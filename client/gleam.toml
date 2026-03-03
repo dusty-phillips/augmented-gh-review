@@ -1,0 +1,18 @@
+name = "client"
+version = "1.0.0"
+target = "javascript"
+
+[dependencies]
+gleam_stdlib = ">= 0.44.0 and < 2.0.0"
+shared = { path = "../shared" }
+lustre = ">= 5.6.0 and < 6.0.0"
+gleam_json = ">= 3.1.0 and < 4.0.0"
+gleam_http = ">= 4.3.0 and < 5.0.0"
+monks_of_style = ">= 1.0.0 and < 2.0.0"
+open_props = ">= 1.1.0 and < 2.0.0"
+plinth = ">= 0.9.3 and < 1.0.0"
+rsvp = ">= 1.2.0 and < 2.0.0"
+
+[dev-dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"
+lustre_dev_tools = ">= 2.3.4 and < 3.0.0"
