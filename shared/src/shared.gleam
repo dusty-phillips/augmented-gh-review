@@ -1,5 +1,2 @@
-import gleam/io
-
-pub fn main() -> Nil {
-  io.println("Hello from shared!")
-}
+// Shared types for the augmented_review monorepo.
+// Import types directly from shared/pr.
