@@ -19,6 +19,7 @@ pub fn pull_request_round_trip_test() {
       created_at: "2026-01-15T10:30:00Z",
       review_decision: "APPROVED",
       draft: False,
+      checks_status: "passing",
     )
 
   original
@@ -39,6 +40,7 @@ pub fn pull_request_draft_true_round_trip_test() {
       created_at: "2026-03-01T00:00:00Z",
       review_decision: "",
       draft: True,
+      checks_status: "pending",
     )
 
   original
@@ -99,6 +101,7 @@ pub fn pull_request_list_round_trip_test() {
       created_at: "2026-01-01T00:00:00Z",
       review_decision: "APPROVED",
       draft: False,
+      checks_status: "passing",
     ),
     PullRequest(
       number: 2,
@@ -108,6 +111,7 @@ pub fn pull_request_list_round_trip_test() {
       created_at: "2026-01-02T00:00:00Z",
       review_decision: "CHANGES_REQUESTED",
       draft: True,
+      checks_status: "pending",
     ),
   ]
 
@@ -145,6 +149,7 @@ pub fn empty_strings_pull_request_test() {
       created_at: "",
       review_decision: "",
       draft: False,
+      checks_status: "passing",
     )
 
   original

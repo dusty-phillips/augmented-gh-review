@@ -1,10 +1,12 @@
 import client/model.{type Model, type Msg, FetchPrs, SelectPr, SetRepo}
+import gleam/int
 import gleam/list
+import gleam/option
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
-import shared/pr.{type PullRequest}
+import shared/pr.{type PrGroups, type PullRequest}
 
 pub fn view(model: Model) -> Element(Msg) {
   html.div(
@@ -22,9 +24,13 @@ pub fn view(model: Model) -> Element(Msg) {
         [html.text("Augmented Review Dashboard")],
       ),
       repo_selector(model),
+      case model.error {
+        option.Some(err) -> error_banner(err)
+        option.None -> html.text("")
+      },
       case model.loading {
         True -> loading_indicator()
-        False -> pr_table(model.prs)
+        False -> pr_sections(model.pr_groups)
       },
     ],
   )
@@ -76,6 +82,23 @@ fn repo_selector(model: Model) -> Element(Msg) {
   )
 }
 
+fn error_banner(message: String) -> Element(Msg) {
+  html.div(
+    [
+      attribute.styles([
+        #("padding", "0.75rem 1rem"),
+        #("margin-bottom", "1rem"),
+        #("background", "#fee2e2"),
+        #("border", "1px solid #fca5a5"),
+        #("border-radius", "6px"),
+        #("color", "#991b1b"),
+        #("font-size", "0.9rem"),
+      ]),
+    ],
+    [html.text(message)],
+  )
+}
+
 fn loading_indicator() -> Element(Msg) {
   html.div(
     [
@@ -90,9 +113,9 @@ fn loading_indicator() -> Element(Msg) {
   )
 }
 
-fn pr_table(prs: List(PullRequest)) -> Element(Msg) {
-  case list.is_empty(prs) {
-    True ->
+fn pr_sections(groups: option.Option(PrGroups)) -> Element(Msg) {
+  case groups {
+    option.None ->
       html.div(
         [
           attribute.styles([
@@ -103,35 +126,116 @@ fn pr_table(prs: List(PullRequest)) -> Element(Msg) {
         ],
         [html.text("No pull requests found. Click Fetch PRs to load.")],
       )
-    False ->
-      html.table(
+    option.Some(g) ->
+      html.div([], [
+        pr_section("Created by Me", g.created_by_me),
+        pr_section("My Review Requested", g.review_requested),
+        pr_section("All Open PRs", g.all_open),
+      ])
+  }
+}
+
+fn pr_section(title: String, prs: List(PullRequest)) -> Element(Msg) {
+  let count = list.length(prs)
+  html.div(
+    [
+      attribute.styles([
+        #("margin-bottom", "2rem"),
+      ]),
+    ],
+    [
+      section_header(title, count),
+      case count {
+        0 -> empty_section_message()
+        _ -> pr_table(prs)
+      },
+    ],
+  )
+}
+
+fn section_header(title: String, count: Int) -> Element(Msg) {
+  html.div(
+    [
+      attribute.styles([
+        #("display", "flex"),
+        #("align-items", "center"),
+        #("gap", "0.5rem"),
+        #("margin-bottom", "0.75rem"),
+      ]),
+    ],
+    [
+      html.h2(
         [
           attribute.styles([
-            #("width", "100%"),
-            #("border-collapse", "collapse"),
+            #("color", "#1a1a2e"),
+            #("font-size", "1.15rem"),
+            #("margin", "0"),
           ]),
         ],
+        [html.text(title)],
+      ),
+      html.span(
         [
-          html.thead([], [
-            html.tr(
-              [
-                attribute.styles([
-                  #("background", "#f0f0f5"),
-                  #("text-align", "left"),
-                ]),
-              ],
-              [
-                header_cell("Title"),
-                header_cell("Author"),
-                header_cell("Created"),
-                header_cell("Review"),
-              ],
-            ),
+          attribute.styles([
+            #("background", "#4361ee"),
+            #("color", "white"),
+            #("padding", "0.15rem 0.5rem"),
+            #("border-radius", "10px"),
+            #("font-size", "0.8rem"),
+            #("font-weight", "600"),
           ]),
-          html.tbody([], list.map(prs, pr_row)),
         ],
-      )
-  }
+        [html.text(int.to_string(count))],
+      ),
+    ],
+  )
+}
+
+fn empty_section_message() -> Element(Msg) {
+  html.div(
+    [
+      attribute.styles([
+        #("padding", "1.5rem"),
+        #("color", "#aaa"),
+        #("font-style", "italic"),
+        #("text-align", "center"),
+        #("border", "1px dashed #ddd"),
+        #("border-radius", "4px"),
+      ]),
+    ],
+    [html.text("No PRs")],
+  )
+}
+
+fn pr_table(prs: List(PullRequest)) -> Element(Msg) {
+  html.table(
+    [
+      attribute.styles([
+        #("width", "100%"),
+        #("border-collapse", "collapse"),
+      ]),
+    ],
+    [
+      html.thead([], [
+        html.tr(
+          [
+            attribute.styles([
+              #("background", "#f0f0f5"),
+              #("text-align", "left"),
+            ]),
+          ],
+          [
+            header_cell("#"),
+            header_cell("Title"),
+            header_cell("Author"),
+            header_cell("Checks"),
+            header_cell("Review"),
+          ],
+        ),
+      ]),
+      html.tbody([], list.map(prs, pr_row)),
+    ],
+  )
 }
 
 fn header_cell(label: String) -> Element(Msg) {
@@ -158,6 +262,24 @@ fn pr_row(pull_request: PullRequest) -> Element(Msg) {
     ],
     [
       html.td(
+        [attribute.styles([#("padding", "0.75rem 1rem")])],
+        [
+          html.a(
+            [
+              attribute.href(pull_request.url),
+              attribute.target("_blank"),
+              event.on_click(FetchPrs) |> event.stop_propagation,
+              attribute.styles([
+                #("color", "#4361ee"),
+                #("text-decoration", "none"),
+                #("font-weight", "500"),
+              ]),
+            ],
+            [html.text("#" <> int.to_string(pull_request.number))],
+          ),
+        ],
+      ),
+      html.td(
         [
           attribute.styles([
             #("padding", "0.75rem 1rem"),
@@ -170,32 +292,61 @@ fn pr_row(pull_request: PullRequest) -> Element(Msg) {
         html.text(pull_request.author),
       ]),
       html.td([attribute.styles([#("padding", "0.75rem 1rem")])], [
-        html.text(pull_request.created_at),
+        checks_badge(pull_request.checks_status),
       ]),
-      html.td([attribute.styles([#("padding", "0.75rem 1rem")])], [
-        review_badge(pull_request.review_decision),
-      ]),
+      html.td(
+        [
+          attribute.styles([
+            #("padding", "0.75rem 1rem"),
+            #("min-width", "8rem"),
+          ]),
+        ],
+        [review_badge(pull_request.review_decision, pull_request.draft)],
+      ),
     ],
   )
 }
 
-fn review_badge(decision: String) -> Element(Msg) {
-  let #(bg, fg) = case decision {
-    "APPROVED" -> #("#d4edda", "#155724")
-    "CHANGES_REQUESTED" -> #("#f8d7da", "#721c24")
-    "REVIEW_REQUIRED" -> #("#fff3cd", "#856404")
-    _ -> #("#e2e3e5", "#383d41")
+fn review_badge(decision: String, draft: Bool) -> Element(Msg) {
+  let #(bg, fg, label) = case draft, decision {
+    True, _ -> #("#dbeafe", "#1e40af", "Draft")
+    _, "APPROVED" -> #("#d4edda", "#155724", "Approved")
+    _, "CHANGES_REQUESTED" -> #("#f8d7da", "#721c24", "Changes requested")
+    _, "REVIEW_REQUIRED" -> #("#fff3cd", "#856404", "Review required")
+    _, "" -> #("#f3f4f6", "#6b7280", "No reviews")
+    _, other -> #("#e2e3e5", "#383d41", other)
   }
   html.span(
     [
       attribute.styles([
         #("padding", "0.25rem 0.5rem"),
         #("border-radius", "4px"),
-        #("font-size", "0.8rem"),
+        #("font-size", "0.7rem"),
+        #("white-space", "nowrap"),
         #("background", bg),
         #("color", fg),
       ]),
     ],
-    [html.text(decision)],
+    [html.text(label)],
+  )
+}
+
+fn checks_badge(status: String) -> Element(Msg) {
+  let #(color, icon, title) = case status {
+    "passing" -> #("#22c55e", "check_circle", "Checks passing")
+    "failing" -> #("#ef4444", "cancel", "Checks failing")
+    "pending" -> #("#eab308", "schedule", "Checks pending")
+    _ -> #("#9ca3af", "help", "Checks unknown")
+  }
+  html.span(
+    [
+      attribute.class("material-symbols-outlined"),
+      attribute.title(title),
+      attribute.styles([
+        #("font-size", "1.25rem"),
+        #("color", color),
+      ]),
+    ],
+    [html.text(icon)],
   )
 }
