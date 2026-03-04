@@ -209,7 +209,7 @@ fn section_header(title: String, count: Int) -> Element(Msg) {
             color.raw("white"),
             padding.raw("0.15rem " <> sizes.size_2),
             border_radius.raw("10px"),
-            font_size.raw(fonts.font_size_00),
+            font_size.raw(fonts.font_size_0),
             font_weight.raw("600"),
           ]),
         ],
@@ -350,7 +350,7 @@ fn review_badge(decision: String, draft: Bool) -> Element(Msg) {
       attribute.styles([
         padding.raw("0.25rem " <> sizes.size_2),
         border_radius.raw(borders.radius_2),
-        font_size.raw(fonts.font_size_00),
+        font_size.raw(fonts.font_size_0),
         white_space.nowrap,
         background.raw(bg),
         color.raw(fg),

@@ -7664,7 +7664,6 @@ var orange_9 = "var(--orange-9)";
 var font_system_ui = "var(--font-system-ui)";
 var font_mono = "var(--font-mono)";
 var font_lineheight_4 = "var(--font-lineheight-4)";
-var font_size_00 = "var(--font-size-00)";
 var font_size_0 = "var(--font-size-0)";
 var font_size_1 = "var(--font-size-1)";
 var font_size_2 = "var(--font-size-2)";
@@ -7765,7 +7764,7 @@ function section_header(title2, count2) {
         raw5("white"),
         raw14("0.15rem " + size_2),
         raw4("10px"),
-        raw8(font_size_00),
+        raw8(font_size_0),
         raw9("600")
       ]))
     ]), toList([text3(to_string(count2))]))
@@ -7819,7 +7818,7 @@ function review_badge(decision, draft) {
     styles(toList([
       raw14("0.25rem " + size_2),
       raw4(radius_2),
-      raw8(font_size_00),
+      raw8(font_size_0),
       nowrap,
       raw(bg),
       raw5(fg)
@@ -15186,7 +15185,7 @@ function header_area(title2, number, url, head_branch, model) {
           raw(violet_2),
           raw4("999px"),
           ["font-family", font_mono],
-          raw8(font_size_00),
+          raw8(font_size_0),
           raw5(violet_9),
           raw19("1.4")
         ]))
@@ -15364,7 +15363,7 @@ function nav_button(label2, msg, enabled) {
           return "not-allowed";
         }
       })()),
-      raw8(font_size_00),
+      raw8(font_size_0),
       raw9("500"),
       raw23("background 0.15s")
     ]))
@@ -15626,7 +15625,7 @@ function comment_display(comment) {
       raw17("3px solid " + yellow_6),
       raw14(size_2 + " " + size_3 + " " + size_2 + " 4.25rem"),
       ["font-family", font_system_ui],
-      raw8(font_size_00),
+      raw8(font_size_0),
       raw5(orange_9),
       raw19("1.4")
     ]))
@@ -15658,7 +15657,7 @@ function comment_input(text4, posting_comment) {
         raw2("1px solid " + gray_4),
         raw4(radius_2),
         ["font-family", font_system_ui],
-        raw8(font_size_00),
+        raw8(font_size_0),
         vertical,
         none5
       ])),
@@ -15693,7 +15692,7 @@ function comment_input(text4, posting_comment) {
               return "pointer";
             }
           })()),
-          raw8(font_size_00),
+          raw8(font_size_0),
           raw9("500")
         ]))
       ]), toList([text3(button_text)])),
@@ -15706,7 +15705,7 @@ function comment_input(text4, posting_comment) {
           none3,
           raw4(radius_2),
           pointer,
-          raw8(font_size_00),
+          raw8(font_size_0),
           raw9("500")
         ]))
       ]), toList([text3("Cancel")]))
@@ -15720,7 +15719,7 @@ function github_comment_display(comment) {
       raw17("3px solid " + blue_6),
       raw14(size_2 + " " + size_3 + " " + size_2 + " 4.25rem"),
       ["font-family", font_system_ui],
-      raw8(font_size_00),
+      raw8(font_size_0),
       raw5(blue_9),
       raw19("1.4")
     ]))
@@ -15730,7 +15729,7 @@ function github_comment_display(comment) {
         flex,
         space_between,
         raw12("0.25rem"),
-        raw8(font_size_00),
+        raw8(font_size_0),
         raw5(gray_6)
       ]))
     ]), toList([
@@ -15860,7 +15859,7 @@ function chunk_panel(chunk, pr_url, commenting, comments, github_comments) {
         raw(gray_1),
         raw3("1px solid " + gray_3),
         ["font-family", font_mono],
-        raw8(font_size_00),
+        raw8(font_size_0),
         raw5(gray_6),
         flex,
         center,
@@ -15932,7 +15931,7 @@ function general_comments_section(github_comments) {
               flex,
               space_between,
               raw12("0.375rem"),
-              raw8(font_size_00),
+              raw8(font_size_0),
               raw5(gray_6)
             ]))
           ]), toList([
