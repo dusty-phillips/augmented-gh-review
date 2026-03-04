@@ -38,12 +38,42 @@ fn compute_checks_status(conclusions: List(String)) -> String {
   }
 }
 
-/// Decoder for check conclusion from statusCheckRollup items.
-fn check_conclusion_decoder() -> decode.Decoder(String) {
-  decode.one_of(decode.at(["conclusion"], decode.string), [
-    decode.at(["state"], decode.string),
-    decode.success(""),
-  ])
+/// A check's conclusion and details URL.
+type CheckInfo {
+  CheckInfo(conclusion: String, url: String)
+}
+
+/// Decoder for a single check from statusCheckRollup items.
+/// CheckRun items have "conclusion" + "detailsUrl"; StatusContext items have "state" + "targetUrl".
+fn check_info_decoder() -> decode.Decoder(CheckInfo) {
+  decode.one_of(check_run_decoder(), [status_context_decoder()])
+}
+
+fn check_run_decoder() -> decode.Decoder(CheckInfo) {
+  use conclusion <- decode.field(
+    "conclusion",
+    decode.one_of(decode.string, [decode.success("")]),
+  )
+  use url <- decode.optional_field("detailsUrl", "", decode.string)
+  decode.success(CheckInfo(conclusion: conclusion, url: url))
+}
+
+fn status_context_decoder() -> decode.Decoder(CheckInfo) {
+  use state <- decode.field("state", decode.string)
+  use url <- decode.optional_field("targetUrl", "", decode.string)
+  decode.success(CheckInfo(conclusion: state, url: url))
+}
+
+/// Find the URL of the first failing check, or empty string.
+fn first_failing_url(checks: List(CheckInfo)) -> String {
+  case
+    list.find(checks, fn(c) {
+      c.conclusion == "FAILURE" || c.conclusion == "ERROR"
+    })
+  {
+    Ok(check) -> check.url
+    Error(_) -> ""
+  }
 }
 
 /// Decoder for a single PR from `gh pr list` JSON output.
@@ -58,13 +88,15 @@ fn gh_pull_request_decoder() -> decode.Decoder(PullRequest) {
     decode.one_of(decode.string, [decode.success("")]),
   )
   use draft <- decode.field("isDraft", decode.bool)
-  use check_conclusions <- decode.field(
+  use checks <- decode.field(
     "statusCheckRollup",
-    decode.one_of(decode.list(check_conclusion_decoder()), [
+    decode.one_of(decode.list(check_info_decoder()), [
       decode.success([]),
     ]),
   )
-  let checks_status = compute_checks_status(check_conclusions)
+  let conclusions = list.map(checks, fn(c) { c.conclusion })
+  let checks_status = compute_checks_status(conclusions)
+  let checks_url = first_failing_url(checks)
   decode.success(PullRequest(
     number: number,
     title: title,
@@ -74,12 +106,13 @@ fn gh_pull_request_decoder() -> decode.Decoder(PullRequest) {
     review_decision: review_decision,
     draft: draft,
     checks_status: checks_status,
+    checks_url: checks_url,
   ))
 }
 
 /// Decoder for `gh pr view` JSON output (for detail view).
 fn gh_pr_detail_decoder() -> decode.Decoder(
-  #(Int, String, String, String, String, List(PrFile)),
+  #(Int, String, String, String, String, String, List(PrFile)),
 ) {
   use number <- decode.field("number", decode.int)
   use title <- decode.field("title", decode.string)
@@ -89,8 +122,9 @@ fn gh_pr_detail_decoder() -> decode.Decoder(
     "body",
     decode.one_of(decode.string, [decode.success("")]),
   )
+  use head_branch <- decode.field("headRefName", decode.string)
   use files <- decode.field("files", decode.list(gh_pr_file_decoder()))
-  decode.success(#(number, title, author, url, body, files))
+  decode.success(#(number, title, author, url, body, head_branch, files))
 }
 
 /// Decoder for individual file objects from gh CLI output.
@@ -227,7 +261,7 @@ pub fn get_pr_detail(
   // First call: get PR metadata and files
   let view_args = [
     "pr", "view", "-R", repo, number_str, "--json",
-    "number,title,author,url,body,files",
+    "number,title,author,url,body,headRefName,files",
   ]
   let view_result =
     shellout.command(run: "gh", with: view_args, in: ".", opt: [])
@@ -253,7 +287,7 @@ pub fn get_pr_detail(
     }),
   )
 
-  use #(num, title, author, url, body, files) <- result.try(
+  use #(num, title, author, url, body, head_branch, files) <- result.try(
     json.parse(view_output, gh_pr_detail_decoder())
     |> result.map_error(fn(err) {
       "Failed to parse PR detail JSON: " <> error_format.json_decode_error(err)
@@ -266,6 +300,7 @@ pub fn get_pr_detail(
     author: author,
     url: url,
     body: body,
+    head_branch: head_branch,
     files: files,
     diff: diff_output,
   ))

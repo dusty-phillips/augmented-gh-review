@@ -11,6 +11,23 @@ pub type View {
   PrReview
 }
 
+pub type CommentingState {
+  NotCommenting
+  Commenting(display_line: Int, file_line: Int, text: String)
+  PostingComment(display_line: Int, file_line: Int, text: String)
+}
+
+pub type ReviewState {
+  ReviewIdle(body: String)
+  SubmittingReview(body: String)
+}
+
+pub type AnalysisState {
+  NotAnalyzed
+  Analyzing(heartbeats: Int)
+  Analyzed(result: AnalysisResult)
+}
+
 pub type Model {
   Model(
     repos: List(String),
@@ -20,17 +37,13 @@ pub type Model {
     loading: Bool,
     view: View,
     error: option.Option(String),
-    analysis: option.Option(AnalysisResult),
+    analysis_state: AnalysisState,
     current_chunk: Int,
     comments: List(LineComment),
-    commenting_line: option.Option(Int),
-    comment_text: String,
+    commenting: CommentingState,
     github_comments: List(PrComment),
-    posting_comment: Bool,
-    stream_heartbeats: Int,
     description_open: Bool,
-    review_body: String,
-    submitting_review: Bool,
+    review: ReviewState,
   )
 }
 
@@ -50,7 +63,7 @@ pub type Msg {
   NextChunk
   PrevChunk
   GoToChunk(Int)
-  StartComment(Int)
+  StartComment(Int, Int)
   CancelComment
   UpdateCommentText(String)
   SubmitComment
@@ -61,4 +74,5 @@ pub type Msg {
   SubmitReview(String)
   SetReviewBody(String)
   ReviewSubmitted(Result(Nil, rsvp.Error))
+  RefreshPrs
 }

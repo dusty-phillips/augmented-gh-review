@@ -1,8 +1,8 @@
 import client/event_source
 import client/model.{
   type Msg, CommentPosted, GotAnalysis, GotGithubComments, GotPrDetail, GotPrs,
-  ReviewSubmitted, SseAnalysisComplete, SseAnalysisError, SseConnectionError,
-  SseHeartbeat,
+  RefreshPrs, ReviewSubmitted, SseAnalysisComplete, SseAnalysisError,
+  SseConnectionError, SseHeartbeat,
 }
 import gleam/dynamic/decode
 import gleam/int
@@ -11,6 +11,7 @@ import gleam/option
 import gleam/result
 import lustre/effect
 import modem
+import plinth/javascript/global
 import rsvp
 import shared/pr
 
@@ -125,4 +126,12 @@ pub fn submit_review(
       ReviewSubmitted(result.map(resp, fn(_response) { Nil }))
     }),
   )
+}
+
+/// Start a background timer that dispatches RefreshPrs every 2 minutes.
+pub fn start_auto_refresh() -> effect.Effect(Msg) {
+  effect.from(fn(dispatch) {
+    let _timer_id = global.set_interval(120_000, fn() { dispatch(RefreshPrs) })
+    Nil
+  })
 }

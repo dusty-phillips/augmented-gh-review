@@ -13,6 +13,7 @@ pub type PullRequest {
     review_decision: String,
     draft: Bool,
     checks_status: String,
+    checks_url: String,
   )
 }
 
@@ -35,6 +36,7 @@ pub type PrDetail {
     author: String,
     url: String,
     body: String,
+    head_branch: String,
     files: List(PrFile),
     diff: String,
   )
@@ -83,6 +85,7 @@ pub fn encode_pull_request(pr: PullRequest) -> json.Json {
     #("review_decision", json.string(pr.review_decision)),
     #("draft", json.bool(pr.draft)),
     #("checks_status", json.string(pr.checks_status)),
+    #("checks_url", json.string(pr.checks_url)),
   ])
 }
 
@@ -120,6 +123,7 @@ pub fn encode_pr_detail(detail: PrDetail) -> json.Json {
     #("author", json.string(detail.author)),
     #("url", json.string(detail.url)),
     #("body", json.string(detail.body)),
+    #("head_branch", json.string(detail.head_branch)),
     #("files", json.array(detail.files, encode_pr_file)),
     #("diff", json.string(detail.diff)),
   ])
@@ -178,6 +182,7 @@ pub fn pull_request_decoder() -> decode.Decoder(PullRequest) {
   use review_decision <- decode.field("review_decision", decode.string)
   use draft <- decode.field("draft", decode.bool)
   use checks_status <- decode.field("checks_status", decode.string)
+  use checks_url <- decode.field("checks_url", decode.string)
   decode.success(PullRequest(
     number: number,
     title: title,
@@ -187,6 +192,7 @@ pub fn pull_request_decoder() -> decode.Decoder(PullRequest) {
     review_decision: review_decision,
     draft: draft,
     checks_status: checks_status,
+    checks_url: checks_url,
   ))
 }
 
@@ -228,6 +234,7 @@ pub fn pr_detail_decoder() -> decode.Decoder(PrDetail) {
   use author <- decode.field("author", decode.string)
   use url <- decode.field("url", decode.string)
   use body <- decode.field("body", decode.string)
+  use head_branch <- decode.field("head_branch", decode.string)
   use files <- decode.field("files", decode.list(pr_file_decoder()))
   use diff <- decode.field("diff", decode.string)
   decode.success(PrDetail(
@@ -236,6 +243,7 @@ pub fn pr_detail_decoder() -> decode.Decoder(PrDetail) {
     author: author,
     url: url,
     body: body,
+    head_branch: head_branch,
     files: files,
     diff: diff,
   ))

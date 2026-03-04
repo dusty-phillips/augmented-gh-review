@@ -1,7 +1,10 @@
+import client/highlight
 import client/model.{
-  type Model, type Msg, AnalyzePr, BackToDashboard, CancelComment, GoToChunk,
-  NextChunk, PrevChunk, SetReviewBody, StartComment, SubmitComment,
-  SubmitReview, ToggleDescription, UpdateCommentText,
+  type Model, type Msg, Analyzed, Analyzing, AnalyzePr, BackToDashboard,
+  CancelComment, Commenting, GoToChunk, NextChunk, NotAnalyzed, NotCommenting,
+  PostingComment, PrevChunk, ReviewIdle, SetReviewBody, StartComment,
+  SubmitComment, SubmitReview, SubmittingReview, ToggleDescription,
+  UpdateCommentText,
 }
 import gleam/int
 import gleam/list
@@ -11,9 +14,7 @@ import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
-import maud
-import maud/components
-import mork
+import client/markdown
 import shared/pr.{type LineComment, type PrComment, type ReviewChunk}
 
 // ---------------------------------------------------------------------------
@@ -55,7 +56,7 @@ pub fn view(model: Model) -> Element(Msg) {
         ],
         [
           // A. Header
-          header_area(detail.title, detail.number, detail.url, model),
+          header_area(detail.title, detail.number, detail.url, detail.head_branch, model),
           // A2. PR Description accordion
           description_accordion(detail.body, model.description_open),
           // Error display
@@ -63,18 +64,18 @@ pub fn view(model: Model) -> Element(Msg) {
             option.Some(err) -> error_banner(err)
             option.None -> html.text("")
           },
-          // B. Analysis content or placeholder
-          case model.analysis {
-            option.Some(analysis) ->
+          // General PR comments (always visible)
+          general_comments_section(model.github_comments),
+          // B. Analysis content or loading
+          case model.analysis_state {
+            Analyzed(analysis) ->
               analysis_view(analysis, detail.url, model)
-            option.None ->
+            Analyzing(heartbeats) ->
+              loading_indicator(heartbeats)
+            NotAnalyzed ->
               case model.loading {
-                True -> loading_indicator(model.stream_heartbeats)
-                False ->
-                  html.div([], [
-                    analyze_prompt(),
-                    general_comments_section(model.github_comments),
-                  ])
+                True -> loading_indicator(0)
+                False -> analyze_prompt()
               }
           },
         ],
@@ -90,13 +91,14 @@ fn header_area(
   title: String,
   number: Int,
   url: String,
+  head_branch: String,
   model: Model,
 ) -> Element(Msg) {
   html.div(
     [
       attribute.styles([
         #("display", "flex"),
-        #("align-items", "center"),
+        #("align-items", "flex-start"),
         #("justify-content", "space-between"),
         #("margin-bottom", "1.5rem"),
         #("flex-wrap", "wrap"),
@@ -156,19 +158,44 @@ fn header_area(
               ),
             ],
           ),
+          html.div(
+            [
+              attribute.styles([
+                #("display", "inline-flex"),
+                #("align-items", "center"),
+                #("gap", "0.375rem"),
+                #("margin-top", "0.5rem"),
+                #("padding", "0.25rem 0.625rem"),
+                #("background", "#ede9fe"),
+                #("border-radius", "999px"),
+                #("font-family",
+                  "\"SF Mono\", \"Fira Code\", \"Consolas\", monospace"),
+                #("font-size", "0.75rem"),
+                #("color", "#6d28d9"),
+                #("line-height", "1.4"),
+              ]),
+            ],
+            [
+              html.span(
+                [
+                  attribute.class("material-symbols-outlined"),
+                  attribute.styles([#("font-size", "0.875rem")]),
+                ],
+                [html.text("account_tree")],
+              ),
+              html.text(head_branch),
+            ],
+          ),
         ],
       ),
       html.div(
         [attribute.styles([#("display", "flex"), #("gap", "0.5rem")])],
         [
           back_button(),
-          case model.analysis {
-            option.None ->
-              case model.loading {
-                True -> html.text("")
-                False -> analyze_button()
-              }
-            option.Some(_) -> html.text("")
+          case model.analysis_state {
+            NotAnalyzed -> analyze_button()
+            Analyzing(_) -> html.text("")
+            Analyzed(_) -> analyze_button()
           },
         ],
       ),
@@ -252,11 +279,7 @@ fn description_accordion(body: String, is_open: Bool) -> Element(Msg) {
                         #("word-break", "break-word"),
                       ]),
                     ],
-                    maud.render_markdown(
-                      body,
-                      mork.configure(),
-                      components.default(),
-                    ),
+                    markdown.render(body),
                   ),
                 ],
               )
@@ -327,7 +350,7 @@ fn analyze_prompt() -> Element(Msg) {
             #("margin-bottom", "1rem"),
           ]),
         ],
-        [html.text("Click \"Analyze PR\" to start AI-powered code review")],
+        [html.text("Analysis not started. Click \"Analyze PR\" to begin.")],
       ),
     ],
   )
@@ -424,11 +447,9 @@ fn analysis_view(
         chunk_panel(
           chunk,
           pr_url,
-          model.commenting_line,
-          model.comment_text,
+          model.commenting,
           model.comments,
           model.github_comments,
-          model.posting_comment,
         )
       Error(_) ->
         html.p([], [html.text("No chunks available.")])
@@ -436,7 +457,7 @@ fn analysis_view(
     // B4. Bottom navigation
     bottom_navigation(current, chunk_count),
     // B5. Submit review section
-    review_submission_section(model.review_body, model.submitting_review),
+    review_submission_section(model.review),
   ])
 }
 
@@ -628,11 +649,9 @@ fn nav_button(label: String, msg: Msg, enabled: Bool) -> Element(Msg) {
 fn chunk_panel(
   chunk: ReviewChunk,
   pr_url: String,
-  commenting_line: option.Option(Int),
-  comment_text: String,
+  commenting: model.CommentingState,
   comments: List(LineComment),
   github_comments: List(PrComment),
-  posting_comment: Bool,
 ) -> Element(Msg) {
   let chunk_comments =
     list.filter(comments, fn(c) { c.chunk_index == chunk.index })
@@ -737,11 +756,9 @@ fn chunk_panel(
       // Diff content
       diff_view(
         chunk,
-        commenting_line,
-        comment_text,
+        commenting,
         chunk_comments,
         chunk_github_comments,
-        posting_comment,
       ),
     ],
   )
@@ -753,15 +770,32 @@ fn chunk_panel(
 
 fn diff_view(
   chunk: ReviewChunk,
-  commenting_line: option.Option(Int),
-  comment_text: String,
+  commenting: model.CommentingState,
   chunk_comments: List(LineComment),
   chunk_github_comments: List(PrComment),
-  posting_comment: Bool,
 ) -> Element(Msg) {
   let lines = string.split(chunk.diff_content, "\n")
   // Parse actual file line numbers from hunk headers
   let file_indexed_lines = index_with_file_lines(lines)
+  // Detect language once per chunk from the file path
+  let language = highlight.detect_language(chunk.file_path)
+
+  // Extract commenting state for this view
+  let commenting_display_line = case commenting {
+    Commenting(dl, _, _) -> option.Some(dl)
+    PostingComment(dl, _, _) -> option.Some(dl)
+    NotCommenting -> option.None
+  }
+  let comment_text = case commenting {
+    Commenting(_, _, text) -> text
+    PostingComment(_, _, text) -> text
+    NotCommenting -> ""
+  }
+  let is_posting = case commenting {
+    PostingComment(_, _, _) -> True
+    Commenting(_, _, _) -> False
+    NotCommenting -> False
+  }
 
   html.div(
     [
@@ -785,14 +819,14 @@ fn diff_view(
             c.line == entry.file_line
           })
         let is_commenting =
-          commenting_line == option.Some(entry.display_line)
+          commenting_display_line == option.Some(entry.display_line)
 
         list.flatten([
-          [diff_line_row(entry.display_line, entry.file_line, entry.text)],
+          [diff_line_row(entry.display_line, entry.file_line, entry.text, language)],
           list.map(line_github_comments, fn(c) { github_comment_display(c) }),
           list.map(line_comments, fn(c) { comment_display(c) }),
           case is_commenting {
-            True -> [comment_input(comment_text, posting_comment)]
+            True -> [comment_input(comment_text, is_posting)]
             False -> []
           },
         ])
@@ -907,6 +941,7 @@ fn diff_line_row(
   display_line: Int,
   file_line: Int,
   line: String,
+  language: String,
 ) -> Element(Msg) {
   let #(bg, border_color) = line_colors(line)
   // Show file line number in gutter (0 for hunk headers)
@@ -914,9 +949,25 @@ fn diff_line_row(
     0 -> ""
     n -> int.to_string(n)
   }
+
+  // Split diff marker from code content for highlighting
+  let #(marker, code) = case string.starts_with(line, "@@") {
+    True -> #("", "")
+    False ->
+      case string.first(line) {
+        Ok("+") -> #("+", string.drop_start(line, 1))
+        Ok("-") -> #("-", string.drop_start(line, 1))
+        Ok(" ") -> #(" ", string.drop_start(line, 1))
+        _ -> #("", line)
+      }
+  }
+
+  // For hunk headers, render as plain text; otherwise highlight
+  let is_hunk_header = string.starts_with(line, "@@")
+
   html.div(
     [
-      event.on_click(StartComment(display_line)),
+      event.on_click(StartComment(display_line, file_line)),
       attribute.styles([
         #("display", "flex"),
         #("background", bg),
@@ -947,16 +998,36 @@ fn diff_line_row(
         [html.text(gutter_text)],
       ),
       // Line content
-      html.span(
-        [
-          attribute.styles([
-            #("padding", "0 0.75rem"),
-            #("white-space", "pre"),
-            #("flex", "1"),
-          ]),
-        ],
-        [html.text(line)],
-      ),
+      case is_hunk_header {
+        True ->
+          html.span(
+            [
+              attribute.styles([
+                #("padding", "0 0.75rem"),
+                #("white-space", "pre"),
+                #("flex", "1"),
+              ]),
+            ],
+            [html.text(line)],
+          )
+        False -> {
+          let highlighted_html = highlight.highlight_line(code, language)
+          html.span(
+            [
+              attribute.styles([
+                #("padding", "0 0.75rem"),
+                #("white-space", "pre"),
+                #("flex", "1"),
+                #("display", "flex"),
+              ]),
+            ],
+            [
+              html.span([], [html.text(marker)]),
+              element.unsafe_raw_html("", "span", [], highlighted_html),
+            ],
+          )
+        }
+      },
     ],
   )
 }
@@ -1115,11 +1186,7 @@ fn github_comment_display(comment: PrComment) -> Element(Msg) {
       ),
       html.div(
         [],
-        maud.render_markdown(
-          comment.body,
-          mork.configure(),
-          components.default(),
-        ),
+        markdown.render(comment.body),
       ),
     ],
   )
@@ -1192,11 +1259,7 @@ fn general_comments_section(
                   ),
                   html.div(
                     [],
-                    maud.render_markdown(
-                      comment.body,
-                      mork.configure(),
-                      components.default(),
-                    ),
+                    markdown.render(comment.body),
                   ),
                 ],
               )
@@ -1249,9 +1312,16 @@ fn bottom_navigation(current: Int, total: Int) -> Element(Msg) {
 // ---------------------------------------------------------------------------
 
 fn review_submission_section(
-  review_body: String,
-  submitting: Bool,
+  review: model.ReviewState,
 ) -> Element(Msg) {
+  let review_body = case review {
+    ReviewIdle(body) -> body
+    SubmittingReview(body) -> body
+  }
+  let submitting = case review {
+    SubmittingReview(_) -> True
+    ReviewIdle(_) -> False
+  }
   html.div(
     [
       attribute.styles([

@@ -15,6 +15,7 @@ rsvp = ">= 1.2.0 and < 2.0.0"
 modem = ">= 2.1.2 and < 3.0.0"
 maud = ">= 1.0.0 and < 2.0.0"
 mork = ">= 1.11.1 and < 2.0.0"
+gleam_regexp = ">= 1.1.1 and < 2.0.0"
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"

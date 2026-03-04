@@ -274,6 +274,7 @@ fn pr_row(pull_request: PullRequest) -> Element(Msg) {
                 #("text-decoration", "none"),
                 #("font-weight", "500"),
               ]),
+              attribute.class("hover-underline"),
             ],
             [html.text("#" <> int.to_string(pull_request.number))],
           ),
@@ -292,7 +293,7 @@ fn pr_row(pull_request: PullRequest) -> Element(Msg) {
         html.text(pull_request.author),
       ]),
       html.td([attribute.styles([#("padding", "0.75rem 1rem")])], [
-        checks_badge(pull_request.checks_status),
+        checks_badge(pull_request.checks_status, pull_request.checks_url),
       ]),
       html.td(
         [
@@ -331,22 +332,40 @@ fn review_badge(decision: String, draft: Bool) -> Element(Msg) {
   )
 }
 
-fn checks_badge(status: String) -> Element(Msg) {
+fn checks_badge(status: String, checks_url: String) -> Element(Msg) {
   let #(color, icon, title) = case status {
     "passing" -> #("#22c55e", "check_circle", "Checks passing")
     "failing" -> #("#ef4444", "cancel", "Checks failing")
     "pending" -> #("#eab308", "schedule", "Checks pending")
     _ -> #("#9ca3af", "help", "Checks unknown")
   }
-  html.span(
-    [
-      attribute.class("material-symbols-outlined"),
-      attribute.title(title),
-      attribute.styles([
-        #("font-size", "1.25rem"),
-        #("color", color),
-      ]),
-    ],
-    [html.text(icon)],
-  )
+  let icon_el =
+    html.span(
+      [
+        attribute.class("material-symbols-outlined"),
+        attribute.title(title),
+        attribute.styles([
+          #("font-size", "1.25rem"),
+          #("color", color),
+        ]),
+      ],
+      [html.text(icon)],
+    )
+  case checks_url {
+    "" -> icon_el
+    url ->
+      html.a(
+        [
+          attribute.href(url),
+          attribute.target("_blank"),
+          attribute.title("View failing check"),
+          attribute.styles([
+            #("display", "inline-flex"),
+            #("text-decoration", "none"),
+          ]),
+          event.on_click(FetchPrs) |> event.stop_propagation,
+        ],
+        [icon_el],
+      )
+  }
 }

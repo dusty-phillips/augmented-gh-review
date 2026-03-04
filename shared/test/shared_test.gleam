@@ -20,6 +20,7 @@ pub fn pull_request_round_trip_test() {
       review_decision: "APPROVED",
       draft: False,
       checks_status: "passing",
+      checks_url: "",
     )
 
   original
@@ -41,6 +42,7 @@ pub fn pull_request_draft_true_round_trip_test() {
       review_decision: "",
       draft: True,
       checks_status: "pending",
+      checks_url: "",
     )
 
   original
@@ -74,6 +76,7 @@ pub fn pr_detail_round_trip_test() {
       author: "contributor",
       url: "https://github.com/owner/repo/pull/7",
       body: "This PR fixes the off-by-one error in the parser.",
+      head_branch: "fix/parser-off-by-one",
       files: [
         PrFile(path: "src/parser.gleam", additions: 5, deletions: 2),
         PrFile(path: "test/parser_test.gleam", additions: 20, deletions: 0),
@@ -102,6 +105,7 @@ pub fn pull_request_list_round_trip_test() {
       review_decision: "APPROVED",
       draft: False,
       checks_status: "passing",
+      checks_url: "",
     ),
     PullRequest(
       number: 2,
@@ -112,6 +116,7 @@ pub fn pull_request_list_round_trip_test() {
       review_decision: "CHANGES_REQUESTED",
       draft: True,
       checks_status: "pending",
+      checks_url: "",
     ),
   ]
 
@@ -150,6 +155,7 @@ pub fn empty_strings_pull_request_test() {
       review_decision: "",
       draft: False,
       checks_status: "passing",
+      checks_url: "",
     )
 
   original
@@ -179,6 +185,7 @@ pub fn empty_file_list_pr_detail_test() {
       author: "",
       url: "",
       body: "",
+      head_branch: "",
       files: [],
       diff: "",
     )

@@ -7021,7 +7021,7 @@ function post(url, body, handler) {
 }
 // build/dev/javascript/shared/shared/pr.mjs
 class PullRequest extends CustomType {
-  constructor(number, title2, author, url, created_at, review_decision, draft, checks_status) {
+  constructor(number, title2, author, url, created_at, review_decision, draft, checks_status, checks_url) {
     super();
     this.number = number;
     this.title = title2;
@@ -7031,6 +7031,7 @@ class PullRequest extends CustomType {
     this.review_decision = review_decision;
     this.draft = draft;
     this.checks_status = checks_status;
+    this.checks_url = checks_url;
   }
 }
 class PrFile extends CustomType {
@@ -7050,13 +7051,14 @@ class PrGroups extends CustomType {
   }
 }
 class PrDetail extends CustomType {
-  constructor(number, title2, author, url, body, files, diff2) {
+  constructor(number, title2, author, url, body, head_branch, files, diff2) {
     super();
     this.number = number;
     this.title = title2;
     this.author = author;
     this.url = url;
     this.body = body;
+    this.head_branch = head_branch;
     this.files = files;
     this.diff = diff2;
   }
@@ -7108,7 +7110,9 @@ function pull_request_decoder() {
             return field("review_decision", string2, (review_decision) => {
               return field("draft", bool, (draft) => {
                 return field("checks_status", string2, (checks_status) => {
-                  return success(new PullRequest(number, title2, author, url, created_at, review_decision, draft, checks_status));
+                  return field("checks_url", string2, (checks_url) => {
+                    return success(new PullRequest(number, title2, author, url, created_at, review_decision, draft, checks_status, checks_url));
+                  });
                 });
               });
             });
@@ -7142,9 +7146,11 @@ function pr_detail_decoder() {
       return field("author", string2, (author) => {
         return field("url", string2, (url) => {
           return field("body", string2, (body) => {
-            return field("files", list2(pr_file_decoder()), (files) => {
-              return field("diff", string2, (diff2) => {
-                return success(new PrDetail(number, title2, author, url, body, files, diff2));
+            return field("head_branch", string2, (head_branch) => {
+              return field("files", list2(pr_file_decoder()), (files) => {
+                return field("diff", string2, (diff2) => {
+                  return success(new PrDetail(number, title2, author, url, body, head_branch, files, diff2));
+                });
               });
             });
           });
@@ -7193,6 +7199,11 @@ function pr_comment_decoder() {
   });
 }
 
+// build/dev/javascript/plinth/global_ffi.mjs
+function setInterval(delay, callback) {
+  return globalThis.setInterval(callback, delay);
+}
+
 // build/dev/javascript/client/client/event_source_ffi.mjs
 function connect(url, onEvent, onError) {
   const source = new EventSource(url);
@@ -7222,8 +7233,52 @@ class Dashboard extends CustomType {
 }
 class PrReview extends CustomType {
 }
+class NotCommenting extends CustomType {
+}
+class Commenting extends CustomType {
+  constructor(display_line, file_line, text4) {
+    super();
+    this.display_line = display_line;
+    this.file_line = file_line;
+    this.text = text4;
+  }
+}
+class PostingComment extends CustomType {
+  constructor(display_line, file_line, text4) {
+    super();
+    this.display_line = display_line;
+    this.file_line = file_line;
+    this.text = text4;
+  }
+}
+class ReviewIdle extends CustomType {
+  constructor(body) {
+    super();
+    this.body = body;
+  }
+}
+class SubmittingReview extends CustomType {
+  constructor(body) {
+    super();
+    this.body = body;
+  }
+}
+class NotAnalyzed extends CustomType {
+}
+class Analyzing extends CustomType {
+  constructor(heartbeats) {
+    super();
+    this.heartbeats = heartbeats;
+  }
+}
+class Analyzed extends CustomType {
+  constructor(result) {
+    super();
+    this.result = result;
+  }
+}
 class Model extends CustomType {
-  constructor(repos, active_repo, pr_groups, selected_pr, loading, view2, error, analysis, current_chunk, comments, commenting_line, comment_text, github_comments, posting_comment, stream_heartbeats, description_open, review_body, submitting_review) {
+  constructor(repos, active_repo, pr_groups, selected_pr, loading, view2, error, analysis_state, current_chunk, comments, commenting, github_comments, description_open, review) {
     super();
     this.repos = repos;
     this.active_repo = active_repo;
@@ -7232,17 +7287,13 @@ class Model extends CustomType {
     this.loading = loading;
     this.view = view2;
     this.error = error;
-    this.analysis = analysis;
+    this.analysis_state = analysis_state;
     this.current_chunk = current_chunk;
     this.comments = comments;
-    this.commenting_line = commenting_line;
-    this.comment_text = comment_text;
+    this.commenting = commenting;
     this.github_comments = github_comments;
-    this.posting_comment = posting_comment;
-    this.stream_heartbeats = stream_heartbeats;
     this.description_open = description_open;
-    this.review_body = review_body;
-    this.submitting_review = submitting_review;
+    this.review = review;
   }
 }
 class GotPrs extends CustomType {
@@ -7316,9 +7367,10 @@ class GoToChunk extends CustomType {
   }
 }
 class StartComment extends CustomType {
-  constructor($0) {
+  constructor($0, $1) {
     super();
     this[0] = $0;
+    this[1] = $1;
   }
 }
 class CancelComment extends CustomType {
@@ -7368,6 +7420,8 @@ class ReviewSubmitted extends CustomType {
     super();
     this[0] = $0;
   }
+}
+class RefreshPrs extends CustomType {
 }
 
 // build/dev/javascript/client/client/effects.mjs
@@ -7425,6 +7479,14 @@ function submit_review(repo, number, event3, body) {
       return;
     }));
   }));
+}
+function start_auto_refresh() {
+  return from2((dispatch2) => {
+    let $ = setInterval(120000, () => {
+      return dispatch2(new RefreshPrs);
+    });
+    return;
+  });
 }
 
 // build/dev/javascript/lustre/lustre/event.mjs
@@ -7594,7 +7656,7 @@ function review_badge(decision, draft) {
     ]))
   ]), toList([text3(label2)]));
 }
-function checks_badge(status) {
+function checks_badge(status, checks_url) {
   let _block;
   if (status === "passing") {
     _block = ["#22c55e", "check_circle", "Checks passing"];
@@ -7612,11 +7674,26 @@ function checks_badge(status) {
   color = $[0];
   icon = $[1];
   title2 = $[2];
-  return span(toList([
+  let icon_el = span(toList([
     class$("material-symbols-outlined"),
     title(title2),
     styles(toList([["font-size", "1.25rem"], ["color", color]]))
   ]), toList([text3(icon)]));
+  if (checks_url === "") {
+    return icon_el;
+  } else {
+    let url = checks_url;
+    return a(toList([
+      href(url),
+      target("_blank"),
+      title("View failing check"),
+      styles(toList([["display", "inline-flex"], ["text-decoration", "none"]])),
+      (() => {
+        let _pipe = on_click(new FetchPrs);
+        return stop_propagation(_pipe);
+      })()
+    ]), toList([icon_el]));
+  }
 }
 function pr_row(pull_request) {
   return tr(toList([
@@ -7635,14 +7712,17 @@ function pr_row(pull_request) {
           ["color", "#4361ee"],
           ["text-decoration", "none"],
           ["font-weight", "500"]
-        ]))
+        ])),
+        class$("hover-underline")
       ]), toList([text3("#" + to_string(pull_request.number))]))
     ])),
     td(toList([
       styles(toList([["padding", "0.75rem 1rem"], ["font-weight", "500"]]))
     ]), toList([text3(pull_request.title)])),
     td(toList([styles(toList([["padding", "0.75rem 1rem"]]))]), toList([text3(pull_request.author)])),
-    td(toList([styles(toList([["padding", "0.75rem 1rem"]]))]), toList([checks_badge(pull_request.checks_status)])),
+    td(toList([styles(toList([["padding", "0.75rem 1rem"]]))]), toList([
+      checks_badge(pull_request.checks_status, pull_request.checks_url)
+    ])),
     td(toList([
       styles(toList([["padding", "0.75rem 1rem"], ["min-width", "8rem"]]))
     ]), toList([review_badge(pull_request.review_decision, pull_request.draft)]))
@@ -7730,6 +7810,150 @@ function view2(model) {
   ]));
 }
 
+// build/dev/javascript/client/client/highlight_ffi.mjs
+function highlight_line(code2, language) {
+  const h = globalThis.hljs || typeof window !== "undefined" && window.hljs;
+  if (!h || !language || language === "") {
+    return escapeHtml(code2);
+  }
+  try {
+    const result = h.highlight(code2, { language, ignoreIllegals: true });
+    return result.value;
+  } catch (e) {
+    try {
+      const result = h.highlightAuto(code2);
+      return result.value;
+    } catch (e2) {
+      return escapeHtml(code2);
+    }
+  }
+}
+function escapeHtml(text4) {
+  return text4.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function detect_language(file_path) {
+  const clean_path = file_path.replace(/\s*\(\+\d+ more\)$/, "");
+  const ext = clean_path.split(".").pop()?.toLowerCase() || "";
+  const map9 = {
+    js: "javascript",
+    jsx: "javascript",
+    ts: "typescript",
+    tsx: "typescript",
+    py: "python",
+    rb: "ruby",
+    rs: "rust",
+    go: "go",
+    java: "java",
+    kt: "kotlin",
+    swift: "swift",
+    gleam: "erlang",
+    ex: "elixir",
+    exs: "elixir",
+    erl: "erlang",
+    css: "css",
+    scss: "scss",
+    html: "html",
+    xml: "xml",
+    json: "json",
+    yaml: "yaml",
+    yml: "yaml",
+    md: "markdown",
+    sql: "sql",
+    sh: "bash",
+    bash: "bash",
+    zsh: "bash",
+    fish: "bash",
+    toml: "ini",
+    dockerfile: "dockerfile",
+    graphql: "graphql",
+    gql: "graphql",
+    c: "c",
+    cpp: "cpp",
+    h: "c",
+    hpp: "cpp",
+    cs: "csharp"
+  };
+  return map9[ext] || "";
+}
+// build/dev/javascript/gleam_regexp/gleam_regexp_ffi.mjs
+function check(regex, string5) {
+  regex.lastIndex = 0;
+  return regex.test(string5);
+}
+function compile(pattern, options) {
+  try {
+    let flags = "gu";
+    if (options.case_insensitive)
+      flags += "i";
+    if (options.multi_line)
+      flags += "m";
+    return new Ok(new RegExp(pattern, flags));
+  } catch (error) {
+    const number = (error.columnNumber || 0) | 0;
+    return new Error(new CompileError(error.message, number));
+  }
+}
+function scan(regex, string5) {
+  regex.lastIndex = 0;
+  const matches2 = Array.from(string5.matchAll(regex)).map((match) => {
+    const content = match[0];
+    return new Match(content, submatches(match.slice(1)));
+  });
+  return List.fromArray(matches2);
+}
+function replace3(regex, original_string, replacement) {
+  regex.lastIndex = 0;
+  return original_string.replaceAll(regex, replacement);
+}
+function submatches(groups) {
+  const submatches2 = [];
+  for (let n = groups.length - 1;n >= 0; n--) {
+    if (groups[n]) {
+      submatches2[n] = new Some(groups[n]);
+      continue;
+    }
+    if (submatches2.length > 0) {
+      submatches2[n] = new None;
+    }
+  }
+  return List.fromArray(submatches2);
+}
+
+// build/dev/javascript/gleam_regexp/gleam/regexp.mjs
+class Match extends CustomType {
+  constructor(content, submatches2) {
+    super();
+    this.content = content;
+    this.submatches = submatches2;
+  }
+}
+class CompileError extends CustomType {
+  constructor(error, byte_index) {
+    super();
+    this.error = error;
+    this.byte_index = byte_index;
+  }
+}
+class Options2 extends CustomType {
+  constructor(case_insensitive, multi_line) {
+    super();
+    this.case_insensitive = case_insensitive;
+    this.multi_line = multi_line;
+  }
+}
+function compile2(pattern, options) {
+  return compile(pattern, options);
+}
+function from_string(pattern) {
+  return compile2(pattern, new Options2(false, false));
+}
+function check2(regexp, string5) {
+  return check(regexp, string5);
+}
+function scan2(regexp, string5) {
+  return scan(regexp, string5);
+}
+
 // build/dev/javascript/splitter/splitter_ffi.mjs
 function make2(patterns) {
   let pattern = "";
@@ -7742,7 +7966,7 @@ function make2(patterns) {
   }
   return new RegExp(pattern);
 }
-function split3(splitter, string5) {
+function split4(splitter, string5) {
   const match = string5.match(splitter);
   if (!match)
     return [string5, "", ""];
@@ -7774,7 +7998,7 @@ function new$6(substrings) {
   return make2(_pipe$1);
 }
 // build/dev/javascript/mork/mork/document.mjs
-class Options2 extends CustomType {
+class Options3 extends CustomType {
   constructor(strip_frontmatter, footnotes, heading_ids, tables, tasklists, emojis, autolinks) {
     super();
     this.strip_frontmatter = strip_frontmatter;
@@ -8078,84 +8302,6 @@ var ascii_whitespace = `
 \r\f\v`;
 var ascii_printable = digits + ascii_letters + ascii_punctuation + ascii_whitespace;
 var alnum = ascii_letters + digits;
-// build/dev/javascript/gleam_regexp/gleam_regexp_ffi.mjs
-function check(regex, string5) {
-  regex.lastIndex = 0;
-  return regex.test(string5);
-}
-function compile(pattern, options) {
-  try {
-    let flags = "gu";
-    if (options.case_insensitive)
-      flags += "i";
-    if (options.multi_line)
-      flags += "m";
-    return new Ok(new RegExp(pattern, flags));
-  } catch (error) {
-    const number = (error.columnNumber || 0) | 0;
-    return new Error(new CompileError(error.message, number));
-  }
-}
-function scan(regex, string5) {
-  regex.lastIndex = 0;
-  const matches2 = Array.from(string5.matchAll(regex)).map((match) => {
-    const content = match[0];
-    return new Match(content, submatches(match.slice(1)));
-  });
-  return List.fromArray(matches2);
-}
-function replace3(regex, original_string, replacement) {
-  regex.lastIndex = 0;
-  return original_string.replaceAll(regex, replacement);
-}
-function submatches(groups) {
-  const submatches2 = [];
-  for (let n = groups.length - 1;n >= 0; n--) {
-    if (groups[n]) {
-      submatches2[n] = new Some(groups[n]);
-      continue;
-    }
-    if (submatches2.length > 0) {
-      submatches2[n] = new None;
-    }
-  }
-  return List.fromArray(submatches2);
-}
-
-// build/dev/javascript/gleam_regexp/gleam/regexp.mjs
-class Match extends CustomType {
-  constructor(content, submatches2) {
-    super();
-    this.content = content;
-    this.submatches = submatches2;
-  }
-}
-class CompileError extends CustomType {
-  constructor(error, byte_index) {
-    super();
-    this.error = error;
-    this.byte_index = byte_index;
-  }
-}
-class Options3 extends CustomType {
-  constructor(case_insensitive, multi_line) {
-    super();
-    this.case_insensitive = case_insensitive;
-    this.multi_line = multi_line;
-  }
-}
-function compile2(pattern, options) {
-  return compile(pattern, options);
-}
-function from_string(pattern) {
-  return compile2(pattern, new Options3(false, false));
-}
-function check2(regexp, string5) {
-  return check(regexp, string5);
-}
-function scan2(regexp, string5) {
-  return scan(regexp, string5);
-}
 
 // build/dev/javascript/mork/mork/internal/util.mjs
 var FILEPATH = "src/mork/internal/util.gleam";
@@ -8527,7 +8673,7 @@ function do_gobble_link_label(loop$sp, loop$rest, loop$acc) {
     let sp = loop$sp;
     let rest = loop$rest;
     let acc = loop$acc;
-    let $ = split3(sp, rest);
+    let $ = split4(sp, rest);
     let l;
     let s;
     let r;
@@ -8597,7 +8743,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
     let acc = loop$acc;
     let stack = loop$stack;
     let value2 = loop$value;
-    let $ = split3(sp, in$);
+    let $ = split4(sp, in$);
     let l;
     let s;
     let r;
@@ -8964,7 +9110,7 @@ function do_parse_link_dest_tag(loop$sp, loop$in, loop$acc, loop$value) {
     let in$ = loop$in;
     let acc = loop$acc;
     let value2 = loop$value;
-    let $ = split3(sp, in$);
+    let $ = split4(sp, in$);
     let l;
     let s;
     let r;
@@ -9077,7 +9223,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
     let acc = loop$acc;
     let stack = loop$stack;
     let value2 = loop$value;
-    let $ = split3(sp, in$);
+    let $ = split4(sp, in$);
     let l;
     let s;
     let r;
@@ -9547,7 +9693,7 @@ function is_empty_list(sp_dot_paren, line) {
     let rest = line$1.slice(1);
     return is_blank(rest);
   } else {
-    let $1 = split3(sp_dot_paren, line$1);
+    let $1 = split4(sp_dot_paren, line$1);
     let ord;
     let marker;
     let rest;
@@ -9616,7 +9762,7 @@ function parse_ordinal_item(sp_dot_paren, line) {
   let line$1;
   idx = $[0];
   line$1 = $[1];
-  let $1 = split3(sp_dot_paren, line$1);
+  let $1 = split4(sp_dot_paren, line$1);
   let ord;
   let marker;
   let rest;
@@ -9859,7 +10005,7 @@ function re_from_string(re) {
   return re$1;
 }
 function re_from_string_i(re) {
-  let opt = new Options3(true, false);
+  let opt = new Options2(true, false);
   let $ = compile2(re, opt);
   let re$1;
   if ($ instanceof Ok) {
@@ -10306,7 +10452,7 @@ class Parser extends CustomType {
   }
 }
 function new_state(start5, line_splitter) {
-  let $ = split3(line_splitter, start5);
+  let $ = split4(line_splitter, start5);
   let current;
   let rest;
   current = $[0];
@@ -10319,7 +10465,7 @@ function new_state(start5, line_splitter) {
   return new Parser(line_splitter, start5, rest, line, line, indent);
 }
 function advance_line(state) {
-  let $ = split3(state.line_splitter, state.rest);
+  let $ = split4(state.line_splitter, state.rest);
   let new_current;
   let new_rest;
   new_current = $[0];
@@ -10332,13 +10478,13 @@ function advance_line(state) {
   return new Parser(state.line_splitter, state.start, new_rest, line, line, indent);
 }
 function next_line_is_blank(state) {
-  let $ = split3(state.line_splitter, state.rest);
+  let $ = split4(state.line_splitter, state.rest);
   let next;
   next = $[0];
   return is_blank(next);
 }
 function next_line(state) {
-  let $ = split3(state.line_splitter, state.rest);
+  let $ = split4(state.line_splitter, state.rest);
   let next;
   next = $[0];
   return next;
@@ -10392,7 +10538,7 @@ function do_merge_until_unescaped_end_bracket(loop$in, loop$sp, loop$acc, loop$s
     let sp = loop$sp;
     let acc = loop$acc;
     let stack = loop$stack;
-    let $ = split3(sp, in$);
+    let $ = split4(sp, in$);
     let l;
     let s;
     let r;
@@ -11378,7 +11524,7 @@ function do_delim_row(loop$pipe, loop$input, loop$count, loop$res) {
     let count2 = loop$count;
     let res = loop$res;
     let input$1 = gobble_hspace(input2);
-    let $ = split3(pipe, input$1);
+    let $ = split4(pipe, input$1);
     let l;
     let s;
     let r;
@@ -11449,7 +11595,7 @@ function do_pipe_split(loop$pipe, loop$input, loop$acc, loop$res) {
     let input2 = loop$input;
     let acc = loop$acc;
     let res = loop$res;
-    let $ = split3(pipe, input2);
+    let $ = split4(pipe, input2);
     let l;
     let s;
     let r;
@@ -12460,7 +12606,7 @@ function do_split_at_tag(loop$sp, loop$rest, loop$acc, loop$stack) {
     let rest = loop$rest;
     let acc = loop$acc;
     let stack = loop$stack;
-    let $ = split3(sp, rest);
+    let $ = split4(sp, rest);
     let l;
     let s;
     let r;
@@ -12701,7 +12847,7 @@ function parse_autolink_tail(_, rest) {
     let sp = new$6(toList([" ", `\r
 `, `
 `, "\t", "<"]));
-    let $2 = split3(sp, rest);
+    let $2 = split4(sp, rest);
     let l;
     let s;
     let r;
@@ -12902,7 +13048,7 @@ function do_parse_inlines(loop$ctx, loop$acc, loop$inlines) {
     let ctx = loop$ctx;
     let acc = loop$acc;
     let inlines = loop$inlines;
-    let $ = split3(ctx.cache.sp_inline, ctx.state.start);
+    let $ = split4(ctx.cache.sp_inline, ctx.state.start);
     let l;
     let sep;
     let r;
@@ -13321,7 +13467,7 @@ function do_parse_codespan_end(loop$ctx, loop$runsplit, loop$run, loop$acc, loop
     let run2 = loop$run;
     let acc = loop$acc;
     let inlines = loop$inlines;
-    let $ = split3(runsplit, ctx.state.start);
+    let $ = split4(runsplit, ctx.state.start);
     let pre2;
     let runend;
     let post2;
@@ -13965,13 +14111,13 @@ function do_parse_linkref(ctx, acc, inlines) {
 
 // build/dev/javascript/mork/mork.mjs
 function configure2() {
-  return new Options2(false, true, false, false, false, false, false);
+  return new Options3(false, true, false, false, false, false, false);
 }
 function split_frontmatter_from_input(input2) {
   let fms = new$6(toList([`---
 `, `---\r
 `]));
-  let $ = split3(fms, input2);
+  let $ = split4(fms, input2);
   let nothing;
   let start5;
   let rest;
@@ -13982,7 +14128,7 @@ function split_frontmatter_from_input(input2) {
   if ($1) {
     return ["", input2];
   } else {
-    let $2 = split3(fms, rest);
+    let $2 = split4(fms, rest);
     let frontmatter;
     let end;
     let rest$1;
@@ -14049,6 +14195,9 @@ class Components extends CustomType {
     this.tr = tr2;
     this.ul = ul2;
   }
+}
+function img2(components, img3) {
+  return new Components(components.a, components.blockquote, components.checkbox, components.code, components.del, components.em, components.footnote, components.h1, components.h2, components.h3, components.h4, components.h5, components.h6, components.hr, img3, components.li, components.mark, components.ol, components.p, components.pre, components.strong, components.table, components.tbody, components.td, components.th, components.thead, components.tr, components.ul);
 }
 function default_view(view3) {
   return (children) => {
@@ -14519,6 +14668,89 @@ function render_markdown(markdown, render_options, components) {
   return render_document(_pipe$1, components);
 }
 
+// build/dev/javascript/client/client/markdown.mjs
+var FILEPATH6 = "src/client/markdown.gleam";
+function convert_html_images(text4) {
+  let $ = compile2('<img[^>]*?\\bsrc="([^"]*?)"[^>]*/?>', new Options2(true, false));
+  let img_re;
+  if ($ instanceof Ok) {
+    img_re = $[0];
+  } else {
+    throw makeError("let_assert", FILEPATH6, "client/markdown", 35, "convert_html_images", "Pattern match failed, no pattern matched the value.", { value: $, start: 995, end: 1157, pattern_start: 1006, pattern_end: 1016 });
+  }
+  let $1 = compile2('\\balt="([^"]*?)"', new Options2(true, false));
+  let alt_re;
+  if ($1 instanceof Ok) {
+    alt_re = $1[0];
+  } else {
+    throw makeError("let_assert", FILEPATH6, "client/markdown", 40, "convert_html_images", "Pattern match failed, no pattern matched the value.", {
+      value: $1,
+      start: 1160,
+      end: 1304,
+      pattern_start: 1171,
+      pattern_end: 1181
+    });
+  }
+  let matches2 = scan2(img_re, text4);
+  return fold2(matches2, text4, (acc, m) => {
+    let _block;
+    let $2 = scan2(alt_re, m.content);
+    if ($2 instanceof Empty) {
+      _block = "image";
+    } else {
+      let alt_match = $2.head;
+      let $32 = alt_match.submatches;
+      if ($32 instanceof Empty) {
+        _block = "image";
+      } else {
+        let $4 = $32.head;
+        if ($4 instanceof Some) {
+          let a2 = $4[0];
+          _block = a2;
+        } else {
+          _block = "image";
+        }
+      }
+    }
+    let alt2 = _block;
+    let _block$1;
+    let $3 = m.submatches;
+    if ($3 instanceof Empty) {
+      _block$1 = "";
+    } else {
+      let $4 = $3.head;
+      if ($4 instanceof Some) {
+        let s = $4[0];
+        _block$1 = s;
+      } else {
+        _block$1 = "";
+      }
+    }
+    let src3 = _block$1;
+    let replacement = "![" + alt2 + "](" + src3 + ")";
+    return replace(acc, m.content, replacement);
+  });
+}
+function render(text4) {
+  let processed = convert_html_images(text4);
+  let _block;
+  let _pipe = default$();
+  _block = img2(_pipe, (src3, alt2, _) => {
+    return img(toList([
+      src(src3),
+      alt(alt2),
+      styles(toList([
+        ["max-width", "100%"],
+        ["height", "auto"],
+        ["border-radius", "8px"],
+        ["margin", "0.5rem 0"]
+      ]))
+    ]));
+  });
+  let img_components = _block;
+  return render_markdown(processed, configure2(), img_components);
+}
+
 // build/dev/javascript/client/client/views/pr_review.mjs
 class DiffLineEntry extends CustomType {
   constructor(display_line, file_line, text4) {
@@ -14592,7 +14824,7 @@ function description_accordion(body, is_open) {
                 ["color", "#374151"],
                 ["word-break", "break-word"]
               ]))
-            ]), render_markdown(body, configure2(), default$()))
+            ]), render(body))
           ]));
         } else {
           return text3("");
@@ -14633,11 +14865,11 @@ function analyze_button() {
     ]))
   ]), toList([text3("Analyze PR")]));
 }
-function header_area(title2, number, url, model) {
+function header_area(title2, number, url, head_branch, model) {
   return div(toList([
     styles(toList([
       ["display", "flex"],
-      ["align-items", "center"],
+      ["align-items", "flex-start"],
       ["justify-content", "space-between"],
       ["margin-bottom", "1.5rem"],
       ["flex-wrap", "wrap"],
@@ -14681,6 +14913,30 @@ function header_area(title2, number, url, model) {
         ]), toList([
           span(toList([class$("material-symbols-outlined")]), toList([text3("open_in_new")]))
         ]))
+      ])),
+      div(toList([
+        styles(toList([
+          ["display", "inline-flex"],
+          ["align-items", "center"],
+          ["gap", "0.375rem"],
+          ["margin-top", "0.5rem"],
+          ["padding", "0.25rem 0.625rem"],
+          ["background", "#ede9fe"],
+          ["border-radius", "999px"],
+          [
+            "font-family",
+            '"SF Mono", "Fira Code", "Consolas", monospace'
+          ],
+          ["font-size", "0.75rem"],
+          ["color", "#6d28d9"],
+          ["line-height", "1.4"]
+        ]))
+      ]), toList([
+        span(toList([
+          class$("material-symbols-outlined"),
+          styles(toList([["font-size", "0.875rem"]]))
+        ]), toList([text3("account_tree")])),
+        text3(head_branch)
       ]))
     ])),
     div(toList([
@@ -14688,16 +14944,13 @@ function header_area(title2, number, url, model) {
     ]), toList([
       back_button(),
       (() => {
-        let $ = model.analysis;
-        if ($ instanceof Some) {
+        let $ = model.analysis_state;
+        if ($ instanceof NotAnalyzed) {
+          return analyze_button();
+        } else if ($ instanceof Analyzing) {
           return text3("");
         } else {
-          let $1 = model.loading;
-          if ($1) {
-            return text3("");
-          } else {
-            return analyze_button();
-          }
+          return analyze_button();
         }
       })()
     ]))
@@ -14720,7 +14973,7 @@ function analyze_prompt() {
         ["margin-bottom", "1rem"]
       ]))
     ]), toList([
-      text3('Click "Analyze PR" to start AI-powered code review')
+      text3('Analysis not started. Click "Analyze PR" to begin.')
     ]))
   ]));
 }
@@ -15017,7 +15270,7 @@ function line_colors(line) {
     return ["transparent", "transparent"];
   }
 }
-function diff_line_row(display_line, file_line, line) {
+function diff_line_row(display_line, file_line, line, language) {
   let $ = line_colors(line);
   let bg;
   let border_color;
@@ -15031,8 +15284,35 @@ function diff_line_row(display_line, file_line, line) {
     _block = to_string(n);
   }
   let gutter_text = _block;
+  let _block$1;
+  let $2 = starts_with(line, "@@");
+  if ($2) {
+    _block$1 = ["", ""];
+  } else {
+    let $3 = first2(line);
+    if ($3 instanceof Ok) {
+      let $4 = $3[0];
+      if ($4 === "+") {
+        _block$1 = ["+", drop_start(line, 1)];
+      } else if ($4 === "-") {
+        _block$1 = ["-", drop_start(line, 1)];
+      } else if ($4 === " ") {
+        _block$1 = [" ", drop_start(line, 1)];
+      } else {
+        _block$1 = ["", line];
+      }
+    } else {
+      _block$1 = ["", line];
+    }
+  }
+  let $1 = _block$1;
+  let marker;
+  let code2;
+  marker = $1[0];
+  code2 = $1[1];
+  let is_hunk_header = starts_with(line, "@@");
   return div(toList([
-    on_click(new StartComment(display_line)),
+    on_click(new StartComment(display_line, file_line)),
     styles(toList([
       ["display", "flex"],
       ["background", bg],
@@ -15063,13 +15343,30 @@ function diff_line_row(display_line, file_line, line) {
         ["flex-shrink", "0"]
       ]))
     ]), toList([text3(gutter_text)])),
-    span(toList([
-      styles(toList([
-        ["padding", "0 0.75rem"],
-        ["white-space", "pre"],
-        ["flex", "1"]
-      ]))
-    ]), toList([text3(line)]))
+    (() => {
+      if (is_hunk_header) {
+        return span(toList([
+          styles(toList([
+            ["padding", "0 0.75rem"],
+            ["white-space", "pre"],
+            ["flex", "1"]
+          ]))
+        ]), toList([text3(line)]));
+      } else {
+        let highlighted_html = highlight_line(code2, language);
+        return span(toList([
+          styles(toList([
+            ["padding", "0 0.75rem"],
+            ["white-space", "pre"],
+            ["flex", "1"],
+            ["display", "flex"]
+          ]))
+        ]), toList([
+          span(toList([]), toList([text3(marker)])),
+          unsafe_raw_html("", "span", toList([]), highlighted_html)
+        ]));
+      }
+    })()
   ]));
 }
 function comment_display(comment) {
@@ -15200,13 +15497,45 @@ function github_comment_display(comment) {
       span(toList([styles(toList([["font-weight", "600"]]))]), toList([text3(comment.author)])),
       span(toList([]), toList([text3(comment.created_at)]))
     ])),
-    div(toList([]), render_markdown(comment.body, configure2(), default$()))
+    div(toList([]), render(comment.body))
   ]));
 }
-function diff_view(chunk, commenting_line, comment_text, chunk_comments, chunk_github_comments, posting_comment) {
+function diff_view(chunk, commenting, chunk_comments, chunk_github_comments) {
   let lines = split2(chunk.diff_content, `
 `);
   let file_indexed_lines = index_with_file_lines(lines);
+  let language = detect_language(chunk.file_path);
+  let _block;
+  if (commenting instanceof NotCommenting) {
+    _block = new None;
+  } else if (commenting instanceof Commenting) {
+    let dl = commenting.display_line;
+    _block = new Some(dl);
+  } else {
+    let dl = commenting.display_line;
+    _block = new Some(dl);
+  }
+  let commenting_display_line = _block;
+  let _block$1;
+  if (commenting instanceof NotCommenting) {
+    _block$1 = "";
+  } else if (commenting instanceof Commenting) {
+    let text4 = commenting.text;
+    _block$1 = text4;
+  } else {
+    let text4 = commenting.text;
+    _block$1 = text4;
+  }
+  let comment_text = _block$1;
+  let _block$2;
+  if (commenting instanceof NotCommenting) {
+    _block$2 = false;
+  } else if (commenting instanceof Commenting) {
+    _block$2 = false;
+  } else {
+    _block$2 = true;
+  }
+  let is_posting = _block$2;
   return div(toList([
     styles(toList([
       ["overflow-x", "auto"],
@@ -15221,10 +15550,10 @@ function diff_view(chunk, commenting_line, comment_text, chunk_comments, chunk_g
     let line_github_comments = filter(chunk_github_comments, (c) => {
       return c.line === entry.file_line;
     });
-    let is_commenting = isEqual(commenting_line, new Some(entry.display_line));
+    let is_commenting = isEqual(commenting_display_line, new Some(entry.display_line));
     return flatten(toList([
       toList([
-        diff_line_row(entry.display_line, entry.file_line, entry.text)
+        diff_line_row(entry.display_line, entry.file_line, entry.text, language)
       ]),
       map2(line_github_comments, (c) => {
         return github_comment_display(c);
@@ -15234,7 +15563,7 @@ function diff_view(chunk, commenting_line, comment_text, chunk_comments, chunk_g
       }),
       (() => {
         if (is_commenting) {
-          return toList([comment_input(comment_text, posting_comment)]);
+          return toList([comment_input(comment_text, is_posting)]);
         } else {
           return toList([]);
         }
@@ -15242,7 +15571,7 @@ function diff_view(chunk, commenting_line, comment_text, chunk_comments, chunk_g
     ]));
   }));
 }
-function chunk_panel(chunk, pr_url, commenting_line, comment_text, comments, github_comments, posting_comment) {
+function chunk_panel(chunk, pr_url, commenting, comments, github_comments) {
   let chunk_comments = filter(comments, (c) => {
     return c.chunk_index === chunk.index;
   });
@@ -15318,7 +15647,7 @@ function chunk_panel(chunk, pr_url, commenting_line, comment_text, comments, git
         span(toList([class$("material-symbols-outlined")]), toList([text3("open_in_new")]))
       ]))
     ])),
-    diff_view(chunk, commenting_line, comment_text, chunk_comments, chunk_github_comments, posting_comment)
+    diff_view(chunk, commenting, chunk_comments, chunk_github_comments)
   ]));
 }
 function general_comments_section(github_comments) {
@@ -15372,7 +15701,7 @@ function general_comments_section(github_comments) {
             ]), toList([text3(comment.author)])),
             span(toList([]), toList([text3(comment.created_at)]))
           ])),
-          div(toList([]), render_markdown(comment.body, configure2(), default$()))
+          div(toList([]), render(comment.body))
         ]));
       }))
     ]));
@@ -15440,7 +15769,23 @@ function review_action_button(label2, event_type, bg_color, _, submitting) {
     })())
   ]));
 }
-function review_submission_section(review_body, submitting) {
+function review_submission_section(review) {
+  let _block;
+  if (review instanceof ReviewIdle) {
+    let body = review.body;
+    _block = body;
+  } else {
+    let body = review.body;
+    _block = body;
+  }
+  let review_body = _block;
+  let _block$1;
+  if (review instanceof ReviewIdle) {
+    _block$1 = false;
+  } else {
+    _block$1 = true;
+  }
+  let submitting = _block$1;
   return div(toList([
     styles(toList([
       ["background", "#ffffff"],
@@ -15503,13 +15848,13 @@ function analysis_view(analysis, pr_url, model) {
     (() => {
       if (maybe_chunk instanceof Ok) {
         let chunk = maybe_chunk[0];
-        return chunk_panel(chunk, pr_url, model.commenting_line, model.comment_text, model.comments, model.github_comments, model.posting_comment);
+        return chunk_panel(chunk, pr_url, model.commenting, model.comments, model.github_comments);
       } else {
         return p(toList([]), toList([text3("No chunks available.")]));
       }
     })(),
     bottom_navigation(current, chunk_count),
-    review_submission_section(model.review_body, model.submitting_review)
+    review_submission_section(model.review)
   ]));
 }
 function view3(model) {
@@ -15525,7 +15870,7 @@ function view3(model) {
         ["color", "#1a1a2e"]
       ]))
     ]), toList([
-      header_area(detail.title, detail.number, detail.url, model),
+      header_area(detail.title, detail.number, detail.url, detail.head_branch, model),
       description_accordion(detail.body, model.description_open),
       (() => {
         let $1 = model.error;
@@ -15536,21 +15881,22 @@ function view3(model) {
           return text3("");
         }
       })(),
+      general_comments_section(model.github_comments),
       (() => {
-        let $1 = model.analysis;
-        if ($1 instanceof Some) {
-          let analysis = $1[0];
-          return analysis_view(analysis, detail.url, model);
-        } else {
+        let $1 = model.analysis_state;
+        if ($1 instanceof NotAnalyzed) {
           let $2 = model.loading;
           if ($2) {
-            return loading_indicator2(model.stream_heartbeats);
+            return loading_indicator2(0);
           } else {
-            return div(toList([]), toList([
-              analyze_prompt(),
-              general_comments_section(model.github_comments)
-            ]));
+            return analyze_prompt();
           }
+        } else if ($1 instanceof Analyzing) {
+          let heartbeats = $1.heartbeats;
+          return loading_indicator2(heartbeats);
+        } else {
+          let analysis = $1.result;
+          return analysis_view(analysis, detail.url, model);
         }
       })()
     ]));
@@ -15572,7 +15918,7 @@ function view3(model) {
 }
 
 // build/dev/javascript/client/client.mjs
-var FILEPATH6 = "src/client.gleam";
+var FILEPATH7 = "src/client.gleam";
 
 class DashboardRoute extends CustomType {
 }
@@ -15600,6 +15946,9 @@ function format_error(err) {
     let response = err[0];
     return "Unexpected response (" + to_string(response.status) + ")";
   }
+}
+function reset_pr_state(model) {
+  return new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, new NotAnalyzed, 0, toList([]), new NotCommenting, toList([]), model.description_open, new ReviewIdle(""));
 }
 function parse_route(uri) {
   let path = uri.path;
@@ -15669,12 +16018,13 @@ function init2(_) {
   initial_loading = $[1];
   initial_effect = $[2];
   return [
-    new Model(toList([default_repo]), default_repo, new None, new None, initial_loading, initial_view, new None, new None, 0, toList([]), new None, "", toList([]), false, 0, false, "", false),
+    new Model(toList([default_repo]), default_repo, new None, new None, initial_loading, initial_view, new None, new NotAnalyzed, 0, toList([]), new NotCommenting, toList([]), false, new ReviewIdle("")),
     batch(toList([
       init((var0) => {
         return new UrlChanged(var0);
       }),
-      initial_effect
+      initial_effect,
+      start_auto_refresh()
     ]))
   ];
 }
@@ -15684,13 +16034,13 @@ function update2(model, msg) {
     if ($ instanceof Ok) {
       let groups = $[0];
       return [
-        new Model(model.repos, model.active_repo, new Some(groups), model.selected_pr, false, model.view, new None, model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, model.posting_comment, model.stream_heartbeats, model.description_open, model.review_body, model.submitting_review),
+        new Model(model.repos, model.active_repo, new Some(groups), model.selected_pr, false, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
         none()
       ];
     } else {
       let err = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some(format_error(err)), model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, model.posting_comment, model.stream_heartbeats, model.description_open, model.review_body, model.submitting_review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
         none()
       ];
     }
@@ -15699,20 +16049,24 @@ function update2(model, msg) {
     if ($ instanceof Ok) {
       let detail = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, new Some(detail), false, model.view, new None, model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, model.posting_comment, model.stream_heartbeats, model.description_open, model.review_body, model.submitting_review),
-        fetch_github_comments(model.active_repo, detail.number)
+        new Model(model.repos, model.active_repo, model.pr_groups, new Some(detail), true, model.view, new None, new Analyzing(0), model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
+        batch(toList([
+          fetch_github_comments(model.active_repo, detail.number),
+          analyze_pr_stream(model.active_repo, detail.number)
+        ]))
       ];
     } else {
       let err = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some(format_error(err)), model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, model.posting_comment, model.stream_heartbeats, model.description_open, model.review_body, model.submitting_review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
         none()
       ];
     }
   } else if (msg instanceof SelectPr) {
     let number = msg[0];
+    let new_model = reset_pr_state(model);
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, true, new PrReview, new None, new None, 0, toList([]), new None, "", toList([]), false, 0, model.description_open, "", false),
+      new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review),
       batch(toList([
         push_url("/pr/" + to_string(number)),
         fetch_pr_detail(model.active_repo, number)
@@ -15721,17 +16075,18 @@ function update2(model, msg) {
   } else if (msg instanceof SetRepo) {
     let repo = msg[0];
     return [
-      new Model(model.repos, repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, model.posting_comment, model.stream_heartbeats, model.description_open, model.review_body, model.submitting_review),
+      new Model(model.repos, repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
       none()
     ];
   } else if (msg instanceof BackToDashboard) {
+    let new_model = reset_pr_state(model);
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, new None, model.loading, new Dashboard, new None, new None, 0, toList([]), new None, "", toList([]), false, 0, model.description_open, "", false),
+      new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new None, new_model.loading, new Dashboard, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review),
       push_url("/")
     ];
   } else if (msg instanceof FetchPrs) {
     return [
-      new Model(model.repos, model.active_repo, new None, model.selected_pr, true, model.view, new None, model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, model.posting_comment, model.stream_heartbeats, model.description_open, model.review_body, model.submitting_review),
+      new Model(model.repos, model.active_repo, new None, model.selected_pr, true, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
       fetch_prs(model.active_repo)
     ];
   } else if (msg instanceof AnalyzePr) {
@@ -15739,7 +16094,7 @@ function update2(model, msg) {
     if ($ instanceof Some) {
       let detail = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, true, model.view, new None, model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, model.posting_comment, 0, model.description_open, model.review_body, model.submitting_review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, true, model.view, new None, new Analyzing(0), model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
         analyze_pr_stream(model.active_repo, detail.number)
       ];
     } else {
@@ -15750,13 +16105,13 @@ function update2(model, msg) {
     if ($ instanceof Ok) {
       let analysis = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new None, new Some(analysis), 0, model.comments, model.commenting_line, model.comment_text, model.github_comments, model.posting_comment, model.stream_heartbeats, model.description_open, model.review_body, model.submitting_review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new None, new Analyzed(analysis), 0, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
         none()
       ];
     } else {
       let err = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some(format_error(err)), model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, model.posting_comment, model.stream_heartbeats, model.description_open, model.review_body, model.submitting_review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
         none()
       ];
     }
@@ -15766,12 +16121,12 @@ function update2(model, msg) {
     if ($ instanceof Ok) {
       let analysis = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new None, new Some(analysis), 0, model.comments, model.commenting_line, model.comment_text, model.github_comments, model.posting_comment, 0, model.description_open, model.review_body, model.submitting_review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new None, new Analyzed(analysis), 0, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
         none()
       ];
     } else {
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some("Failed to parse analysis response"), model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, model.posting_comment, 0, model.description_open, model.review_body, model.submitting_review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some("Failed to parse analysis response"), new NotAnalyzed, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
         none()
       ];
     }
@@ -15789,28 +16144,36 @@ function update2(model, msg) {
     }
     let error_msg = _block;
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some("Analysis failed: " + error_msg), model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, model.posting_comment, 0, model.description_open, model.review_body, model.submitting_review),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some("Analysis failed: " + error_msg), new NotAnalyzed, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
       none()
     ];
   } else if (msg instanceof SseHeartbeat) {
-    return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, model.posting_comment, model.stream_heartbeats + 1, model.description_open, model.review_body, model.submitting_review),
-      none()
-    ];
+    let $ = model.analysis_state;
+    if ($ instanceof Analyzing) {
+      let n = $.heartbeats;
+      return [
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, new Analyzing(n + 1), model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
+        none()
+      ];
+    } else {
+      return [model, none()];
+    }
   } else if (msg instanceof SseConnectionError) {
     let msg$1 = msg[0];
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some("Connection error: " + msg$1), model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, model.posting_comment, 0, model.description_open, model.review_body, model.submitting_review),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some("Connection error: " + msg$1), new NotAnalyzed, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
       none()
     ];
   } else if (msg instanceof NextChunk) {
     let _block;
-    let $ = model.analysis;
-    if ($ instanceof Some) {
-      let a2 = $[0];
-      _block = length(a2.chunks) - 1;
-    } else {
+    let $ = model.analysis_state;
+    if ($ instanceof NotAnalyzed) {
       _block = 0;
+    } else if ($ instanceof Analyzing) {
+      _block = 0;
+    } else {
+      let analysis = $.result;
+      _block = length(analysis.chunks) - 1;
     }
     let max2 = _block;
     let _block$1;
@@ -15822,7 +16185,7 @@ function update2(model, msg) {
     }
     let next = _block$1;
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis, next, model.comments, new None, "", model.github_comments, model.posting_comment, model.stream_heartbeats, model.description_open, model.review_body, model.submitting_review),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, next, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review),
       none()
     ];
   } else if (msg instanceof PrevChunk) {
@@ -15835,42 +16198,59 @@ function update2(model, msg) {
     }
     let prev = _block;
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis, prev, model.comments, new None, "", model.github_comments, model.posting_comment, model.stream_heartbeats, model.description_open, model.review_body, model.submitting_review),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, prev, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review),
       none()
     ];
   } else if (msg instanceof GoToChunk) {
     let n = msg[0];
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis, n, model.comments, new None, "", model.github_comments, model.posting_comment, model.stream_heartbeats, model.description_open, model.review_body, model.submitting_review),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, n, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review),
       none()
     ];
   } else if (msg instanceof StartComment) {
-    let line = msg[0];
+    let display_line = msg[0];
+    let file_line = msg[1];
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis, model.current_chunk, model.comments, new Some(line), "", model.github_comments, model.posting_comment, model.stream_heartbeats, model.description_open, model.review_body, model.submitting_review),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new Commenting(display_line, file_line, ""), model.github_comments, model.description_open, model.review),
       none()
     ];
   } else if (msg instanceof CancelComment) {
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis, model.current_chunk, model.comments, new None, "", model.github_comments, model.posting_comment, model.stream_heartbeats, model.description_open, model.review_body, model.submitting_review),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review),
       none()
     ];
   } else if (msg instanceof UpdateCommentText) {
     let text4 = msg[0];
-    return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis, model.current_chunk, model.comments, model.commenting_line, text4, model.github_comments, model.posting_comment, model.stream_heartbeats, model.description_open, model.review_body, model.submitting_review),
-      none()
-    ];
+    let $ = model.commenting;
+    if ($ instanceof NotCommenting) {
+      return [model, none()];
+    } else if ($ instanceof Commenting) {
+      let dl = $.display_line;
+      let fl = $.file_line;
+      return [
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new Commenting(dl, fl, text4), model.github_comments, model.description_open, model.review),
+        none()
+      ];
+    } else {
+      let dl = $.display_line;
+      let fl = $.file_line;
+      return [
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new PostingComment(dl, fl, text4), model.github_comments, model.description_open, model.review),
+        none()
+      ];
+    }
   } else if (msg instanceof SubmitComment) {
-    let $ = model.commenting_line;
+    let $ = model.commenting;
     let $1 = model.selected_pr;
-    let $2 = model.analysis;
-    if ($ instanceof Some && $1 instanceof Some) {
-      if ($2 instanceof Some) {
-        let line = $[0];
+    let $2 = model.analysis_state;
+    if ($1 instanceof Some && $ instanceof Commenting) {
+      if ($2 instanceof Analyzed) {
         let detail = $1[0];
-        let analysis = $2[0];
-        let comment = new LineComment(model.current_chunk, line, model.comment_text);
+        let display_line = $.display_line;
+        let file_line = $.file_line;
+        let text4 = $.text;
+        let analysis = $2.result;
+        let comment = new LineComment(model.current_chunk, display_line, text4);
         let _block;
         let $3 = (() => {
           let _pipe = drop(analysis.chunks, model.current_chunk);
@@ -15878,20 +16258,27 @@ function update2(model, msg) {
         })();
         if ($3 instanceof Ok) {
           let chunk = $3[0];
-          _block = chunk.file_path;
+          let $4 = split_once(chunk.file_path, " (+");
+          if ($4 instanceof Ok) {
+            let path = $4[0][0];
+            _block = path;
+          } else {
+            _block = chunk.file_path;
+          }
         } else {
           _block = "";
         }
         let file_path = _block;
         return [
-          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis, model.current_chunk, prepend(comment, model.comments), new None, "", model.github_comments, true, model.stream_heartbeats, model.description_open, model.review_body, model.submitting_review),
-          post_github_comment(model.active_repo, detail.number, model.comment_text, file_path, line)
+          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, prepend(comment, model.comments), new PostingComment(display_line, file_line, text4), model.github_comments, model.description_open, model.review),
+          post_github_comment(model.active_repo, detail.number, text4, file_path, file_line)
         ];
       } else {
-        let line = $[0];
-        let comment = new LineComment(model.current_chunk, line, model.comment_text);
+        let display_line = $.display_line;
+        let text4 = $.text;
+        let comment = new LineComment(model.current_chunk, display_line, text4);
         return [
-          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis, model.current_chunk, prepend(comment, model.comments), new None, "", model.github_comments, model.posting_comment, model.stream_heartbeats, model.description_open, model.review_body, model.submitting_review),
+          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, prepend(comment, model.comments), new NotCommenting, model.github_comments, model.description_open, model.review),
           none()
         ];
       }
@@ -15903,13 +16290,13 @@ function update2(model, msg) {
     if ($ instanceof Ok) {
       let comments = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, comments, model.posting_comment, model.stream_heartbeats, model.description_open, model.review_body, model.submitting_review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, comments, model.description_open, model.review),
         none()
       ];
     } else {
       let err = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new Some(format_error(err)), model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, model.posting_comment, model.stream_heartbeats, model.description_open, model.review_body, model.submitting_review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
         none()
       ];
     }
@@ -15920,19 +16307,19 @@ function update2(model, msg) {
       if ($1 instanceof Some) {
         let detail = $1[0];
         return [
-          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, false, model.stream_heartbeats, model.description_open, model.review_body, model.submitting_review),
+          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review),
           fetch_github_comments(model.active_repo, detail.number)
         ];
       } else {
         return [
-          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, false, model.stream_heartbeats, model.description_open, model.review_body, model.submitting_review),
+          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review),
           none()
         ];
       }
     } else {
       let err = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new Some(format_error(err)), model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, false, model.stream_heartbeats, model.description_open, model.review_body, model.submitting_review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review),
         none()
       ];
     }
@@ -15944,8 +16331,9 @@ function update2(model, msg) {
       if ($1 instanceof Dashboard) {
         return [model, none()];
       } else {
+        let new_model = reset_pr_state(model);
         return [
-          new Model(model.repos, model.active_repo, model.pr_groups, new None, model.loading, new Dashboard, new None, new None, 0, toList([]), new None, "", toList([]), false, 0, model.description_open, "", false),
+          new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new None, new_model.loading, new Dashboard, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review),
           none()
         ];
       }
@@ -15953,8 +16341,9 @@ function update2(model, msg) {
       let number = $[0];
       let $1 = model.view;
       if ($1 instanceof Dashboard) {
+        let new_model = reset_pr_state(model);
         return [
-          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, true, new PrReview, new None, new None, 0, toList([]), new None, "", toList([]), false, 0, model.description_open, "", false),
+          new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review),
           fetch_pr_detail(model.active_repo, number)
         ];
       } else {
@@ -15964,14 +16353,16 @@ function update2(model, msg) {
           if (detail.number === number) {
             return [model, none()];
           } else {
+            let new_model = reset_pr_state(model);
             return [
-              new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, true, new PrReview, new None, new None, 0, toList([]), new None, "", toList([]), false, 0, model.description_open, "", false),
+              new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review),
               fetch_pr_detail(model.active_repo, number)
             ];
           }
         } else {
+          let new_model = reset_pr_state(model);
           return [
-            new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, true, new PrReview, new None, new None, 0, toList([]), new None, "", toList([]), false, 0, model.description_open, "", false),
+            new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review),
             fetch_pr_detail(model.active_repo, number)
           ];
         }
@@ -15979,50 +16370,72 @@ function update2(model, msg) {
     }
   } else if (msg instanceof ToggleDescription) {
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, model.posting_comment, model.stream_heartbeats, !model.description_open, model.review_body, model.submitting_review),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, !model.description_open, model.review),
       none()
     ];
   } else if (msg instanceof SubmitReview) {
     let event4 = msg[0];
     let $ = model.selected_pr;
+    let $1 = model.review;
     if ($ instanceof Some) {
-      let detail = $[0];
-      return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new None, model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, model.posting_comment, model.stream_heartbeats, model.description_open, model.review_body, true),
-        submit_review(model.active_repo, detail.number, event4, model.review_body)
-      ];
+      if ($1 instanceof ReviewIdle) {
+        let detail = $[0];
+        let body = $1.body;
+        return [
+          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new SubmittingReview(body)),
+          submit_review(model.active_repo, detail.number, event4, body)
+        ];
+      } else {
+        let detail = $[0];
+        let body = $1.body;
+        return [
+          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new SubmittingReview(body)),
+          submit_review(model.active_repo, detail.number, event4, body)
+        ];
+      }
     } else {
       return [model, none()];
     }
   } else if (msg instanceof SetReviewBody) {
     let text4 = msg[0];
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, model.posting_comment, model.stream_heartbeats, model.description_open, text4, model.submitting_review),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new ReviewIdle(text4)),
       none()
     ];
-  } else {
+  } else if (msg instanceof ReviewSubmitted) {
     let $ = msg[0];
     if ($ instanceof Ok) {
       let $1 = model.selected_pr;
       if ($1 instanceof Some) {
         let detail = $1[0];
         return [
-          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new None, model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, model.posting_comment, model.stream_heartbeats, model.description_open, "", false),
+          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new ReviewIdle("")),
           fetch_github_comments(model.active_repo, detail.number)
         ];
       } else {
         return [
-          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, model.posting_comment, model.stream_heartbeats, model.description_open, "", false),
+          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new ReviewIdle("")),
           none()
         ];
       }
     } else {
       let err = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new Some(format_error(err)), model.analysis, model.current_chunk, model.comments, model.commenting_line, model.comment_text, model.github_comments, model.posting_comment, model.stream_heartbeats, model.description_open, model.review_body, false),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new ReviewIdle((() => {
+          let $1 = model.review;
+          if ($1 instanceof ReviewIdle) {
+            let body = $1.body;
+            return body;
+          } else {
+            let body = $1.body;
+            return body;
+          }
+        })())),
         none()
       ];
     }
+  } else {
+    return [model, fetch_prs(model.active_repo)];
   }
 }
 function view4(model) {
@@ -16037,7 +16450,7 @@ function main() {
   let app = application(init2, update2, view4);
   let $ = start4(app, "#app", undefined);
   if (!($ instanceof Ok)) {
-    throw makeError("let_assert", FILEPATH6, "client", 29, "main", "Pattern match failed, no pattern matched the value.", { value: $, start: 863, end: 912, pattern_start: 874, pattern_end: 879 });
+    throw makeError("let_assert", FILEPATH7, "client", 30, "main", "Pattern match failed, no pattern matched the value.", { value: $, start: 984, end: 1033, pattern_start: 995, pattern_end: 1000 });
   }
   return;
 }
