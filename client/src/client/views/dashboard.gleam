@@ -8,19 +8,47 @@ import lustre/element/html
 import lustre/event
 import shared/pr.{type PrGroups, type PullRequest}
 
+import monks/align_items
+import monks/background
+import monks/border
+import monks/border_bottom
+import monks/border_collapse
+import monks/border_radius
+import monks/color
+import monks/cursor
+import monks/display
+import monks/flex
+import monks/font_size
+import monks/font_style
+import monks/font_weight
+import monks/gap
+import monks/margin
+import monks/margin_bottom
+import monks/max_width
+import monks/padding
+import monks/text_align
+import monks/text_decoration
+import monks/white_space
+import monks/width
+
+import open_props/borders
+import open_props/colors
+import open_props/fonts
+import open_props/sizes
+
 pub fn view(model: Model) -> Element(Msg) {
   html.div(
     [
       attribute.styles([
-        #("max-width", "960px"),
-        #("margin", "0 auto"),
-        #("padding", "2rem"),
-        #("font-family", "system-ui, sans-serif"),
+        max_width.raw("960px"),
+        margin.raw("0 auto"),
+        padding.raw(sizes.size_7),
+        #("font-family", fonts.font_system_ui),
       ]),
     ],
     [
       html.h1(
-        [attribute.styles([#("color", "#1a1a2e"), #("margin-bottom", "1.5rem")])],
+        [attribute.styles([color.raw(colors.indigo_12), margin_bottom.raw(sizes.size_5)])],
         [html.text("Augmented Review Dashboard")],
       ),
       repo_selector(model),
@@ -40,15 +68,15 @@ fn repo_selector(model: Model) -> Element(Msg) {
   html.div(
     [
       attribute.styles([
-        #("display", "flex"),
-        #("gap", "0.5rem"),
-        #("margin-bottom", "1.5rem"),
-        #("align-items", "center"),
+        display.flex,
+        gap.raw(sizes.size_2),
+        margin_bottom.raw(sizes.size_5),
+        align_items.center,
       ]),
     ],
     [
       html.label(
-        [attribute.styles([#("font-weight", "600")])],
+        [attribute.styles([font_weight.raw("600")])],
         [html.text("Repository:")],
       ),
       html.input([
@@ -56,24 +84,24 @@ fn repo_selector(model: Model) -> Element(Msg) {
         attribute.placeholder("owner/repo"),
         event.on_input(SetRepo),
         attribute.styles([
-          #("padding", "0.5rem 0.75rem"),
-          #("border", "1px solid #ccc"),
-          #("border-radius", "4px"),
-          #("flex", "1"),
-          #("font-size", "0.95rem"),
+          padding.raw(sizes.size_2 <> " " <> sizes.size_3),
+          border.raw("1px solid " <> colors.gray_4),
+          border_radius.raw(borders.radius_2),
+          flex.raw("1"),
+          font_size.raw(fonts.font_size_1),
         ]),
       ]),
       html.button(
         [
           event.on_click(FetchPrs),
           attribute.styles([
-            #("padding", "0.5rem 1rem"),
-            #("background", "#4361ee"),
-            #("color", "white"),
-            #("border", "none"),
-            #("border-radius", "4px"),
-            #("cursor", "pointer"),
-            #("font-size", "0.95rem"),
+            padding.raw(sizes.size_2 <> " " <> sizes.size_4),
+            background.raw(colors.indigo_6),
+            color.raw("white"),
+            border.none,
+            border_radius.raw(borders.radius_2),
+            cursor.pointer,
+            font_size.raw(fonts.font_size_1),
           ]),
         ],
         [html.text("Fetch PRs")],
@@ -86,13 +114,13 @@ fn error_banner(message: String) -> Element(Msg) {
   html.div(
     [
       attribute.styles([
-        #("padding", "0.75rem 1rem"),
-        #("margin-bottom", "1rem"),
-        #("background", "#fee2e2"),
-        #("border", "1px solid #fca5a5"),
-        #("border-radius", "6px"),
-        #("color", "#991b1b"),
-        #("font-size", "0.9rem"),
+        padding.raw(sizes.size_3 <> " " <> sizes.size_4),
+        margin_bottom.raw(sizes.size_4),
+        background.raw(colors.red_1),
+        border.raw("1px solid " <> colors.red_4),
+        border_radius.raw(borders.radius_2),
+        color.raw(colors.red_10),
+        font_size.raw(fonts.font_size_0),
       ]),
     ],
     [html.text(message)],
@@ -103,10 +131,10 @@ fn loading_indicator() -> Element(Msg) {
   html.div(
     [
       attribute.styles([
-        #("text-align", "center"),
-        #("padding", "3rem"),
-        #("color", "#666"),
-        #("font-size", "1.1rem"),
+        text_align.center,
+        padding.raw(sizes.size_9),
+        color.raw(colors.gray_6),
+        font_size.raw(fonts.font_size_2),
       ]),
     ],
     [html.text("Loading pull requests...")],
@@ -119,9 +147,9 @@ fn pr_sections(groups: option.Option(PrGroups)) -> Element(Msg) {
       html.div(
         [
           attribute.styles([
-            #("text-align", "center"),
-            #("padding", "3rem"),
-            #("color", "#888"),
+            text_align.center,
+            padding.raw(sizes.size_9),
+            color.raw(colors.gray_5),
           ]),
         ],
         [html.text("No pull requests found. Click Fetch PRs to load.")],
@@ -140,7 +168,7 @@ fn pr_section(title: String, prs: List(PullRequest)) -> Element(Msg) {
   html.div(
     [
       attribute.styles([
-        #("margin-bottom", "2rem"),
+        margin_bottom.raw(sizes.size_7),
       ]),
     ],
     [
@@ -157,19 +185,19 @@ fn section_header(title: String, count: Int) -> Element(Msg) {
   html.div(
     [
       attribute.styles([
-        #("display", "flex"),
-        #("align-items", "center"),
-        #("gap", "0.5rem"),
-        #("margin-bottom", "0.75rem"),
+        display.flex,
+        align_items.center,
+        gap.raw(sizes.size_2),
+        margin_bottom.raw(sizes.size_3),
       ]),
     ],
     [
       html.h2(
         [
           attribute.styles([
-            #("color", "#1a1a2e"),
-            #("font-size", "1.15rem"),
-            #("margin", "0"),
+            color.raw(colors.indigo_12),
+            font_size.raw(fonts.font_size_2),
+            margin.raw("0"),
           ]),
         ],
         [html.text(title)],
@@ -177,12 +205,12 @@ fn section_header(title: String, count: Int) -> Element(Msg) {
       html.span(
         [
           attribute.styles([
-            #("background", "#4361ee"),
-            #("color", "white"),
-            #("padding", "0.15rem 0.5rem"),
-            #("border-radius", "10px"),
-            #("font-size", "0.8rem"),
-            #("font-weight", "600"),
+            background.raw(colors.indigo_6),
+            color.raw("white"),
+            padding.raw("0.15rem " <> sizes.size_2),
+            border_radius.raw("10px"),
+            font_size.raw(fonts.font_size_00),
+            font_weight.raw("600"),
           ]),
         ],
         [html.text(int.to_string(count))],
@@ -195,12 +223,12 @@ fn empty_section_message() -> Element(Msg) {
   html.div(
     [
       attribute.styles([
-        #("padding", "1.5rem"),
-        #("color", "#aaa"),
-        #("font-style", "italic"),
-        #("text-align", "center"),
-        #("border", "1px dashed #ddd"),
-        #("border-radius", "4px"),
+        padding.raw(sizes.size_5),
+        color.raw(colors.gray_5),
+        font_style.italic,
+        text_align.center,
+        border.raw("1px dashed " <> colors.gray_3),
+        border_radius.raw(borders.radius_2),
       ]),
     ],
     [html.text("No PRs")],
@@ -211,8 +239,8 @@ fn pr_table(prs: List(PullRequest)) -> Element(Msg) {
   html.table(
     [
       attribute.styles([
-        #("width", "100%"),
-        #("border-collapse", "collapse"),
+        width.raw("100%"),
+        border_collapse.collapse,
       ]),
     ],
     [
@@ -220,8 +248,8 @@ fn pr_table(prs: List(PullRequest)) -> Element(Msg) {
         html.tr(
           [
             attribute.styles([
-              #("background", "#f0f0f5"),
-              #("text-align", "left"),
+              background.raw(colors.gray_1),
+              text_align.left,
             ]),
           ],
           [
@@ -242,9 +270,9 @@ fn header_cell(label: String) -> Element(Msg) {
   html.th(
     [
       attribute.styles([
-        #("padding", "0.75rem 1rem"),
-        #("border-bottom", "2px solid #ddd"),
-        #("font-weight", "600"),
+        padding.raw(sizes.size_3 <> " " <> sizes.size_4),
+        border_bottom.raw("2px solid " <> colors.gray_3),
+        font_weight.raw("600"),
       ]),
     ],
     [html.text(label)],
@@ -256,13 +284,13 @@ fn pr_row(pull_request: PullRequest) -> Element(Msg) {
     [
       event.on_click(SelectPr(pull_request.number)),
       attribute.styles([
-        #("cursor", "pointer"),
-        #("border-bottom", "1px solid #eee"),
+        cursor.pointer,
+        border_bottom.raw("1px solid " <> colors.gray_2),
       ]),
     ],
     [
       html.td(
-        [attribute.styles([#("padding", "0.75rem 1rem")])],
+        [attribute.styles([padding.raw(sizes.size_3 <> " " <> sizes.size_4)])],
         [
           html.a(
             [
@@ -270,9 +298,9 @@ fn pr_row(pull_request: PullRequest) -> Element(Msg) {
               attribute.target("_blank"),
               event.on_click(FetchPrs) |> event.stop_propagation,
               attribute.styles([
-                #("color", "#4361ee"),
-                #("text-decoration", "none"),
-                #("font-weight", "500"),
+                color.raw(colors.indigo_6),
+                text_decoration.none,
+                font_weight.raw("500"),
               ]),
               attribute.class("hover-underline"),
             ],
@@ -283,22 +311,22 @@ fn pr_row(pull_request: PullRequest) -> Element(Msg) {
       html.td(
         [
           attribute.styles([
-            #("padding", "0.75rem 1rem"),
-            #("font-weight", "500"),
+            padding.raw(sizes.size_3 <> " " <> sizes.size_4),
+            font_weight.raw("500"),
           ]),
         ],
         [html.text(pull_request.title)],
       ),
-      html.td([attribute.styles([#("padding", "0.75rem 1rem")])], [
+      html.td([attribute.styles([padding.raw(sizes.size_3 <> " " <> sizes.size_4)])], [
         html.text(pull_request.author),
       ]),
-      html.td([attribute.styles([#("padding", "0.75rem 1rem")])], [
+      html.td([attribute.styles([padding.raw(sizes.size_3 <> " " <> sizes.size_4)])], [
         checks_badge(pull_request.checks_status, pull_request.checks_url),
       ]),
       html.td(
         [
           attribute.styles([
-            #("padding", "0.75rem 1rem"),
+            padding.raw(sizes.size_3 <> " " <> sizes.size_4),
             #("min-width", "8rem"),
           ]),
         ],
@@ -310,22 +338,22 @@ fn pr_row(pull_request: PullRequest) -> Element(Msg) {
 
 fn review_badge(decision: String, draft: Bool) -> Element(Msg) {
   let #(bg, fg, label) = case draft, decision {
-    True, _ -> #("#dbeafe", "#1e40af", "Draft")
-    _, "APPROVED" -> #("#d4edda", "#155724", "Approved")
-    _, "CHANGES_REQUESTED" -> #("#f8d7da", "#721c24", "Changes requested")
-    _, "REVIEW_REQUIRED" -> #("#fff3cd", "#856404", "Review required")
-    _, "" -> #("#f3f4f6", "#6b7280", "No reviews")
-    _, other -> #("#e2e3e5", "#383d41", other)
+    True, _ -> #(colors.blue_2, colors.blue_9, "Draft")
+    _, "APPROVED" -> #(colors.green_2, colors.green_10, "Approved")
+    _, "CHANGES_REQUESTED" -> #(colors.red_2, colors.red_10, "Changes requested")
+    _, "REVIEW_REQUIRED" -> #(colors.yellow_2, colors.yellow_10, "Review required")
+    _, "" -> #(colors.gray_1, colors.gray_6, "No reviews")
+    _, other -> #(colors.gray_2, colors.gray_8, other)
   }
   html.span(
     [
       attribute.styles([
-        #("padding", "0.25rem 0.5rem"),
-        #("border-radius", "4px"),
-        #("font-size", "0.7rem"),
-        #("white-space", "nowrap"),
-        #("background", bg),
-        #("color", fg),
+        padding.raw("0.25rem " <> sizes.size_2),
+        border_radius.raw(borders.radius_2),
+        font_size.raw(fonts.font_size_00),
+        white_space.nowrap,
+        background.raw(bg),
+        color.raw(fg),
       ]),
     ],
     [html.text(label)],
@@ -333,11 +361,11 @@ fn review_badge(decision: String, draft: Bool) -> Element(Msg) {
 }
 
 fn checks_badge(status: String, checks_url: String) -> Element(Msg) {
-  let #(color, icon, title) = case status {
-    "passing" -> #("#22c55e", "check_circle", "Checks passing")
-    "failing" -> #("#ef4444", "cancel", "Checks failing")
-    "pending" -> #("#eab308", "schedule", "Checks pending")
-    _ -> #("#9ca3af", "help", "Checks unknown")
+  let #(badge_color, icon, title) = case status {
+    "passing" -> #(colors.green_7, "check_circle", "Checks passing")
+    "failing" -> #(colors.red_7, "cancel", "Checks failing")
+    "pending" -> #(colors.yellow_7, "schedule", "Checks pending")
+    _ -> #(colors.gray_5, "help", "Checks unknown")
   }
   let icon_el =
     html.span(
@@ -345,8 +373,8 @@ fn checks_badge(status: String, checks_url: String) -> Element(Msg) {
         attribute.class("material-symbols-outlined"),
         attribute.title(title),
         attribute.styles([
-          #("font-size", "1.25rem"),
-          #("color", color),
+          font_size.raw(fonts.font_size_2),
+          color.raw(badge_color),
         ]),
       ],
       [html.text(icon)],
@@ -360,8 +388,8 @@ fn checks_badge(status: String, checks_url: String) -> Element(Msg) {
           attribute.target("_blank"),
           attribute.title("View failing check"),
           attribute.styles([
-            #("display", "inline-flex"),
-            #("text-decoration", "none"),
+            display.inline_flex,
+            text_decoration.none,
           ]),
           event.on_click(FetchPrs) |> event.stop_propagation,
         ],

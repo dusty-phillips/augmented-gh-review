@@ -7511,17 +7511,187 @@ function on_input(msg) {
   }));
 }
 
+// build/dev/javascript/monks_of_style/monks/align_items.mjs
+var center = ["align-items", "center"];
+var flex_start = ["align-items", "flex-start"];
+// build/dev/javascript/monks_of_style/monks/background.mjs
+function raw(value2) {
+  return ["background", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/border.mjs
+var none3 = ["border", "none"];
+function raw2(value2) {
+  return ["border", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/border_bottom.mjs
+function raw3(value2) {
+  return ["border-bottom", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/border_collapse.mjs
+var collapse = ["border-collapse", "collapse"];
+
+// build/dev/javascript/monks_of_style/monks/border_radius.mjs
+function raw4(value2) {
+  return ["border-radius", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/color.mjs
+function raw5(value2) {
+  return ["color", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/cursor.mjs
+var pointer = ["cursor", "pointer"];
+function raw6(value2) {
+  return ["cursor", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/display.mjs
+var flex = ["display", "flex"];
+var inline_block = ["display", "inline-block"];
+var inline_flex = ["display", "inline-flex"];
+
+// build/dev/javascript/monks_of_style/monks/flex.mjs
+function raw7(value2) {
+  return ["flex", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/font_size.mjs
+function raw8(value2) {
+  return ["font-size", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/font_style.mjs
+var italic = ["font-style", "italic"];
+
+// build/dev/javascript/monks_of_style/monks/font_weight.mjs
+function raw9(value2) {
+  return ["font-weight", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/gap.mjs
+function raw10(value2) {
+  return ["gap", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/margin.mjs
+function raw11(value2) {
+  return ["margin", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/margin_bottom.mjs
+function raw12(value2) {
+  return ["margin-bottom", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/max_width.mjs
+function raw13(value2) {
+  return ["max-width", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/padding.mjs
+function raw14(value2) {
+  return ["padding", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/text_align.mjs
+var left = ["text-align", "left"];
+var right = ["text-align", "right"];
+var center2 = ["text-align", "center"];
+
+// build/dev/javascript/monks_of_style/monks/text_decoration.mjs
+var none4 = ["text-decoration", "none"];
+
+// build/dev/javascript/monks_of_style/monks/white_space.mjs
+var pre2 = ["white-space", "pre"];
+var nowrap = ["white-space", "nowrap"];
+var pre_wrap = ["white-space", "pre-wrap"];
+
+// build/dev/javascript/monks_of_style/monks/width.mjs
+function raw15(value2) {
+  return ["width", value2];
+}
+
+// build/dev/javascript/open_props/open_props/borders.mjs
+var radius_2 = "var(--radius-2)";
+var radius_3 = "var(--radius-3)";
+
+// build/dev/javascript/open_props/open_props/colors.mjs
+var gray_1 = "var(--gray-1)";
+var gray_2 = "var(--gray-2)";
+var gray_3 = "var(--gray-3)";
+var gray_4 = "var(--gray-4)";
+var gray_5 = "var(--gray-5)";
+var gray_6 = "var(--gray-6)";
+var gray_7 = "var(--gray-7)";
+var gray_8 = "var(--gray-8)";
+var gray_9 = "var(--gray-9)";
+var red_1 = "var(--red-1)";
+var red_2 = "var(--red-2)";
+var red_4 = "var(--red-4)";
+var red_7 = "var(--red-7)";
+var red_10 = "var(--red-10)";
+var violet_2 = "var(--violet-2)";
+var violet_9 = "var(--violet-9)";
+var indigo_6 = "var(--indigo-6)";
+var indigo_7 = "var(--indigo-7)";
+var indigo_8 = "var(--indigo-8)";
+var indigo_12 = "var(--indigo-12)";
+var blue_1 = "var(--blue-1)";
+var blue_2 = "var(--blue-2)";
+var blue_3 = "var(--blue-3)";
+var blue_6 = "var(--blue-6)";
+var blue_9 = "var(--blue-9)";
+var green_2 = "var(--green-2)";
+var green_7 = "var(--green-7)";
+var green_8 = "var(--green-8)";
+var green_10 = "var(--green-10)";
+var yellow_0 = "var(--yellow-0)";
+var yellow_1 = "var(--yellow-1)";
+var yellow_2 = "var(--yellow-2)";
+var yellow_5 = "var(--yellow-5)";
+var yellow_6 = "var(--yellow-6)";
+var yellow_7 = "var(--yellow-7)";
+var yellow_10 = "var(--yellow-10)";
+var orange_7 = "var(--orange-7)";
+var orange_8 = "var(--orange-8)";
+var orange_9 = "var(--orange-9)";
+
+// build/dev/javascript/open_props/open_props/fonts.mjs
+var font_system_ui = "var(--font-system-ui)";
+var font_mono = "var(--font-mono)";
+var font_lineheight_4 = "var(--font-lineheight-4)";
+var font_size_00 = "var(--font-size-00)";
+var font_size_0 = "var(--font-size-0)";
+var font_size_1 = "var(--font-size-1)";
+var font_size_2 = "var(--font-size-2)";
+var font_size_3 = "var(--font-size-3)";
+var font_size_4 = "var(--font-size-4)";
+
+// build/dev/javascript/open_props/open_props/sizes.mjs
+var size_2 = "var(--size-2)";
+var size_3 = "var(--size-3)";
+var size_4 = "var(--size-4)";
+var size_5 = "var(--size-5)";
+var size_6 = "var(--size-6)";
+var size_7 = "var(--size-7)";
+var size_9 = "var(--size-9)";
+var size_10 = "var(--size-10)";
+
 // build/dev/javascript/client/client/views/dashboard.mjs
 function repo_selector(model) {
   return div(toList([
     styles(toList([
-      ["display", "flex"],
-      ["gap", "0.5rem"],
-      ["margin-bottom", "1.5rem"],
-      ["align-items", "center"]
+      flex,
+      raw10(size_2),
+      raw12(size_5),
+      center
     ]))
   ]), toList([
-    label(toList([styles(toList([["font-weight", "600"]]))]), toList([text3("Repository:")])),
+    label(toList([styles(toList([raw9("600")]))]), toList([text3("Repository:")])),
     input(toList([
       value(model.active_repo),
       placeholder("owner/repo"),
@@ -7529,23 +7699,23 @@ function repo_selector(model) {
         return new SetRepo(var0);
       }),
       styles(toList([
-        ["padding", "0.5rem 0.75rem"],
-        ["border", "1px solid #ccc"],
-        ["border-radius", "4px"],
-        ["flex", "1"],
-        ["font-size", "0.95rem"]
+        raw14(size_2 + " " + size_3),
+        raw2("1px solid " + gray_4),
+        raw4(radius_2),
+        raw7("1"),
+        raw8(font_size_1)
       ]))
     ])),
     button(toList([
       on_click(new FetchPrs),
       styles(toList([
-        ["padding", "0.5rem 1rem"],
-        ["background", "#4361ee"],
-        ["color", "white"],
-        ["border", "none"],
-        ["border-radius", "4px"],
-        ["cursor", "pointer"],
-        ["font-size", "0.95rem"]
+        raw14(size_2 + " " + size_4),
+        raw(indigo_6),
+        raw5("white"),
+        none3,
+        raw4(radius_2),
+        pointer,
+        raw8(font_size_1)
       ]))
     ]), toList([text3("Fetch PRs")]))
   ]));
@@ -7553,50 +7723,50 @@ function repo_selector(model) {
 function error_banner(message2) {
   return div(toList([
     styles(toList([
-      ["padding", "0.75rem 1rem"],
-      ["margin-bottom", "1rem"],
-      ["background", "#fee2e2"],
-      ["border", "1px solid #fca5a5"],
-      ["border-radius", "6px"],
-      ["color", "#991b1b"],
-      ["font-size", "0.9rem"]
+      raw14(size_3 + " " + size_4),
+      raw12(size_4),
+      raw(red_1),
+      raw2("1px solid " + red_4),
+      raw4(radius_2),
+      raw5(red_10),
+      raw8(font_size_0)
     ]))
   ]), toList([text3(message2)]));
 }
 function loading_indicator() {
   return div(toList([
     styles(toList([
-      ["text-align", "center"],
-      ["padding", "3rem"],
-      ["color", "#666"],
-      ["font-size", "1.1rem"]
+      center2,
+      raw14(size_9),
+      raw5(gray_6),
+      raw8(font_size_2)
     ]))
   ]), toList([text3("Loading pull requests...")]));
 }
 function section_header(title2, count2) {
   return div(toList([
     styles(toList([
-      ["display", "flex"],
-      ["align-items", "center"],
-      ["gap", "0.5rem"],
-      ["margin-bottom", "0.75rem"]
+      flex,
+      center,
+      raw10(size_2),
+      raw12(size_3)
     ]))
   ]), toList([
     h2(toList([
       styles(toList([
-        ["color", "#1a1a2e"],
-        ["font-size", "1.15rem"],
-        ["margin", "0"]
+        raw5(indigo_12),
+        raw8(font_size_2),
+        raw11("0")
       ]))
     ]), toList([text3(title2)])),
     span(toList([
       styles(toList([
-        ["background", "#4361ee"],
-        ["color", "white"],
-        ["padding", "0.15rem 0.5rem"],
-        ["border-radius", "10px"],
-        ["font-size", "0.8rem"],
-        ["font-weight", "600"]
+        raw(indigo_6),
+        raw5("white"),
+        raw14("0.15rem " + size_2),
+        raw4("10px"),
+        raw8(font_size_00),
+        raw9("600")
       ]))
     ]), toList([text3(to_string(count2))]))
   ]));
@@ -7604,39 +7774,39 @@ function section_header(title2, count2) {
 function empty_section_message() {
   return div(toList([
     styles(toList([
-      ["padding", "1.5rem"],
-      ["color", "#aaa"],
-      ["font-style", "italic"],
-      ["text-align", "center"],
-      ["border", "1px dashed #ddd"],
-      ["border-radius", "4px"]
+      raw14(size_5),
+      raw5(gray_5),
+      italic,
+      center2,
+      raw2("1px dashed " + gray_3),
+      raw4(radius_2)
     ]))
   ]), toList([text3("No PRs")]));
 }
 function header_cell(label2) {
   return th(toList([
     styles(toList([
-      ["padding", "0.75rem 1rem"],
-      ["border-bottom", "2px solid #ddd"],
-      ["font-weight", "600"]
+      raw14(size_3 + " " + size_4),
+      raw3("2px solid " + gray_3),
+      raw9("600")
     ]))
   ]), toList([text3(label2)]));
 }
 function review_badge(decision, draft) {
   let _block;
   if (draft) {
-    _block = ["#dbeafe", "#1e40af", "Draft"];
+    _block = [blue_2, blue_9, "Draft"];
   } else if (decision === "APPROVED") {
-    _block = ["#d4edda", "#155724", "Approved"];
+    _block = [green_2, green_10, "Approved"];
   } else if (decision === "CHANGES_REQUESTED") {
-    _block = ["#f8d7da", "#721c24", "Changes requested"];
+    _block = [red_2, red_10, "Changes requested"];
   } else if (decision === "REVIEW_REQUIRED") {
-    _block = ["#fff3cd", "#856404", "Review required"];
+    _block = [yellow_2, yellow_10, "Review required"];
   } else if (decision === "") {
-    _block = ["#f3f4f6", "#6b7280", "No reviews"];
+    _block = [gray_1, gray_6, "No reviews"];
   } else {
     let other = decision;
-    _block = ["#e2e3e5", "#383d41", other];
+    _block = [gray_2, gray_8, other];
   }
   let $ = _block;
   let bg;
@@ -7647,37 +7817,37 @@ function review_badge(decision, draft) {
   label2 = $[2];
   return span(toList([
     styles(toList([
-      ["padding", "0.25rem 0.5rem"],
-      ["border-radius", "4px"],
-      ["font-size", "0.7rem"],
-      ["white-space", "nowrap"],
-      ["background", bg],
-      ["color", fg]
+      raw14("0.25rem " + size_2),
+      raw4(radius_2),
+      raw8(font_size_00),
+      nowrap,
+      raw(bg),
+      raw5(fg)
     ]))
   ]), toList([text3(label2)]));
 }
 function checks_badge(status, checks_url) {
   let _block;
   if (status === "passing") {
-    _block = ["#22c55e", "check_circle", "Checks passing"];
+    _block = [green_7, "check_circle", "Checks passing"];
   } else if (status === "failing") {
-    _block = ["#ef4444", "cancel", "Checks failing"];
+    _block = [red_7, "cancel", "Checks failing"];
   } else if (status === "pending") {
-    _block = ["#eab308", "schedule", "Checks pending"];
+    _block = [yellow_7, "schedule", "Checks pending"];
   } else {
-    _block = ["#9ca3af", "help", "Checks unknown"];
+    _block = [gray_5, "help", "Checks unknown"];
   }
   let $ = _block;
-  let color;
+  let badge_color;
   let icon;
   let title2;
-  color = $[0];
+  badge_color = $[0];
   icon = $[1];
   title2 = $[2];
   let icon_el = span(toList([
     class$("material-symbols-outlined"),
     title(title2),
-    styles(toList([["font-size", "1.25rem"], ["color", color]]))
+    styles(toList([raw8(font_size_2), raw5(badge_color)]))
   ]), toList([text3(icon)]));
   if (checks_url === "") {
     return icon_el;
@@ -7687,7 +7857,7 @@ function checks_badge(status, checks_url) {
       href(url),
       target("_blank"),
       title("View failing check"),
-      styles(toList([["display", "inline-flex"], ["text-decoration", "none"]])),
+      styles(toList([inline_flex, none4])),
       (() => {
         let _pipe = on_click(new FetchPrs);
         return stop_propagation(_pipe);
@@ -7698,9 +7868,14 @@ function checks_badge(status, checks_url) {
 function pr_row(pull_request) {
   return tr(toList([
     on_click(new SelectPr(pull_request.number)),
-    styles(toList([["cursor", "pointer"], ["border-bottom", "1px solid #eee"]]))
+    styles(toList([
+      pointer,
+      raw3("1px solid " + gray_2)
+    ]))
   ]), toList([
-    td(toList([styles(toList([["padding", "0.75rem 1rem"]]))]), toList([
+    td(toList([
+      styles(toList([raw14(size_3 + " " + size_4)]))
+    ]), toList([
       a(toList([
         href(pull_request.url),
         target("_blank"),
@@ -7709,32 +7884,42 @@ function pr_row(pull_request) {
           return stop_propagation(_pipe);
         })(),
         styles(toList([
-          ["color", "#4361ee"],
-          ["text-decoration", "none"],
-          ["font-weight", "500"]
+          raw5(indigo_6),
+          none4,
+          raw9("500")
         ])),
         class$("hover-underline")
       ]), toList([text3("#" + to_string(pull_request.number))]))
     ])),
     td(toList([
-      styles(toList([["padding", "0.75rem 1rem"], ["font-weight", "500"]]))
+      styles(toList([
+        raw14(size_3 + " " + size_4),
+        raw9("500")
+      ]))
     ]), toList([text3(pull_request.title)])),
-    td(toList([styles(toList([["padding", "0.75rem 1rem"]]))]), toList([text3(pull_request.author)])),
-    td(toList([styles(toList([["padding", "0.75rem 1rem"]]))]), toList([
+    td(toList([
+      styles(toList([raw14(size_3 + " " + size_4)]))
+    ]), toList([text3(pull_request.author)])),
+    td(toList([
+      styles(toList([raw14(size_3 + " " + size_4)]))
+    ]), toList([
       checks_badge(pull_request.checks_status, pull_request.checks_url)
     ])),
     td(toList([
-      styles(toList([["padding", "0.75rem 1rem"], ["min-width", "8rem"]]))
+      styles(toList([
+        raw14(size_3 + " " + size_4),
+        ["min-width", "8rem"]
+      ]))
     ]), toList([review_badge(pull_request.review_decision, pull_request.draft)]))
   ]));
 }
 function pr_table(prs) {
   return table(toList([
-    styles(toList([["width", "100%"], ["border-collapse", "collapse"]]))
+    styles(toList([raw15("100%"), collapse]))
   ]), toList([
     thead(toList([]), toList([
       tr(toList([
-        styles(toList([["background", "#f0f0f5"], ["text-align", "left"]]))
+        styles(toList([raw(gray_1), left]))
       ]), toList([
         header_cell("#"),
         header_cell("Title"),
@@ -7748,7 +7933,7 @@ function pr_table(prs) {
 }
 function pr_section(title2, prs) {
   let count2 = length(prs);
-  return div(toList([styles(toList([["margin-bottom", "2rem"]]))]), toList([
+  return div(toList([styles(toList([raw12(size_7)]))]), toList([
     section_header(title2, count2),
     (() => {
       if (count2 === 0) {
@@ -7770,9 +7955,9 @@ function pr_sections(groups) {
   } else {
     return div(toList([
       styles(toList([
-        ["text-align", "center"],
-        ["padding", "3rem"],
-        ["color", "#888"]
+        center2,
+        raw14(size_9),
+        raw5(gray_5)
       ]))
     ]), toList([text3("No pull requests found. Click Fetch PRs to load.")]));
   }
@@ -7780,14 +7965,17 @@ function pr_sections(groups) {
 function view2(model) {
   return div(toList([
     styles(toList([
-      ["max-width", "960px"],
-      ["margin", "0 auto"],
-      ["padding", "2rem"],
-      ["font-family", "system-ui, sans-serif"]
+      raw13("960px"),
+      raw11("0 auto"),
+      raw14(size_7),
+      ["font-family", font_system_ui]
     ]))
   ]), toList([
     h1(toList([
-      styles(toList([["color", "#1a1a2e"], ["margin-bottom", "1.5rem"]]))
+      styles(toList([
+        raw5(indigo_12),
+        raw12(size_5)
+      ]))
     ]), toList([text3("Augmented Review Dashboard")])),
     repo_selector(model),
     (() => {
@@ -7809,6 +7997,78 @@ function view2(model) {
     })()
   ]));
 }
+
+// build/dev/javascript/monks_of_style/monks/animation.mjs
+function raw16(value2) {
+  return ["animation", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/border_left.mjs
+function raw17(value2) {
+  return ["border-left", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/box_sizing.mjs
+var border_box = ["box-sizing", "border-box"];
+
+// build/dev/javascript/monks_of_style/monks/flex_direction.mjs
+var column = ["flex-direction", "column"];
+
+// build/dev/javascript/monks_of_style/monks/flex_shrink.mjs
+function raw18(value2) {
+  return ["flex-shrink", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/flex_wrap.mjs
+var wrap = ["flex-wrap", "wrap"];
+
+// build/dev/javascript/monks_of_style/monks/justify_content.mjs
+var space_between = ["justify-content", "space-between"];
+var center3 = ["justify-content", "center"];
+
+// build/dev/javascript/monks_of_style/monks/line_height.mjs
+function raw19(value2) {
+  return ["line-height", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/margin_top.mjs
+function raw20(value2) {
+  return ["margin-top", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/min_height.mjs
+function raw21(value2) {
+  return ["min-height", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/min_width.mjs
+function raw22(value2) {
+  return ["min-width", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/outline.mjs
+var none5 = ["outline", "none"];
+
+// build/dev/javascript/monks_of_style/monks/overflow.mjs
+var hidden = ["overflow", "hidden"];
+
+// build/dev/javascript/monks_of_style/monks/position.mjs
+var relative2 = ["position", "relative"];
+var absolute = ["position", "absolute"];
+
+// build/dev/javascript/monks_of_style/monks/resize.mjs
+var vertical = ["resize", "vertical"];
+
+// build/dev/javascript/monks_of_style/monks/transition.mjs
+function raw23(value2) {
+  return ["transition", value2];
+}
+
+// build/dev/javascript/monks_of_style/monks/user_select.mjs
+var none6 = ["user-select", "none"];
+
+// build/dev/javascript/monks_of_style/monks/word_break.mjs
+var break_word = ["word-break", "break-word"];
 
 // build/dev/javascript/client/client/highlight_ffi.mjs
 function highlight_line(code2, language) {
@@ -8042,18 +8302,18 @@ class Code extends CustomType {
 class Empty2 extends CustomType {
 }
 class Heading extends CustomType {
-  constructor(level, id2, raw, inlines) {
+  constructor(level, id2, raw24, inlines) {
     super();
     this.level = level;
     this.id = id2;
-    this.raw = raw;
+    this.raw = raw24;
     this.inlines = inlines;
   }
 }
 class HtmlBlock extends CustomType {
-  constructor(raw) {
+  constructor(raw24) {
     super();
-    this.raw = raw;
+    this.raw = raw24;
   }
 }
 class Newline extends CustomType {
@@ -8067,9 +8327,9 @@ class OrderedList extends CustomType {
   }
 }
 class Paragraph extends CustomType {
-  constructor(raw, inlines) {
+  constructor(raw24, inlines) {
     super();
-    this.raw = raw;
+    this.raw = raw24;
     this.inlines = inlines;
   }
 }
@@ -8083,10 +8343,10 @@ class Table extends CustomType {
 class ThematicBreak extends CustomType {
 }
 class THead extends CustomType {
-  constructor(align, raw, inlines) {
+  constructor(align, raw24, inlines) {
     super();
     this.align = align;
-    this.raw = raw;
+    this.raw = raw24;
     this.inlines = inlines;
   }
 }
@@ -8097,9 +8357,9 @@ class Right extends CustomType {
 class Center extends CustomType {
 }
 class Cell extends CustomType {
-  constructor(raw, inlines) {
+  constructor(raw24, inlines) {
     super();
-    this.raw = raw;
+    this.raw = raw24;
     this.inlines = inlines;
   }
 }
@@ -10651,11 +10911,11 @@ function advance_line_with_blocks(ctx, blocks) {
     return new Document(_record.options, blocks, _record.links, _record.footnotes);
   })(), ctx.nest);
 }
-function with_state(ctx, raw) {
-  return new Context(ctx.cache, new_state(raw, ctx.cache.sp_line), ctx.stack, ctx.doc, ctx.nest);
+function with_state(ctx, raw24) {
+  return new Context(ctx.cache, new_state(raw24, ctx.cache.sp_line), ctx.stack, ctx.doc, ctx.nest);
 }
-function with_state_reset_blocks(ctx, raw) {
-  return new Context(ctx.cache, new_state(raw, ctx.cache.sp_line), toList([]), (() => {
+function with_state_reset_blocks(ctx, raw24) {
+  return new Context(ctx.cache, new_state(raw24, ctx.cache.sp_line), toList([]), (() => {
     let _record = ctx.doc;
     return new Document(_record.options, toList([]), _record.links, _record.footnotes);
   })(), toList([]));
@@ -11639,11 +11899,11 @@ function parse_header_row(pipe, header, num_cols, aligns) {
   let $ = true_len === length(aligns) && true_len === num_cols;
   if ($) {
     return new Ok(map2(zip(cols, aligns), (data2) => {
-      let raw;
+      let raw24;
       let align;
-      raw = data2[0];
+      raw24 = data2[0];
       align = data2[1];
-      return new THead(align, raw, toList([]));
+      return new THead(align, raw24, toList([]));
     }));
   } else {
     return new Error(undefined);
@@ -11728,18 +11988,18 @@ function try_parse_paragraph(ctx, cont) {
     lines = $[1];
     let lines$1 = prepend(line, lines);
     return lazy_guard(isEqual(lines$1, toList([])), cont, () => {
-      let raw = join(lines$1, `
+      let raw24 = join(lines$1, `
 `);
       return lazy_guard(!isEqual(ctx$1.nest, toList([])) && ctx$1.state.indent === 0, () => {
-        return update_blocks(ctx$1, prepend(new Paragraph(raw, toList([])), ctx$1.doc.blocks));
+        return update_blocks(ctx$1, prepend(new Paragraph(raw24, toList([])), ctx$1.doc.blocks));
       }, () => {
         let $1 = setext_underline(ctx$1, ctx$1.state.pos);
         if ($1 instanceof SetextH1) {
-          return advance_line_with_blocks(ctx$1, prepend(new Heading(1, "", raw, toList([])), ctx$1.doc.blocks));
+          return advance_line_with_blocks(ctx$1, prepend(new Heading(1, "", raw24, toList([])), ctx$1.doc.blocks));
         } else if ($1 instanceof SetextH2) {
-          return advance_line_with_blocks(ctx$1, prepend(new Heading(2, "", raw, toList([])), ctx$1.doc.blocks));
+          return advance_line_with_blocks(ctx$1, prepend(new Heading(2, "", raw24, toList([])), ctx$1.doc.blocks));
         } else {
-          return update_blocks(ctx$1, prepend(new Paragraph(raw, toList([])), ctx$1.doc.blocks));
+          return update_blocks(ctx$1, prepend(new Paragraph(raw24, toList([])), ctx$1.doc.blocks));
         }
       });
     });
@@ -12459,14 +12719,14 @@ class InlineState extends CustomType {
     this.inlines = inlines;
   }
 }
-function try_parse_checkbox(raw) {
-  let raw$1 = gobble_hspace(raw);
-  return try_pop("[", raw$1, (raw2) => {
-    if (raw2.startsWith(" ]")) {
-      let rest = raw2.slice(2);
+function try_parse_checkbox(raw24) {
+  let raw$1 = gobble_hspace(raw24);
+  return try_pop("[", raw$1, (raw25) => {
+    if (raw25.startsWith(" ]")) {
+      let rest = raw25.slice(2);
       return new Ok([new Checkbox(false), rest]);
-    } else if (raw2.startsWith("x]")) {
-      let rest = raw2.slice(2);
+    } else if (raw25.startsWith("x]")) {
+      let rest = raw25.slice(2);
       return new Ok([new Checkbox(true), rest]);
     } else {
       return new Error(undefined);
@@ -12895,8 +13155,8 @@ function do_item_blocks(ctx, blocks) {
       let $1 = blocks.head;
       if ($1 instanceof Paragraph) {
         let blocks$1 = blocks.tail;
-        let raw = $1.raw;
-        let first3 = new Paragraph("", do_checkbox_inlines(ctx, raw));
+        let raw24 = $1.raw;
+        let first3 = new Paragraph("", do_checkbox_inlines(ctx, raw24));
         let rest = map2(blocks$1, (_capture) => {
           return parse_block_inlines(ctx, _capture);
         });
@@ -12928,8 +13188,8 @@ function parse_block_inlines(ctx, block) {
   } else if (block instanceof Heading) {
     let level = block.level;
     let id2 = block.id;
-    let raw = block.raw;
-    return new Heading(level, id2, "", do_inlines(ctx, raw));
+    let raw24 = block.raw;
+    return new Heading(level, id2, "", do_inlines(ctx, raw24));
   } else if (block instanceof OrderedList) {
     let pack = block.pack;
     let items = block.items;
@@ -12938,8 +13198,8 @@ function parse_block_inlines(ctx, block) {
       return new ListItem(do_item_blocks(ctx, item.blocks), item.ends_with_blank, item.contains_blank);
     }), start5);
   } else if (block instanceof Paragraph) {
-    let raw = block.raw;
-    return new Paragraph("", do_inlines(ctx, raw));
+    let raw24 = block.raw;
+    return new Paragraph("", do_inlines(ctx, raw24));
   } else if (block instanceof Table) {
     let header = block.header;
     let rows = block.rows;
@@ -13468,10 +13728,10 @@ function do_parse_codespan_end(loop$ctx, loop$runsplit, loop$run, loop$acc, loop
     let acc = loop$acc;
     let inlines = loop$inlines;
     let $ = split4(runsplit, ctx.state.start);
-    let pre2;
+    let pre3;
     let runend;
     let post2;
-    pre2 = $[0];
+    pre3 = $[0];
     runend = $[1];
     post2 = $[2];
     let $1 = runend === "";
@@ -13481,11 +13741,11 @@ function do_parse_codespan_end(loop$ctx, loop$runsplit, loop$run, loop$acc, loop
       let $2 = post2 === "";
       if ($2) {
         return new InlineState(ctx, prepend((() => {
-          let _pipe = acc + pre2;
+          let _pipe = acc + pre3;
           return make_codespan(_pipe);
         })(), inlines));
       } else {
-        let body = acc + pre2;
+        let body = acc + pre3;
         let marker = lazy_unwrap(first2(run2), () => {
           throw makeError("panic", FILEPATH5, "mork/internal/inlines", 969, "do_parse_codespan_end", "`panic` expression evaluated.", {});
         });
@@ -13847,14 +14107,14 @@ function do_inlines(ctx, text4) {
   })(_pipe$1);
   return reverse(_pipe$2);
 }
-function do_checkbox_inlines(ctx, raw) {
-  let $ = try_parse_checkbox(raw);
+function do_checkbox_inlines(ctx, raw24) {
+  let $ = try_parse_checkbox(raw24);
   if ($ instanceof Ok) {
     let checkbox = $[0][0];
     let raw$1 = $[0][1];
     return prepend(checkbox, do_inlines(ctx, raw$1));
   } else {
-    return do_inlines(ctx, raw);
+    return do_inlines(ctx, raw24);
   }
 }
 function matching_opener(loop$ctx, loop$style, loop$len, loop$acc, loop$rest, loop$strict, loop$resolves) {
@@ -14164,7 +14424,7 @@ class Center2 extends CustomType {
 class Right2 extends CustomType {
 }
 class Components extends CustomType {
-  constructor(a2, blockquote2, checkbox, code2, del2, em2, footnote, h12, h22, h32, h42, h52, h62, hr2, img2, li2, mark2, ol2, p2, pre2, strong2, table2, tbody2, td2, th2, thead2, tr2, ul2) {
+  constructor(a2, blockquote2, checkbox, code2, del2, em2, footnote, h12, h22, h32, h42, h52, h62, hr2, img2, li2, mark2, ol2, p2, pre3, strong2, table2, tbody2, td2, th2, thead2, tr2, ul2) {
     super();
     this.a = a2;
     this.blockquote = blockquote2;
@@ -14185,7 +14445,7 @@ class Components extends CustomType {
     this.mark = mark2;
     this.ol = ol2;
     this.p = p2;
-    this.pre = pre2;
+    this.pre = pre3;
     this.strong = strong2;
     this.table = table2;
     this.tbody = tbody2;
@@ -14404,8 +14664,8 @@ function render_block(block, document2, components, pack) {
     let inlines = block.inlines;
     return render_heading(level, id2, inlines, document2, components);
   } else if (block instanceof HtmlBlock) {
-    let raw = block.raw;
-    return unsafe_raw_html("", "div", toList([]), raw);
+    let raw24 = block.raw;
+    return unsafe_raw_html("", "div", toList([]), raw24);
   } else if (block instanceof Newline) {
     return none2();
   } else if (block instanceof OrderedList) {
@@ -14774,37 +15034,37 @@ function description_accordion(body, is_open) {
     let chevron = _block;
     return div(toList([
       styles(toList([
-        ["background", "#ffffff"],
-        ["border", "1px solid #e2e8f0"],
-        ["border-radius", "12px"],
-        ["margin-bottom", "1.25rem"],
-        ["overflow", "hidden"]
+        raw("white"),
+        raw2("1px solid " + gray_3),
+        raw4(radius_3),
+        raw12(size_5),
+        hidden
       ]))
     ]), toList([
       div(toList([
         on_click(new ToggleDescription),
         styles(toList([
-          ["padding", "0.875rem 1.25rem"],
-          ["cursor", "pointer"],
-          ["display", "flex"],
-          ["align-items", "center"],
-          ["gap", "0.5rem"],
-          ["user-select", "none"],
-          ["transition", "background 0.15s"]
+          raw14("0.875rem 1.25rem"),
+          pointer,
+          flex,
+          center,
+          raw10(size_2),
+          none6,
+          raw23("background 0.15s")
         ]))
       ]), toList([
         span(toList([
           styles(toList([
-            ["font-size", "0.875rem"],
-            ["color", "#6b7280"],
-            ["width", "1rem"]
+            raw8(font_size_0),
+            raw5(gray_6),
+            raw15(size_4)
           ]))
         ]), toList([text3(chevron)])),
         span(toList([
           styles(toList([
-            ["font-size", "0.9375rem"],
-            ["font-weight", "600"],
-            ["color", "#374151"]
+            raw8(font_size_1),
+            raw9("600"),
+            raw5(gray_8)
           ]))
         ]), toList([text3("PR Description")]))
       ])),
@@ -14812,17 +15072,17 @@ function description_accordion(body, is_open) {
         if (is_open) {
           return div(toList([
             styles(toList([
-              ["padding", "0 1.25rem 1.25rem 1.25rem"],
-              ["border-top", "1px solid #e2e8f0"]
+              raw14("0 1.25rem 1.25rem 1.25rem"),
+              ["border-top", "1px solid " + gray_3]
             ]))
           ]), toList([
             div(toList([
               styles(toList([
-                ["margin-top", "1rem"],
-                ["font-size", "0.875rem"],
-                ["line-height", "1.6"],
-                ["color", "#374151"],
-                ["word-break", "break-word"]
+                raw20(size_4),
+                raw8(font_size_0),
+                raw19(font_lineheight_4),
+                raw5(gray_8),
+                break_word
               ]))
             ]), render(body))
           ]));
@@ -14837,15 +15097,15 @@ function back_button() {
   return button(toList([
     on_click(new BackToDashboard),
     styles(toList([
-      ["padding", "0.5rem 1rem"],
-      ["background", "#6c757d"],
-      ["color", "white"],
-      ["border", "none"],
-      ["border-radius", "6px"],
-      ["cursor", "pointer"],
-      ["font-size", "0.875rem"],
-      ["font-weight", "500"],
-      ["transition", "background 0.15s"]
+      raw14(size_2 + " " + size_4),
+      raw(gray_6),
+      raw5("white"),
+      none3,
+      raw4(radius_2),
+      pointer,
+      raw8(font_size_0),
+      raw9("500"),
+      raw23("background 0.15s")
     ]))
   ]), toList([text3("Back to Dashboard")]));
 }
@@ -14853,39 +15113,41 @@ function analyze_button() {
   return button(toList([
     on_click(new AnalyzePr),
     styles(toList([
-      ["padding", "0.5rem 1.25rem"],
-      ["background", "#4f46e5"],
-      ["color", "white"],
-      ["border", "none"],
-      ["border-radius", "6px"],
-      ["cursor", "pointer"],
-      ["font-size", "0.875rem"],
-      ["font-weight", "500"],
-      ["transition", "background 0.15s"]
+      raw14(size_2 + " " + size_5),
+      raw(indigo_7),
+      raw5("white"),
+      none3,
+      raw4(radius_2),
+      pointer,
+      raw8(font_size_0),
+      raw9("500"),
+      raw23("background 0.15s")
     ]))
   ]), toList([text3("Analyze PR")]));
 }
 function header_area(title2, number, url, head_branch, model) {
   return div(toList([
     styles(toList([
-      ["display", "flex"],
-      ["align-items", "flex-start"],
-      ["justify-content", "space-between"],
-      ["margin-bottom", "1.5rem"],
-      ["flex-wrap", "wrap"],
-      ["gap", "0.75rem"]
+      flex,
+      flex_start,
+      space_between,
+      raw12(size_5),
+      wrap,
+      raw10(size_3)
     ]))
   ]), toList([
-    div(toList([styles(toList([["flex", "1"], ["min-width", "0"]]))]), toList([
+    div(toList([
+      styles(toList([raw7("1"), raw22("0")]))
+    ]), toList([
       h1(toList([
         styles(toList([
-          ["margin", "0"],
-          ["font-size", "1.5rem"],
-          ["font-weight", "600"],
-          ["color", "#1a1a2e"],
-          ["display", "flex"],
-          ["align-items", "center"],
-          ["gap", "0.5rem"]
+          raw11("0"),
+          raw8(font_size_4),
+          raw9("600"),
+          raw5(indigo_12),
+          flex,
+          center,
+          raw10(size_2)
         ]))
       ]), toList([
         a(toList([
@@ -14893,9 +15155,9 @@ function header_area(title2, number, url, head_branch, model) {
           target("_blank"),
           title(url),
           styles(toList([
-            ["color", "#6c757d"],
-            ["font-weight", "400"],
-            ["text-decoration", "none"]
+            raw5(gray_6),
+            raw9("400"),
+            none4
           ]))
         ]), toList([text3("#" + to_string(number))])),
         text3(title2),
@@ -14904,11 +15166,11 @@ function header_area(title2, number, url, head_branch, model) {
           target("_blank"),
           title(url),
           styles(toList([
-            ["color", "#9ca3af"],
-            ["text-decoration", "none"],
-            ["font-size", "1.125rem"],
-            ["display", "inline-flex"],
-            ["align-items", "center"]
+            raw5(gray_5),
+            none4,
+            raw8(font_size_3),
+            inline_flex,
+            center
           ]))
         ]), toList([
           span(toList([class$("material-symbols-outlined")]), toList([text3("open_in_new")]))
@@ -14916,31 +15178,28 @@ function header_area(title2, number, url, head_branch, model) {
       ])),
       div(toList([
         styles(toList([
-          ["display", "inline-flex"],
-          ["align-items", "center"],
-          ["gap", "0.375rem"],
-          ["margin-top", "0.5rem"],
-          ["padding", "0.25rem 0.625rem"],
-          ["background", "#ede9fe"],
-          ["border-radius", "999px"],
-          [
-            "font-family",
-            '"SF Mono", "Fira Code", "Consolas", monospace'
-          ],
-          ["font-size", "0.75rem"],
-          ["color", "#6d28d9"],
-          ["line-height", "1.4"]
+          inline_flex,
+          center,
+          raw10("0.375rem"),
+          raw20(size_2),
+          raw14("0.25rem 0.625rem"),
+          raw(violet_2),
+          raw4("999px"),
+          ["font-family", font_mono],
+          raw8(font_size_00),
+          raw5(violet_9),
+          raw19("1.4")
         ]))
       ]), toList([
         span(toList([
           class$("material-symbols-outlined"),
-          styles(toList([["font-size", "0.875rem"]]))
+          styles(toList([raw8(font_size_0)]))
         ]), toList([text3("account_tree")])),
         text3(head_branch)
       ]))
     ])),
     div(toList([
-      styles(toList([["display", "flex"], ["gap", "0.5rem"]]))
+      styles(toList([flex, raw10(size_2)]))
     ]), toList([
       back_button(),
       (() => {
@@ -14959,18 +15218,18 @@ function header_area(title2, number, url, head_branch, model) {
 function analyze_prompt() {
   return div(toList([
     styles(toList([
-      ["text-align", "center"],
-      ["padding", "4rem 2rem"],
-      ["background", "#f8f9fa"],
-      ["border-radius", "12px"],
-      ["border", "1px solid #e9ecef"]
+      center2,
+      raw14(size_10 + " " + size_7),
+      raw(gray_1),
+      raw4(radius_3),
+      raw2("1px solid " + gray_2)
     ]))
   ]), toList([
     p(toList([
       styles(toList([
-        ["color", "#6c757d"],
-        ["font-size", "1.1rem"],
-        ["margin-bottom", "1rem"]
+        raw5(gray_6),
+        raw8(font_size_2),
+        raw12(size_4)
       ]))
     ]), toList([
       text3('Analysis not started. Click "Analyze PR" to begin.')
@@ -14980,15 +15239,15 @@ function analyze_prompt() {
 function error_banner2(message2) {
   return div(toList([
     styles(toList([
-      ["padding", "0.75rem 1rem"],
-      ["margin-bottom", "1rem"],
-      ["background", "#fee2e2"],
-      ["border", "1px solid #fca5a5"],
-      ["border-radius", "6px"],
-      ["color", "#991b1b"],
-      ["font-size", "0.9rem"],
-      ["white-space", "pre-wrap"],
-      ["word-break", "break-word"]
+      raw14(size_3 + " " + size_4),
+      raw12(size_4),
+      raw(red_1),
+      raw2("1px solid " + red_4),
+      raw4(radius_2),
+      raw5(red_10),
+      raw8(font_size_0),
+      pre_wrap,
+      break_word
     ]))
   ]), toList([text3(message2)]));
 }
@@ -15003,27 +15262,30 @@ function loading_indicator2(heartbeats) {
   let progress_text = _block;
   return div(toList([
     styles(toList([
-      ["text-align", "center"],
-      ["padding", "4rem 2rem"],
-      ["background", "#f8f9fa"],
-      ["border-radius", "12px"],
-      ["border", "1px solid #e9ecef"]
+      center2,
+      raw14(size_10 + " " + size_7),
+      raw(gray_1),
+      raw4(radius_3),
+      raw2("1px solid " + gray_2)
     ]))
   ]), toList([
     div(toList([
       styles(toList([
-        ["display", "inline-block"],
-        ["width", "2rem"],
-        ["height", "2rem"],
-        ["border", "3px solid #e9ecef"],
-        ["border-top-color", "#4f46e5"],
-        ["border-radius", "50%"],
-        ["animation", "spin 0.8s linear infinite"],
-        ["margin-bottom", "1rem"]
+        inline_block,
+        raw15(size_7),
+        ["height", size_7],
+        raw2("3px solid " + gray_2),
+        ["border-top-color", indigo_7],
+        raw4("50%"),
+        raw16("spin 0.8s linear infinite"),
+        raw12(size_4)
       ]))
     ]), toList([])),
     p(toList([
-      styles(toList([["color", "#6c757d"], ["font-size", "1rem"]]))
+      styles(toList([
+        raw5(gray_6),
+        raw8(font_size_1)
+      ]))
     ]), toList([text3(progress_text)]))
   ]));
 }
@@ -15034,37 +15296,37 @@ function chunk_pill(index5, current, comments) {
   });
   let _block;
   if (is_active) {
-    _block = "#4f46e5";
+    _block = indigo_7;
   } else {
-    _block = "#e5e7eb";
+    _block = gray_3;
   }
   let bg = _block;
   return button(toList([
     on_click(new GoToChunk(index5)),
     styles(toList([
-      ["width", "1.25rem"],
+      raw15("1.25rem"),
       ["height", "1.25rem"],
-      ["border-radius", "50%"],
-      ["border", "none"],
-      ["background", bg],
-      ["cursor", "pointer"],
-      ["position", "relative"],
-      ["padding", "0"],
-      ["transition", "background 0.15s"]
+      raw4("50%"),
+      none3,
+      raw(bg),
+      pointer,
+      relative2,
+      raw14("0"),
+      raw23("background 0.15s")
     ]))
   ]), (() => {
     if (has_comments) {
       return toList([
         span(toList([
           styles(toList([
-            ["position", "absolute"],
+            absolute,
             ["top", "-2px"],
             ["right", "-2px"],
-            ["width", "8px"],
+            raw15("8px"),
             ["height", "8px"],
-            ["border-radius", "50%"],
-            ["background", "#f59e0b"],
-            ["border", "1.5px solid white"]
+            raw4("50%"),
+            raw(yellow_6),
+            raw2("1.5px solid white")
           ]))
         ]), toList([]))
       ]);
@@ -15078,42 +15340,33 @@ function nav_button(label2, msg, enabled) {
     on_click(msg),
     disabled(!enabled),
     styles(toList([
-      ["padding", "0.375rem 0.875rem"],
-      [
-        "background",
-        (() => {
-          if (enabled) {
-            return "#4f46e5";
-          } else {
-            return "#d1d5db";
-          }
-        })()
-      ],
-      [
-        "color",
-        (() => {
-          if (enabled) {
-            return "white";
-          } else {
-            return "#9ca3af";
-          }
-        })()
-      ],
-      ["border", "none"],
-      ["border-radius", "6px"],
-      [
-        "cursor",
-        (() => {
-          if (enabled) {
-            return "pointer";
-          } else {
-            return "not-allowed";
-          }
-        })()
-      ],
-      ["font-size", "0.8125rem"],
-      ["font-weight", "500"],
-      ["transition", "background 0.15s"]
+      raw14("0.375rem 0.875rem"),
+      raw((() => {
+        if (enabled) {
+          return indigo_7;
+        } else {
+          return gray_4;
+        }
+      })()),
+      raw5((() => {
+        if (enabled) {
+          return "white";
+        } else {
+          return gray_5;
+        }
+      })()),
+      none3,
+      raw4(radius_2),
+      raw6((() => {
+        if (enabled) {
+          return "pointer";
+        } else {
+          return "not-allowed";
+        }
+      })()),
+      raw8(font_size_00),
+      raw9("500"),
+      raw23("background 0.15s")
     ]))
   ]), toList([text3(label2)]));
 }
@@ -15196,20 +15449,20 @@ function make_range(from3, to) {
 function chunk_navigator(current, total, comments) {
   return div(toList([
     styles(toList([
-      ["display", "flex"],
-      ["align-items", "center"],
-      ["gap", "0.75rem"],
-      ["flex-wrap", "wrap"]
+      flex,
+      center,
+      raw10(size_3),
+      wrap
     ]))
   ]), toList([
     nav_button("Prev", new PrevChunk, current > 0),
     span(toList([
       styles(toList([
-        ["font-size", "0.875rem"],
-        ["color", "#6b7280"],
-        ["font-weight", "500"],
-        ["min-width", "6rem"],
-        ["text-align", "center"]
+        raw8(font_size_0),
+        raw5(gray_6),
+        raw9("500"),
+        raw22("6rem"),
+        center2
       ]))
     ]), toList([
       text3("Chunk " + to_string(current + 1) + " of " + to_string(total))
@@ -15217,10 +15470,10 @@ function chunk_navigator(current, total, comments) {
     nav_button("Next", new NextChunk, current < total - 1),
     div(toList([
       styles(toList([
-        ["display", "flex"],
-        ["gap", "0.375rem"],
-        ["margin-left", "0.5rem"],
-        ["flex-wrap", "wrap"]
+        flex,
+        raw10("0.375rem"),
+        ["margin-left", size_2],
+        wrap
       ]))
     ]), (() => {
       let _pipe = make_range(0, total - 1);
@@ -15233,27 +15486,27 @@ function chunk_navigator(current, total, comments) {
 function summary_panel(summary, current, total, comments) {
   return div(toList([
     styles(toList([
-      ["background", "#ffffff"],
-      ["border", "1px solid #e2e8f0"],
-      ["border-radius", "12px"],
-      ["padding", "1.25rem 1.5rem"],
-      ["margin-bottom", "1.25rem"]
+      raw("white"),
+      raw2("1px solid " + gray_3),
+      raw4(radius_3),
+      raw14(size_5 + " " + size_6),
+      raw12(size_5)
     ]))
   ]), toList([
     h2(toList([
       styles(toList([
-        ["margin", "0 0 0.75rem 0"],
-        ["font-size", "1rem"],
-        ["font-weight", "600"],
-        ["color", "#374151"]
+        raw11("0 0 " + size_3 + " 0"),
+        raw8(font_size_1),
+        raw9("600"),
+        raw5(gray_8)
       ]))
     ]), toList([text3("AI Summary")])),
     p(toList([
       styles(toList([
-        ["margin", "0 0 1rem 0"],
-        ["color", "#4b5563"],
-        ["line-height", "1.6"],
-        ["font-size", "0.925rem"]
+        raw11("0 0 " + size_4 + " 0"),
+        raw5(gray_7),
+        raw19(font_lineheight_4),
+        raw8(font_size_1)
       ]))
     ]), toList([text3(summary)])),
     chunk_navigator(current, total, comments)
@@ -15314,52 +15567,49 @@ function diff_line_row(display_line, file_line, line, language) {
   return div(toList([
     on_click(new StartComment(display_line, file_line)),
     styles(toList([
-      ["display", "flex"],
-      ["background", bg],
-      ["border-left", "3px solid " + border_color],
-      ["cursor", "pointer"],
-      ["transition", "filter 0.1s"]
+      flex,
+      raw(bg),
+      raw17("3px solid " + border_color),
+      pointer,
+      raw23("filter 0.1s")
     ]))
   ]), toList([
     span(toList([
       styles(toList([
-        ["display", "inline-block"],
-        ["min-width", "3.5rem"],
-        ["padding", "0 0.5rem"],
-        ["text-align", "right"],
-        ["color", "#9ca3af"],
-        ["user-select", "none"],
-        [
-          "background",
-          (() => {
-            if (bg === "transparent") {
-              return "#fafafa";
-            } else {
-              return "rgba(0,0,0,0.03)";
-            }
-          })()
-        ],
-        ["border-right", "1px solid #e5e7eb"],
-        ["flex-shrink", "0"]
+        inline_block,
+        raw22("3.5rem"),
+        raw14("0 " + size_2),
+        right,
+        raw5(gray_5),
+        none6,
+        raw((() => {
+          if (bg === "transparent") {
+            return gray_1;
+          } else {
+            return "rgba(0,0,0,0.03)";
+          }
+        })()),
+        ["border-right", "1px solid " + gray_3],
+        raw18("0")
       ]))
     ]), toList([text3(gutter_text)])),
     (() => {
       if (is_hunk_header) {
         return span(toList([
           styles(toList([
-            ["padding", "0 0.75rem"],
-            ["white-space", "pre"],
-            ["flex", "1"]
+            raw14("0 " + size_3),
+            pre2,
+            raw7("1")
           ]))
         ]), toList([text3(line)]));
       } else {
         let highlighted_html = highlight_line(code2, language);
         return span(toList([
           styles(toList([
-            ["padding", "0 0.75rem"],
-            ["white-space", "pre"],
-            ["flex", "1"],
-            ["display", "flex"]
+            raw14("0 " + size_3),
+            pre2,
+            raw7("1"),
+            flex
           ]))
         ]), toList([
           span(toList([]), toList([text3(marker)])),
@@ -15372,13 +15622,13 @@ function diff_line_row(display_line, file_line, line, language) {
 function comment_display(comment) {
   return div(toList([
     styles(toList([
-      ["background", "#fef9c3"],
-      ["border-left", "3px solid #f59e0b"],
-      ["padding", "0.5rem 0.75rem 0.5rem 4.25rem"],
-      ["font-family", "system-ui, -apple-system, sans-serif"],
-      ["font-size", "0.8125rem"],
-      ["color", "#92400e"],
-      ["line-height", "1.4"]
+      raw(yellow_1),
+      raw17("3px solid " + yellow_6),
+      raw14(size_2 + " " + size_3 + " " + size_2 + " 4.25rem"),
+      ["font-family", font_system_ui],
+      raw8(font_size_00),
+      raw5(orange_9),
+      raw19("1.4")
     ]))
   ]), toList([text3(comment.body)]));
 }
@@ -15392,25 +15642,25 @@ function comment_input(text4, posting_comment) {
   let button_text = _block;
   return div(toList([
     styles(toList([
-      ["padding", "0.75rem 0.75rem 0.75rem 4.25rem"],
-      ["background", "#fffbeb"],
-      ["border-left", "3px solid #fbbf24"],
-      ["display", "flex"],
-      ["gap", "0.5rem"],
-      ["align-items", "flex-start"]
+      raw14(size_3 + " " + size_3 + " " + size_3 + " 4.25rem"),
+      raw(yellow_0),
+      raw17("3px solid " + yellow_5),
+      flex,
+      raw10(size_2),
+      flex_start
     ]))
   ]), toList([
     textarea(toList([
       styles(toList([
-        ["flex", "1"],
-        ["min-height", "3rem"],
-        ["padding", "0.5rem"],
-        ["border", "1px solid #d1d5db"],
-        ["border-radius", "6px"],
-        ["font-family", "system-ui, -apple-system, sans-serif"],
-        ["font-size", "0.8125rem"],
-        ["resize", "vertical"],
-        ["outline", "none"]
+        raw7("1"),
+        raw21("3rem"),
+        raw14(size_2),
+        raw2("1px solid " + gray_4),
+        raw4(radius_2),
+        ["font-family", font_system_ui],
+        raw8(font_size_00),
+        vertical,
+        none5
       ])),
       placeholder("Add a comment..."),
       value(text4),
@@ -15419,55 +15669,45 @@ function comment_input(text4, posting_comment) {
       })
     ]), ""),
     div(toList([
-      styles(toList([
-        ["display", "flex"],
-        ["flex-direction", "column"],
-        ["gap", "0.375rem"]
-      ]))
+      styles(toList([flex, column, raw10("0.375rem")]))
     ]), toList([
       button(toList([
         on_click(new SubmitComment),
         disabled(posting_comment),
         styles(toList([
-          ["padding", "0.375rem 0.75rem"],
-          [
-            "background",
-            (() => {
-              if (posting_comment) {
-                return "#9ca3af";
-              } else {
-                return "#4f46e5";
-              }
-            })()
-          ],
-          ["color", "white"],
-          ["border", "none"],
-          ["border-radius", "5px"],
-          [
-            "cursor",
-            (() => {
-              if (posting_comment) {
-                return "not-allowed";
-              } else {
-                return "pointer";
-              }
-            })()
-          ],
-          ["font-size", "0.75rem"],
-          ["font-weight", "500"]
+          raw14("0.375rem " + size_3),
+          raw((() => {
+            if (posting_comment) {
+              return gray_5;
+            } else {
+              return indigo_7;
+            }
+          })()),
+          raw5("white"),
+          none3,
+          raw4(radius_2),
+          raw6((() => {
+            if (posting_comment) {
+              return "not-allowed";
+            } else {
+              return "pointer";
+            }
+          })()),
+          raw8(font_size_00),
+          raw9("500")
         ]))
       ]), toList([text3(button_text)])),
       button(toList([
         on_click(new CancelComment),
         styles(toList([
-          ["padding", "0.375rem 0.75rem"],
-          ["background", "#e5e7eb"],
-          ["color", "#374151"],
-          ["border", "none"],
-          ["border-radius", "5px"],
-          ["cursor", "pointer"],
-          ["font-size", "0.75rem"],
-          ["font-weight", "500"]
+          raw14("0.375rem " + size_3),
+          raw(gray_3),
+          raw5(gray_8),
+          none3,
+          raw4(radius_2),
+          pointer,
+          raw8(font_size_00),
+          raw9("500")
         ]))
       ]), toList([text3("Cancel")]))
     ]))
@@ -15476,25 +15716,25 @@ function comment_input(text4, posting_comment) {
 function github_comment_display(comment) {
   return div(toList([
     styles(toList([
-      ["background", "#dbeafe"],
-      ["border-left", "3px solid #3b82f6"],
-      ["padding", "0.5rem 0.75rem 0.5rem 4.25rem"],
-      ["font-family", "system-ui, -apple-system, sans-serif"],
-      ["font-size", "0.8125rem"],
-      ["color", "#1e40af"],
-      ["line-height", "1.4"]
+      raw(blue_2),
+      raw17("3px solid " + blue_6),
+      raw14(size_2 + " " + size_3 + " " + size_2 + " 4.25rem"),
+      ["font-family", font_system_ui],
+      raw8(font_size_00),
+      raw5(blue_9),
+      raw19("1.4")
     ]))
   ]), toList([
     div(toList([
       styles(toList([
-        ["display", "flex"],
-        ["justify-content", "space-between"],
-        ["margin-bottom", "0.25rem"],
-        ["font-size", "0.75rem"],
-        ["color", "#6b7280"]
+        flex,
+        space_between,
+        raw12("0.25rem"),
+        raw8(font_size_00),
+        raw5(gray_6)
       ]))
     ]), toList([
-      span(toList([styles(toList([["font-weight", "600"]]))]), toList([text3(comment.author)])),
+      span(toList([styles(toList([raw9("600")]))]), toList([text3(comment.author)])),
       span(toList([]), toList([text3(comment.created_at)]))
     ])),
     div(toList([]), render(comment.body))
@@ -15539,9 +15779,9 @@ function diff_view(chunk, commenting, chunk_comments, chunk_github_comments) {
   return div(toList([
     styles(toList([
       ["overflow-x", "auto"],
-      ["font-family", '"SF Mono", "Fira Code", "Consolas", monospace'],
-      ["font-size", "0.8125rem"],
-      ["line-height", "1.5"]
+      ["font-family", font_mono],
+      raw8(font_size_00),
+      raw19("1.5")
     ]))
   ]), flat_map(file_indexed_lines, (entry) => {
     let line_comments = filter(chunk_comments, (c) => {
@@ -15580,54 +15820,51 @@ function chunk_panel(chunk, pr_url, commenting, comments, github_comments) {
   });
   return div(toList([
     styles(toList([
-      ["background", "#ffffff"],
-      ["border", "1px solid #e2e8f0"],
-      ["border-radius", "12px"],
-      ["margin-bottom", "1.25rem"],
-      ["overflow", "hidden"]
+      raw("white"),
+      raw2("1px solid " + gray_3),
+      raw4(radius_3),
+      raw12(size_5),
+      hidden
     ]))
   ]), toList([
     div(toList([
       styles(toList([
-        ["padding", "1rem 1.5rem"],
-        ["border-bottom", "1px solid #e2e8f0"]
+        raw14(size_4 + " " + size_6),
+        raw3("1px solid " + gray_3)
       ]))
     ]), toList([
       h3(toList([
         styles(toList([
-          ["margin", "0 0 0.375rem 0"],
-          ["font-size", "1.05rem"],
-          ["font-weight", "600"],
-          ["color", "#1e293b"]
+          raw11("0 0 0.375rem 0"),
+          raw8(font_size_2),
+          raw9("600"),
+          raw5(gray_9)
         ]))
       ]), toList([text3(chunk.title)])),
       div(toList([
         styles(toList([
-          ["background", "#eff6ff"],
-          ["border", "1px solid #bfdbfe"],
-          ["border-radius", "8px"],
-          ["padding", "0.75rem 1rem"],
-          ["margin-top", "0.5rem"],
-          ["font-size", "0.875rem"],
-          ["line-height", "1.5"],
-          ["color", "#374151"]
+          raw(blue_1),
+          raw2("1px solid " + blue_3),
+          raw4(radius_2),
+          raw14(size_3 + " " + size_4),
+          raw20(size_2),
+          raw8(font_size_0),
+          raw19("1.5"),
+          raw5(gray_8)
         ]))
       ]), toList([text3(chunk.description)]))
     ])),
     div(toList([
       styles(toList([
-        ["padding", "0.625rem 1.5rem"],
-        ["background", "#f8fafc"],
-        ["border-bottom", "1px solid #e2e8f0"],
-        [
-          "font-family",
-          '"SF Mono", "Fira Code", "Consolas", monospace'
-        ],
-        ["font-size", "0.8125rem"],
-        ["color", "#6b7280"],
-        ["display", "flex"],
-        ["align-items", "center"],
-        ["gap", "0.5rem"]
+        raw14("0.625rem " + size_6),
+        raw(gray_1),
+        raw3("1px solid " + gray_3),
+        ["font-family", font_mono],
+        raw8(font_size_00),
+        raw5(gray_6),
+        flex,
+        center,
+        raw10(size_2)
       ]))
     ]), toList([
       text3(chunk.file_path),
@@ -15636,12 +15873,12 @@ function chunk_panel(chunk, pr_url, commenting, comments, github_comments) {
         target("_blank"),
         title("View files on GitHub"),
         styles(toList([
-          ["color", "#9ca3af"],
-          ["text-decoration", "none"],
-          ["font-size", "0.875rem"],
-          ["display", "inline-flex"],
-          ["align-items", "center"],
-          ["line-height", "1"]
+          raw5(gray_5),
+          none4,
+          raw8(font_size_0),
+          inline_flex,
+          center,
+          raw19("1")
         ]))
       ]), toList([
         span(toList([class$("material-symbols-outlined")]), toList([text3("open_in_new")]))
@@ -15659,45 +15896,48 @@ function general_comments_section(github_comments) {
   } else {
     return div(toList([
       styles(toList([
-        ["background", "#ffffff"],
-        ["border", "1px solid #e2e8f0"],
-        ["border-radius", "12px"],
-        ["padding", "1.25rem 1.5rem"],
-        ["margin-top", "1.25rem"]
+        raw("white"),
+        raw2("1px solid " + gray_3),
+        raw4(radius_3),
+        raw14(size_5 + " " + size_6),
+        raw20(size_5)
       ]))
     ]), toList([
       h2(toList([
         styles(toList([
-          ["margin", "0 0 0.75rem 0"],
-          ["font-size", "1rem"],
-          ["font-weight", "600"],
-          ["color", "#374151"]
+          raw11("0 0 " + size_3 + " 0"),
+          raw8(font_size_1),
+          raw9("600"),
+          raw5(gray_8)
         ]))
       ]), toList([text3("Comments")])),
       div(toList([]), map2(general_comments, (comment) => {
         return div(toList([
           styles(toList([
-            ["background", "#dbeafe"],
-            ["border-left", "3px solid #3b82f6"],
-            ["padding", "0.75rem 1rem"],
-            ["margin-bottom", "0.5rem"],
-            ["border-radius", "0 8px 8px 0"],
-            ["font-size", "0.875rem"],
-            ["color", "#1e40af"],
-            ["line-height", "1.5"]
+            raw(blue_2),
+            raw17("3px solid " + blue_6),
+            raw14(size_3 + " " + size_4),
+            raw12(size_2),
+            [
+              "border-radius",
+              "0 " + radius_2 + " " + radius_2 + " 0"
+            ],
+            raw8(font_size_0),
+            raw5(blue_9),
+            raw19("1.5")
           ]))
         ]), toList([
           div(toList([
             styles(toList([
-              ["display", "flex"],
-              ["justify-content", "space-between"],
-              ["margin-bottom", "0.375rem"],
-              ["font-size", "0.75rem"],
-              ["color", "#6b7280"]
+              flex,
+              space_between,
+              raw12("0.375rem"),
+              raw8(font_size_00),
+              raw5(gray_6)
             ]))
           ]), toList([
             span(toList([
-              styles(toList([["font-weight", "600"]]))
+              styles(toList([raw9("600")]))
             ]), toList([text3(comment.author)])),
             span(toList([]), toList([text3(comment.created_at)]))
           ])),
@@ -15710,16 +15950,19 @@ function general_comments_section(github_comments) {
 function bottom_navigation(current, total) {
   return div(toList([
     styles(toList([
-      ["display", "flex"],
-      ["justify-content", "center"],
-      ["align-items", "center"],
-      ["gap", "1rem"],
-      ["padding", "1rem 0"]
+      flex,
+      center3,
+      center,
+      raw10(size_4),
+      raw14(size_4 + " 0")
     ]))
   ]), toList([
     nav_button("Previous Chunk", new PrevChunk, current > 0),
     span(toList([
-      styles(toList([["font-size", "0.875rem"], ["color", "#6b7280"]]))
+      styles(toList([
+        raw8(font_size_0),
+        raw5(gray_6)
+      ]))
     ]), toList([
       text3(to_string(current + 1) + " / " + to_string(total))
     ])),
@@ -15731,33 +15974,27 @@ function review_action_button(label2, event_type, bg_color, _, submitting) {
     on_click(new SubmitReview(event_type)),
     disabled(submitting),
     styles(toList([
-      ["padding", "0.5rem 1.25rem"],
-      [
-        "background",
-        (() => {
-          if (submitting) {
-            return "#9ca3af";
-          } else {
-            return bg_color;
-          }
-        })()
-      ],
-      ["color", "white"],
-      ["border", "none"],
-      ["border-radius", "6px"],
-      [
-        "cursor",
-        (() => {
-          if (submitting) {
-            return "not-allowed";
-          } else {
-            return "pointer";
-          }
-        })()
-      ],
-      ["font-size", "0.875rem"],
-      ["font-weight", "500"],
-      ["transition", "background 0.15s"]
+      raw14(size_2 + " " + size_5),
+      raw((() => {
+        if (submitting) {
+          return gray_5;
+        } else {
+          return bg_color;
+        }
+      })()),
+      raw5("white"),
+      none3,
+      raw4(radius_2),
+      raw6((() => {
+        if (submitting) {
+          return "not-allowed";
+        } else {
+          return "pointer";
+        }
+      })()),
+      raw8(font_size_0),
+      raw9("500"),
+      raw23("background 0.15s")
     ]))
   ]), toList([
     text3((() => {
@@ -15788,34 +16025,34 @@ function review_submission_section(review) {
   let submitting = _block$1;
   return div(toList([
     styles(toList([
-      ["background", "#ffffff"],
-      ["border", "1px solid #e2e8f0"],
-      ["border-radius", "12px"],
-      ["padding", "1.25rem 1.5rem"],
-      ["margin-top", "1.5rem"]
+      raw("white"),
+      raw2("1px solid " + gray_3),
+      raw4(radius_3),
+      raw14(size_5 + " " + size_6),
+      raw20(size_5)
     ]))
   ]), toList([
     h2(toList([
       styles(toList([
-        ["margin", "0 0 0.75rem 0"],
-        ["font-size", "1rem"],
-        ["font-weight", "600"],
-        ["color", "#374151"]
+        raw11("0 0 " + size_3 + " 0"),
+        raw8(font_size_1),
+        raw9("600"),
+        raw5(gray_8)
       ]))
     ]), toList([text3("Submit Review")])),
     textarea(toList([
       styles(toList([
-        ["width", "100%"],
-        ["min-height", "4rem"],
-        ["padding", "0.625rem"],
-        ["border", "1px solid #d1d5db"],
-        ["border-radius", "8px"],
-        ["font-family", "system-ui, -apple-system, sans-serif"],
-        ["font-size", "0.875rem"],
-        ["resize", "vertical"],
-        ["outline", "none"],
-        ["box-sizing", "border-box"],
-        ["margin-bottom", "0.75rem"]
+        raw15("100%"),
+        raw21("4rem"),
+        raw14("0.625rem"),
+        raw2("1px solid " + gray_4),
+        raw4(radius_2),
+        ["font-family", font_system_ui],
+        raw8(font_size_0),
+        vertical,
+        none5,
+        border_box,
+        raw12(size_3)
       ])),
       placeholder("Leave a comment with your review (optional for approvals)..."),
       value(review_body),
@@ -15824,15 +16061,11 @@ function review_submission_section(review) {
       })
     ]), ""),
     div(toList([
-      styles(toList([
-        ["display", "flex"],
-        ["gap", "0.5rem"],
-        ["flex-wrap", "wrap"]
-      ]))
+      styles(toList([flex, raw10(size_2), wrap]))
     ]), toList([
-      review_action_button("Approve", "APPROVE", "#16a34a", "#15803d", submitting),
-      review_action_button("Request Changes", "REQUEST_CHANGES", "#ea580c", "#c2410c", submitting),
-      review_action_button("Comment", "COMMENT", "#4f46e5", "#4338ca", submitting)
+      review_action_button("Approve", "APPROVE", green_7, green_8, submitting),
+      review_action_button("Request Changes", "REQUEST_CHANGES", orange_7, orange_8, submitting),
+      review_action_button("Comment", "COMMENT", indigo_7, indigo_8, submitting)
     ]))
   ]));
 }
@@ -15863,11 +16096,11 @@ function view3(model) {
     let detail = $[0];
     return div(toList([
       styles(toList([
-        ["max-width", "1100px"],
-        ["margin", "0 auto"],
-        ["padding", "2rem"],
-        ["font-family", "system-ui, -apple-system, sans-serif"],
-        ["color", "#1a1a2e"]
+        raw13("1100px"),
+        raw11("0 auto"),
+        raw14(size_7),
+        ["font-family", font_system_ui],
+        raw5(indigo_12)
       ]))
     ]), toList([
       header_area(detail.title, detail.number, detail.url, detail.head_branch, model),
@@ -15905,10 +16138,10 @@ function view3(model) {
     if ($1) {
       return div(toList([
         styles(toList([
-          ["max-width", "1100px"],
-          ["margin", "0 auto"],
-          ["padding", "2rem"],
-          ["font-family", "system-ui, -apple-system, sans-serif"]
+          raw13("1100px"),
+          raw11("0 auto"),
+          raw14(size_7),
+          ["font-family", font_system_ui]
         ]))
       ]), toList([loading_indicator2(0)]));
     } else {

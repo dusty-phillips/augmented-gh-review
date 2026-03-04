@@ -17,6 +17,50 @@ import lustre/event
 import client/markdown
 import shared/pr.{type LineComment, type PrComment, type ReviewChunk}
 
+import monks/align_items
+import monks/animation
+import monks/background
+import monks/border
+import monks/border_bottom
+import monks/border_left
+import monks/border_radius
+import monks/box_sizing
+import monks/color
+import monks/cursor
+import monks/display
+import monks/flex
+import monks/flex_direction
+import monks/flex_shrink
+import monks/flex_wrap
+import monks/font_size
+import monks/font_weight
+import monks/gap
+import monks/justify_content
+import monks/line_height
+import monks/margin
+import monks/margin_bottom
+import monks/margin_top
+import monks/max_width
+import monks/min_height
+import monks/min_width
+import monks/outline
+import monks/overflow
+import monks/padding
+import monks/position
+import monks/resize
+import monks/text_align
+import monks/text_decoration
+import monks/transition
+import monks/user_select
+import monks/white_space
+import monks/width
+import monks/word_break
+
+import open_props/borders
+import open_props/colors
+import open_props/fonts
+import open_props/sizes
+
 // ---------------------------------------------------------------------------
 // Main view
 // ---------------------------------------------------------------------------
@@ -29,10 +73,10 @@ pub fn view(model: Model) -> Element(Msg) {
           html.div(
             [
               attribute.styles([
-                #("max-width", "1100px"),
-                #("margin", "0 auto"),
-                #("padding", "2rem"),
-                #("font-family", "system-ui, -apple-system, sans-serif"),
+                max_width.raw("1100px"),
+                margin.raw("0 auto"),
+                padding.raw(sizes.size_7),
+                #("font-family", fonts.font_system_ui),
               ]),
             ],
             [loading_indicator(0)],
@@ -47,11 +91,11 @@ pub fn view(model: Model) -> Element(Msg) {
       html.div(
         [
           attribute.styles([
-            #("max-width", "1100px"),
-            #("margin", "0 auto"),
-            #("padding", "2rem"),
-            #("font-family", "system-ui, -apple-system, sans-serif"),
-            #("color", "#1a1a2e"),
+            max_width.raw("1100px"),
+            margin.raw("0 auto"),
+            padding.raw(sizes.size_7),
+            #("font-family", fonts.font_system_ui),
+            color.raw(colors.indigo_12),
           ]),
         ],
         [
@@ -97,28 +141,28 @@ fn header_area(
   html.div(
     [
       attribute.styles([
-        #("display", "flex"),
-        #("align-items", "flex-start"),
-        #("justify-content", "space-between"),
-        #("margin-bottom", "1.5rem"),
-        #("flex-wrap", "wrap"),
-        #("gap", "0.75rem"),
+        display.flex,
+        align_items.flex_start,
+        justify_content.space_between,
+        margin_bottom.raw(sizes.size_5),
+        flex_wrap.wrap,
+        gap.raw(sizes.size_3),
       ]),
     ],
     [
       html.div(
-        [attribute.styles([#("flex", "1"), #("min-width", "0")])],
+        [attribute.styles([flex.raw("1"), min_width.raw("0")])],
         [
           html.h1(
             [
               attribute.styles([
-                #("margin", "0"),
-                #("font-size", "1.5rem"),
-                #("font-weight", "600"),
-                #("color", "#1a1a2e"),
-                #("display", "flex"),
-                #("align-items", "center"),
-                #("gap", "0.5rem"),
+                margin.raw("0"),
+                font_size.raw(fonts.font_size_4),
+                font_weight.raw("600"),
+                color.raw(colors.indigo_12),
+                display.flex,
+                align_items.center,
+                gap.raw(sizes.size_2),
               ]),
             ],
             [
@@ -128,9 +172,9 @@ fn header_area(
                   attribute.target("_blank"),
                   attribute.title(url),
                   attribute.styles([
-                    #("color", "#6c757d"),
-                    #("font-weight", "400"),
-                    #("text-decoration", "none"),
+                    color.raw(colors.gray_6),
+                    font_weight.raw("400"),
+                    text_decoration.none,
                   ]),
                 ],
                 [html.text("#" <> int.to_string(number))],
@@ -142,11 +186,11 @@ fn header_area(
                   attribute.target("_blank"),
                   attribute.title(url),
                   attribute.styles([
-                    #("color", "#9ca3af"),
-                    #("text-decoration", "none"),
-                    #("font-size", "1.125rem"),
-                    #("display", "inline-flex"),
-                    #("align-items", "center"),
+                    color.raw(colors.gray_5),
+                    text_decoration.none,
+                    font_size.raw(fonts.font_size_3),
+                    display.inline_flex,
+                    align_items.center,
                   ]),
                 ],
                 [
@@ -161,25 +205,24 @@ fn header_area(
           html.div(
             [
               attribute.styles([
-                #("display", "inline-flex"),
-                #("align-items", "center"),
-                #("gap", "0.375rem"),
-                #("margin-top", "0.5rem"),
-                #("padding", "0.25rem 0.625rem"),
-                #("background", "#ede9fe"),
-                #("border-radius", "999px"),
-                #("font-family",
-                  "\"SF Mono\", \"Fira Code\", \"Consolas\", monospace"),
-                #("font-size", "0.75rem"),
-                #("color", "#6d28d9"),
-                #("line-height", "1.4"),
+                display.inline_flex,
+                align_items.center,
+                gap.raw("0.375rem"),
+                margin_top.raw(sizes.size_2),
+                padding.raw("0.25rem 0.625rem"),
+                background.raw(colors.violet_2),
+                border_radius.raw("999px"),
+                #("font-family", fonts.font_mono),
+                font_size.raw(fonts.font_size_00),
+                color.raw(colors.violet_9),
+                line_height.raw("1.4"),
               ]),
             ],
             [
               html.span(
                 [
                   attribute.class("material-symbols-outlined"),
-                  attribute.styles([#("font-size", "0.875rem")]),
+                  attribute.styles([font_size.raw(fonts.font_size_0)]),
                 ],
                 [html.text("account_tree")],
               ),
@@ -189,7 +232,7 @@ fn header_area(
         ],
       ),
       html.div(
-        [attribute.styles([#("display", "flex"), #("gap", "0.5rem")])],
+        [attribute.styles([display.flex, gap.raw(sizes.size_2)])],
         [
           back_button(),
           case model.analysis_state {
@@ -214,11 +257,11 @@ fn description_accordion(body: String, is_open: Bool) -> Element(Msg) {
       html.div(
         [
           attribute.styles([
-            #("background", "#ffffff"),
-            #("border", "1px solid #e2e8f0"),
-            #("border-radius", "12px"),
-            #("margin-bottom", "1.25rem"),
-            #("overflow", "hidden"),
+            background.raw("white"),
+            border.raw("1px solid " <> colors.gray_3),
+            border_radius.raw(borders.radius_3),
+            margin_bottom.raw(sizes.size_5),
+            overflow.hidden,
           ]),
         ],
         [
@@ -226,22 +269,22 @@ fn description_accordion(body: String, is_open: Bool) -> Element(Msg) {
             [
               event.on_click(ToggleDescription),
               attribute.styles([
-                #("padding", "0.875rem 1.25rem"),
-                #("cursor", "pointer"),
-                #("display", "flex"),
-                #("align-items", "center"),
-                #("gap", "0.5rem"),
-                #("user-select", "none"),
-                #("transition", "background 0.15s"),
+                padding.raw("0.875rem 1.25rem"),
+                cursor.pointer,
+                display.flex,
+                align_items.center,
+                gap.raw(sizes.size_2),
+                user_select.none,
+                transition.raw("background 0.15s"),
               ]),
             ],
             [
               html.span(
                 [
                   attribute.styles([
-                    #("font-size", "0.875rem"),
-                    #("color", "#6b7280"),
-                    #("width", "1rem"),
+                    font_size.raw(fonts.font_size_0),
+                    color.raw(colors.gray_6),
+                    width.raw(sizes.size_4),
                   ]),
                 ],
                 [html.text(chevron)],
@@ -249,9 +292,9 @@ fn description_accordion(body: String, is_open: Bool) -> Element(Msg) {
               html.span(
                 [
                   attribute.styles([
-                    #("font-size", "0.9375rem"),
-                    #("font-weight", "600"),
-                    #("color", "#374151"),
+                    font_size.raw(fonts.font_size_1),
+                    font_weight.raw("600"),
+                    color.raw(colors.gray_8),
                   ]),
                 ],
                 [html.text("PR Description")],
@@ -264,19 +307,19 @@ fn description_accordion(body: String, is_open: Bool) -> Element(Msg) {
               html.div(
                 [
                   attribute.styles([
-                    #("padding", "0 1.25rem 1.25rem 1.25rem"),
-                    #("border-top", "1px solid #e2e8f0"),
+                    padding.raw("0 1.25rem 1.25rem 1.25rem"),
+                    #("border-top", "1px solid " <> colors.gray_3),
                   ]),
                 ],
                 [
                   html.div(
                     [
                       attribute.styles([
-                        #("margin-top", "1rem"),
-                        #("font-size", "0.875rem"),
-                        #("line-height", "1.6"),
-                        #("color", "#374151"),
-                        #("word-break", "break-word"),
+                        margin_top.raw(sizes.size_4),
+                        font_size.raw(fonts.font_size_0),
+                        line_height.raw(fonts.font_lineheight_4),
+                        color.raw(colors.gray_8),
+                        word_break.break_word,
                       ]),
                     ],
                     markdown.render(body),
@@ -295,15 +338,15 @@ fn back_button() -> Element(Msg) {
     [
       event.on_click(BackToDashboard),
       attribute.styles([
-        #("padding", "0.5rem 1rem"),
-        #("background", "#6c757d"),
-        #("color", "white"),
-        #("border", "none"),
-        #("border-radius", "6px"),
-        #("cursor", "pointer"),
-        #("font-size", "0.875rem"),
-        #("font-weight", "500"),
-        #("transition", "background 0.15s"),
+        padding.raw(sizes.size_2 <> " " <> sizes.size_4),
+        background.raw(colors.gray_6),
+        color.raw("white"),
+        border.none,
+        border_radius.raw(borders.radius_2),
+        cursor.pointer,
+        font_size.raw(fonts.font_size_0),
+        font_weight.raw("500"),
+        transition.raw("background 0.15s"),
       ]),
     ],
     [html.text("Back to Dashboard")],
@@ -315,15 +358,15 @@ fn analyze_button() -> Element(Msg) {
     [
       event.on_click(AnalyzePr),
       attribute.styles([
-        #("padding", "0.5rem 1.25rem"),
-        #("background", "#4f46e5"),
-        #("color", "white"),
-        #("border", "none"),
-        #("border-radius", "6px"),
-        #("cursor", "pointer"),
-        #("font-size", "0.875rem"),
-        #("font-weight", "500"),
-        #("transition", "background 0.15s"),
+        padding.raw(sizes.size_2 <> " " <> sizes.size_5),
+        background.raw(colors.indigo_7),
+        color.raw("white"),
+        border.none,
+        border_radius.raw(borders.radius_2),
+        cursor.pointer,
+        font_size.raw(fonts.font_size_0),
+        font_weight.raw("500"),
+        transition.raw("background 0.15s"),
       ]),
     ],
     [html.text("Analyze PR")],
@@ -334,20 +377,20 @@ fn analyze_prompt() -> Element(Msg) {
   html.div(
     [
       attribute.styles([
-        #("text-align", "center"),
-        #("padding", "4rem 2rem"),
-        #("background", "#f8f9fa"),
-        #("border-radius", "12px"),
-        #("border", "1px solid #e9ecef"),
+        text_align.center,
+        padding.raw(sizes.size_10 <> " " <> sizes.size_7),
+        background.raw(colors.gray_1),
+        border_radius.raw(borders.radius_3),
+        border.raw("1px solid " <> colors.gray_2),
       ]),
     ],
     [
       html.p(
         [
           attribute.styles([
-            #("color", "#6c757d"),
-            #("font-size", "1.1rem"),
-            #("margin-bottom", "1rem"),
+            color.raw(colors.gray_6),
+            font_size.raw(fonts.font_size_2),
+            margin_bottom.raw(sizes.size_4),
           ]),
         ],
         [html.text("Analysis not started. Click \"Analyze PR\" to begin.")],
@@ -360,15 +403,15 @@ fn error_banner(message: String) -> Element(Msg) {
   html.div(
     [
       attribute.styles([
-        #("padding", "0.75rem 1rem"),
-        #("margin-bottom", "1rem"),
-        #("background", "#fee2e2"),
-        #("border", "1px solid #fca5a5"),
-        #("border-radius", "6px"),
-        #("color", "#991b1b"),
-        #("font-size", "0.9rem"),
-        #("white-space", "pre-wrap"),
-        #("word-break", "break-word"),
+        padding.raw(sizes.size_3 <> " " <> sizes.size_4),
+        margin_bottom.raw(sizes.size_4),
+        background.raw(colors.red_1),
+        border.raw("1px solid " <> colors.red_4),
+        border_radius.raw(borders.radius_2),
+        color.raw(colors.red_10),
+        font_size.raw(fonts.font_size_0),
+        white_space.pre_wrap,
+        word_break.break_word,
       ]),
     ],
     [html.text(message)],
@@ -387,25 +430,25 @@ fn loading_indicator(heartbeats: Int) -> Element(Msg) {
   html.div(
     [
       attribute.styles([
-        #("text-align", "center"),
-        #("padding", "4rem 2rem"),
-        #("background", "#f8f9fa"),
-        #("border-radius", "12px"),
-        #("border", "1px solid #e9ecef"),
+        text_align.center,
+        padding.raw(sizes.size_10 <> " " <> sizes.size_7),
+        background.raw(colors.gray_1),
+        border_radius.raw(borders.radius_3),
+        border.raw("1px solid " <> colors.gray_2),
       ]),
     ],
     [
       html.div(
         [
           attribute.styles([
-            #("display", "inline-block"),
-            #("width", "2rem"),
-            #("height", "2rem"),
-            #("border", "3px solid #e9ecef"),
-            #("border-top-color", "#4f46e5"),
-            #("border-radius", "50%"),
-            #("animation", "spin 0.8s linear infinite"),
-            #("margin-bottom", "1rem"),
+            display.inline_block,
+            width.raw(sizes.size_7),
+            #("height", sizes.size_7),
+            border.raw("3px solid " <> colors.gray_2),
+            #("border-top-color", colors.indigo_7),
+            border_radius.raw("50%"),
+            animation.raw("spin 0.8s linear infinite"),
+            margin_bottom.raw(sizes.size_4),
           ]),
         ],
         [],
@@ -413,8 +456,8 @@ fn loading_indicator(heartbeats: Int) -> Element(Msg) {
       html.p(
         [
           attribute.styles([
-            #("color", "#6c757d"),
-            #("font-size", "1rem"),
+            color.raw(colors.gray_6),
+            font_size.raw(fonts.font_size_1),
           ]),
         ],
         [html.text(progress_text)],
@@ -474,21 +517,21 @@ fn summary_panel(
   html.div(
     [
       attribute.styles([
-        #("background", "#ffffff"),
-        #("border", "1px solid #e2e8f0"),
-        #("border-radius", "12px"),
-        #("padding", "1.25rem 1.5rem"),
-        #("margin-bottom", "1.25rem"),
+        background.raw("white"),
+        border.raw("1px solid " <> colors.gray_3),
+        border_radius.raw(borders.radius_3),
+        padding.raw(sizes.size_5 <> " " <> sizes.size_6),
+        margin_bottom.raw(sizes.size_5),
       ]),
     ],
     [
       html.h2(
         [
           attribute.styles([
-            #("margin", "0 0 0.75rem 0"),
-            #("font-size", "1rem"),
-            #("font-weight", "600"),
-            #("color", "#374151"),
+            margin.raw("0 0 " <> sizes.size_3 <> " 0"),
+            font_size.raw(fonts.font_size_1),
+            font_weight.raw("600"),
+            color.raw(colors.gray_8),
           ]),
         ],
         [html.text("AI Summary")],
@@ -496,10 +539,10 @@ fn summary_panel(
       html.p(
         [
           attribute.styles([
-            #("margin", "0 0 1rem 0"),
-            #("color", "#4b5563"),
-            #("line-height", "1.6"),
-            #("font-size", "0.925rem"),
+            margin.raw("0 0 " <> sizes.size_4 <> " 0"),
+            color.raw(colors.gray_7),
+            line_height.raw(fonts.font_lineheight_4),
+            font_size.raw(fonts.font_size_1),
           ]),
         ],
         [html.text(summary)],
@@ -517,10 +560,10 @@ fn chunk_navigator(
   html.div(
     [
       attribute.styles([
-        #("display", "flex"),
-        #("align-items", "center"),
-        #("gap", "0.75rem"),
-        #("flex-wrap", "wrap"),
+        display.flex,
+        align_items.center,
+        gap.raw(sizes.size_3),
+        flex_wrap.wrap,
       ]),
     ],
     [
@@ -528,11 +571,11 @@ fn chunk_navigator(
       html.span(
         [
           attribute.styles([
-            #("font-size", "0.875rem"),
-            #("color", "#6b7280"),
-            #("font-weight", "500"),
-            #("min-width", "6rem"),
-            #("text-align", "center"),
+            font_size.raw(fonts.font_size_0),
+            color.raw(colors.gray_6),
+            font_weight.raw("500"),
+            min_width.raw("6rem"),
+            text_align.center,
           ]),
         ],
         [
@@ -549,10 +592,10 @@ fn chunk_navigator(
       html.div(
         [
           attribute.styles([
-            #("display", "flex"),
-            #("gap", "0.375rem"),
-            #("margin-left", "0.5rem"),
-            #("flex-wrap", "wrap"),
+            display.flex,
+            gap.raw("0.375rem"),
+            #("margin-left", sizes.size_2),
+            flex_wrap.wrap,
           ]),
         ],
         make_range(0, total - 1)
@@ -571,22 +614,22 @@ fn chunk_pill(
   let has_comments =
     list.any(comments, fn(c) { c.chunk_index == index })
   let bg = case is_active {
-    True -> "#4f46e5"
-    False -> "#e5e7eb"
+    True -> colors.indigo_7
+    False -> colors.gray_3
   }
   html.button(
     [
       event.on_click(GoToChunk(index)),
       attribute.styles([
-        #("width", "1.25rem"),
+        width.raw("1.25rem"),
         #("height", "1.25rem"),
-        #("border-radius", "50%"),
-        #("border", "none"),
-        #("background", bg),
-        #("cursor", "pointer"),
-        #("position", "relative"),
-        #("padding", "0"),
-        #("transition", "background 0.15s"),
+        border_radius.raw("50%"),
+        border.none,
+        background.raw(bg),
+        cursor.pointer,
+        position.relative,
+        padding.raw("0"),
+        transition.raw("background 0.15s"),
       ]),
     ],
     case has_comments {
@@ -594,14 +637,14 @@ fn chunk_pill(
         html.span(
           [
             attribute.styles([
-              #("position", "absolute"),
+              position.absolute,
               #("top", "-2px"),
               #("right", "-2px"),
-              #("width", "8px"),
+              width.raw("8px"),
               #("height", "8px"),
-              #("border-radius", "50%"),
-              #("background", "#f59e0b"),
-              #("border", "1.5px solid white"),
+              border_radius.raw("50%"),
+              background.raw(colors.yellow_6),
+              border.raw("1.5px solid white"),
             ]),
           ],
           [],
@@ -618,24 +661,24 @@ fn nav_button(label: String, msg: Msg, enabled: Bool) -> Element(Msg) {
       event.on_click(msg),
       attribute.disabled(!enabled),
       attribute.styles([
-        #("padding", "0.375rem 0.875rem"),
-        #("background", case enabled {
-          True -> "#4f46e5"
-          False -> "#d1d5db"
+        padding.raw("0.375rem 0.875rem"),
+        background.raw(case enabled {
+          True -> colors.indigo_7
+          False -> colors.gray_4
         }),
-        #("color", case enabled {
+        color.raw(case enabled {
           True -> "white"
-          False -> "#9ca3af"
+          False -> colors.gray_5
         }),
-        #("border", "none"),
-        #("border-radius", "6px"),
-        #("cursor", case enabled {
+        border.none,
+        border_radius.raw(borders.radius_2),
+        cursor.raw(case enabled {
           True -> "pointer"
           False -> "not-allowed"
         }),
-        #("font-size", "0.8125rem"),
-        #("font-weight", "500"),
-        #("transition", "background 0.15s"),
+        font_size.raw(fonts.font_size_00),
+        font_weight.raw("500"),
+        transition.raw("background 0.15s"),
       ]),
     ],
     [html.text(label)],
@@ -665,11 +708,11 @@ fn chunk_panel(
   html.div(
     [
       attribute.styles([
-        #("background", "#ffffff"),
-        #("border", "1px solid #e2e8f0"),
-        #("border-radius", "12px"),
-        #("margin-bottom", "1.25rem"),
-        #("overflow", "hidden"),
+        background.raw("white"),
+        border.raw("1px solid " <> colors.gray_3),
+        border_radius.raw(borders.radius_3),
+        margin_bottom.raw(sizes.size_5),
+        overflow.hidden,
       ]),
     ],
     [
@@ -677,18 +720,18 @@ fn chunk_panel(
       html.div(
         [
           attribute.styles([
-            #("padding", "1rem 1.5rem"),
-            #("border-bottom", "1px solid #e2e8f0"),
+            padding.raw(sizes.size_4 <> " " <> sizes.size_6),
+            border_bottom.raw("1px solid " <> colors.gray_3),
           ]),
         ],
         [
           html.h3(
             [
               attribute.styles([
-                #("margin", "0 0 0.375rem 0"),
-                #("font-size", "1.05rem"),
-                #("font-weight", "600"),
-                #("color", "#1e293b"),
+                margin.raw("0 0 0.375rem 0"),
+                font_size.raw(fonts.font_size_2),
+                font_weight.raw("600"),
+                color.raw(colors.gray_9),
               ]),
             ],
             [html.text(chunk.title)],
@@ -696,14 +739,14 @@ fn chunk_panel(
           html.div(
             [
               attribute.styles([
-                #("background", "#eff6ff"),
-                #("border", "1px solid #bfdbfe"),
-                #("border-radius", "8px"),
-                #("padding", "0.75rem 1rem"),
-                #("margin-top", "0.5rem"),
-                #("font-size", "0.875rem"),
-                #("line-height", "1.5"),
-                #("color", "#374151"),
+                background.raw(colors.blue_1),
+                border.raw("1px solid " <> colors.blue_3),
+                border_radius.raw(borders.radius_2),
+                padding.raw(sizes.size_3 <> " " <> sizes.size_4),
+                margin_top.raw(sizes.size_2),
+                font_size.raw(fonts.font_size_0),
+                line_height.raw("1.5"),
+                color.raw(colors.gray_8),
               ]),
             ],
             [html.text(chunk.description)],
@@ -714,18 +757,15 @@ fn chunk_panel(
       html.div(
         [
           attribute.styles([
-            #("padding", "0.625rem 1.5rem"),
-            #("background", "#f8fafc"),
-            #("border-bottom", "1px solid #e2e8f0"),
-            #(
-              "font-family",
-              "\"SF Mono\", \"Fira Code\", \"Consolas\", monospace",
-            ),
-            #("font-size", "0.8125rem"),
-            #("color", "#6b7280"),
-            #("display", "flex"),
-            #("align-items", "center"),
-            #("gap", "0.5rem"),
+            padding.raw("0.625rem " <> sizes.size_6),
+            background.raw(colors.gray_1),
+            border_bottom.raw("1px solid " <> colors.gray_3),
+            #("font-family", fonts.font_mono),
+            font_size.raw(fonts.font_size_00),
+            color.raw(colors.gray_6),
+            display.flex,
+            align_items.center,
+            gap.raw(sizes.size_2),
           ]),
         ],
         [
@@ -736,12 +776,12 @@ fn chunk_panel(
               attribute.target("_blank"),
               attribute.title("View files on GitHub"),
               attribute.styles([
-                #("color", "#9ca3af"),
-                #("text-decoration", "none"),
-                #("font-size", "0.875rem"),
-                #("display", "inline-flex"),
-                #("align-items", "center"),
-                #("line-height", "1"),
+                color.raw(colors.gray_5),
+                text_decoration.none,
+                font_size.raw(fonts.font_size_0),
+                display.inline_flex,
+                align_items.center,
+                line_height.raw("1"),
               ]),
             ],
             [
@@ -801,12 +841,9 @@ fn diff_view(
     [
       attribute.styles([
         #("overflow-x", "auto"),
-        #(
-          "font-family",
-          "\"SF Mono\", \"Fira Code\", \"Consolas\", monospace",
-        ),
-        #("font-size", "0.8125rem"),
-        #("line-height", "1.5"),
+        #("font-family", fonts.font_mono),
+        font_size.raw(fonts.font_size_00),
+        line_height.raw("1.5"),
       ]),
     ],
     list.flat_map(file_indexed_lines, fn(entry) {
@@ -878,7 +915,7 @@ fn index_file_lines_acc(
         False -> {
           case string.starts_with(line, "-") {
             True -> {
-              // Removed line — doesn't increment new file line number
+              // Removed line -- doesn't increment new file line number
               let entry =
                 DiffLineEntry(
                   display_line: display_idx,
@@ -893,7 +930,7 @@ fn index_file_lines_acc(
               )
             }
             False -> {
-              // Added line or context line — increments new file line number
+              // Added line or context line -- increments new file line number
               let entry =
                 DiffLineEntry(
                   display_line: display_idx,
@@ -969,30 +1006,30 @@ fn diff_line_row(
     [
       event.on_click(StartComment(display_line, file_line)),
       attribute.styles([
-        #("display", "flex"),
-        #("background", bg),
-        #("border-left", "3px solid " <> border_color),
-        #("cursor", "pointer"),
-        #("transition", "filter 0.1s"),
+        display.flex,
+        background.raw(bg),
+        border_left.raw("3px solid " <> border_color),
+        cursor.pointer,
+        transition.raw("filter 0.1s"),
       ]),
     ],
     [
-      // Line number gutter — shows actual file line number
+      // Line number gutter -- shows actual file line number
       html.span(
         [
           attribute.styles([
-            #("display", "inline-block"),
-            #("min-width", "3.5rem"),
-            #("padding", "0 0.5rem"),
-            #("text-align", "right"),
-            #("color", "#9ca3af"),
-            #("user-select", "none"),
-            #("background", case bg {
-              "transparent" -> "#fafafa"
+            display.inline_block,
+            min_width.raw("3.5rem"),
+            padding.raw("0 " <> sizes.size_2),
+            text_align.right,
+            color.raw(colors.gray_5),
+            user_select.none,
+            background.raw(case bg {
+              "transparent" -> colors.gray_1
               _ -> "rgba(0,0,0,0.03)"
             }),
-            #("border-right", "1px solid #e5e7eb"),
-            #("flex-shrink", "0"),
+            #("border-right", "1px solid " <> colors.gray_3),
+            flex_shrink.raw("0"),
           ]),
         ],
         [html.text(gutter_text)],
@@ -1003,9 +1040,9 @@ fn diff_line_row(
           html.span(
             [
               attribute.styles([
-                #("padding", "0 0.75rem"),
-                #("white-space", "pre"),
-                #("flex", "1"),
+                padding.raw("0 " <> sizes.size_3),
+                white_space.pre,
+                flex.raw("1"),
               ]),
             ],
             [html.text(line)],
@@ -1015,10 +1052,10 @@ fn diff_line_row(
           html.span(
             [
               attribute.styles([
-                #("padding", "0 0.75rem"),
-                #("white-space", "pre"),
-                #("flex", "1"),
-                #("display", "flex"),
+                padding.raw("0 " <> sizes.size_3),
+                white_space.pre,
+                flex.raw("1"),
+                display.flex,
               ]),
             ],
             [
@@ -1033,6 +1070,8 @@ fn diff_line_row(
 }
 
 fn line_colors(line: String) -> #(String, String) {
+  // These are domain-specific diff colors; keeping hardcoded hex values
+  // as they need to be specific semantic colors for diffs
   case line {
     "+" <> _ -> #("#dcfce7", "#22c55e")
     "-" <> _ -> #("#fee2e2", "#ef4444")
@@ -1049,13 +1088,13 @@ fn comment_display(comment: LineComment) -> Element(Msg) {
   html.div(
     [
       attribute.styles([
-        #("background", "#fef9c3"),
-        #("border-left", "3px solid #f59e0b"),
-        #("padding", "0.5rem 0.75rem 0.5rem 4.25rem"),
-        #("font-family", "system-ui, -apple-system, sans-serif"),
-        #("font-size", "0.8125rem"),
-        #("color", "#92400e"),
-        #("line-height", "1.4"),
+        background.raw(colors.yellow_1),
+        border_left.raw("3px solid " <> colors.yellow_6),
+        padding.raw(sizes.size_2 <> " " <> sizes.size_3 <> " " <> sizes.size_2 <> " 4.25rem"),
+        #("font-family", fonts.font_system_ui),
+        font_size.raw(fonts.font_size_00),
+        color.raw(colors.orange_9),
+        line_height.raw("1.4"),
       ]),
     ],
     [html.text(comment.body)],
@@ -1070,27 +1109,27 @@ fn comment_input(text: String, posting_comment: Bool) -> Element(Msg) {
   html.div(
     [
       attribute.styles([
-        #("padding", "0.75rem 0.75rem 0.75rem 4.25rem"),
-        #("background", "#fffbeb"),
-        #("border-left", "3px solid #fbbf24"),
-        #("display", "flex"),
-        #("gap", "0.5rem"),
-        #("align-items", "flex-start"),
+        padding.raw(sizes.size_3 <> " " <> sizes.size_3 <> " " <> sizes.size_3 <> " 4.25rem"),
+        background.raw(colors.yellow_0),
+        border_left.raw("3px solid " <> colors.yellow_5),
+        display.flex,
+        gap.raw(sizes.size_2),
+        align_items.flex_start,
       ]),
     ],
     [
       html.textarea(
         [
           attribute.styles([
-            #("flex", "1"),
-            #("min-height", "3rem"),
-            #("padding", "0.5rem"),
-            #("border", "1px solid #d1d5db"),
-            #("border-radius", "6px"),
-            #("font-family", "system-ui, -apple-system, sans-serif"),
-            #("font-size", "0.8125rem"),
-            #("resize", "vertical"),
-            #("outline", "none"),
+            flex.raw("1"),
+            min_height.raw("3rem"),
+            padding.raw(sizes.size_2),
+            border.raw("1px solid " <> colors.gray_4),
+            border_radius.raw(borders.radius_2),
+            #("font-family", fonts.font_system_ui),
+            font_size.raw(fonts.font_size_00),
+            resize.vertical,
+            outline.none,
           ]),
           attribute.placeholder("Add a comment..."),
           attribute.value(text),
@@ -1101,9 +1140,9 @@ fn comment_input(text: String, posting_comment: Bool) -> Element(Msg) {
       html.div(
         [
           attribute.styles([
-            #("display", "flex"),
-            #("flex-direction", "column"),
-            #("gap", "0.375rem"),
+            display.flex,
+            flex_direction.column,
+            gap.raw("0.375rem"),
           ]),
         ],
         [
@@ -1112,20 +1151,20 @@ fn comment_input(text: String, posting_comment: Bool) -> Element(Msg) {
               event.on_click(SubmitComment),
               attribute.disabled(posting_comment),
               attribute.styles([
-                #("padding", "0.375rem 0.75rem"),
-                #("background", case posting_comment {
-                  True -> "#9ca3af"
-                  False -> "#4f46e5"
+                padding.raw("0.375rem " <> sizes.size_3),
+                background.raw(case posting_comment {
+                  True -> colors.gray_5
+                  False -> colors.indigo_7
                 }),
-                #("color", "white"),
-                #("border", "none"),
-                #("border-radius", "5px"),
-                #("cursor", case posting_comment {
+                color.raw("white"),
+                border.none,
+                border_radius.raw(borders.radius_2),
+                cursor.raw(case posting_comment {
                   True -> "not-allowed"
                   False -> "pointer"
                 }),
-                #("font-size", "0.75rem"),
-                #("font-weight", "500"),
+                font_size.raw(fonts.font_size_00),
+                font_weight.raw("500"),
               ]),
             ],
             [html.text(button_text)],
@@ -1134,14 +1173,14 @@ fn comment_input(text: String, posting_comment: Bool) -> Element(Msg) {
             [
               event.on_click(CancelComment),
               attribute.styles([
-                #("padding", "0.375rem 0.75rem"),
-                #("background", "#e5e7eb"),
-                #("color", "#374151"),
-                #("border", "none"),
-                #("border-radius", "5px"),
-                #("cursor", "pointer"),
-                #("font-size", "0.75rem"),
-                #("font-weight", "500"),
+                padding.raw("0.375rem " <> sizes.size_3),
+                background.raw(colors.gray_3),
+                color.raw(colors.gray_8),
+                border.none,
+                border_radius.raw(borders.radius_2),
+                cursor.pointer,
+                font_size.raw(fonts.font_size_00),
+                font_weight.raw("500"),
               ]),
             ],
             [html.text("Cancel")],
@@ -1156,29 +1195,29 @@ fn github_comment_display(comment: PrComment) -> Element(Msg) {
   html.div(
     [
       attribute.styles([
-        #("background", "#dbeafe"),
-        #("border-left", "3px solid #3b82f6"),
-        #("padding", "0.5rem 0.75rem 0.5rem 4.25rem"),
-        #("font-family", "system-ui, -apple-system, sans-serif"),
-        #("font-size", "0.8125rem"),
-        #("color", "#1e40af"),
-        #("line-height", "1.4"),
+        background.raw(colors.blue_2),
+        border_left.raw("3px solid " <> colors.blue_6),
+        padding.raw(sizes.size_2 <> " " <> sizes.size_3 <> " " <> sizes.size_2 <> " 4.25rem"),
+        #("font-family", fonts.font_system_ui),
+        font_size.raw(fonts.font_size_00),
+        color.raw(colors.blue_9),
+        line_height.raw("1.4"),
       ]),
     ],
     [
       html.div(
         [
           attribute.styles([
-            #("display", "flex"),
-            #("justify-content", "space-between"),
-            #("margin-bottom", "0.25rem"),
-            #("font-size", "0.75rem"),
-            #("color", "#6b7280"),
+            display.flex,
+            justify_content.space_between,
+            margin_bottom.raw("0.25rem"),
+            font_size.raw(fonts.font_size_00),
+            color.raw(colors.gray_6),
           ]),
         ],
         [
           html.span(
-            [attribute.styles([#("font-weight", "600")])],
+            [attribute.styles([font_weight.raw("600")])],
             [html.text(comment.author)],
           ),
           html.span([], [html.text(comment.created_at)]),
@@ -1203,21 +1242,21 @@ fn general_comments_section(
       html.div(
         [
           attribute.styles([
-            #("background", "#ffffff"),
-            #("border", "1px solid #e2e8f0"),
-            #("border-radius", "12px"),
-            #("padding", "1.25rem 1.5rem"),
-            #("margin-top", "1.25rem"),
+            background.raw("white"),
+            border.raw("1px solid " <> colors.gray_3),
+            border_radius.raw(borders.radius_3),
+            padding.raw(sizes.size_5 <> " " <> sizes.size_6),
+            margin_top.raw(sizes.size_5),
           ]),
         ],
         [
           html.h2(
             [
               attribute.styles([
-                #("margin", "0 0 0.75rem 0"),
-                #("font-size", "1rem"),
-                #("font-weight", "600"),
-                #("color", "#374151"),
+                margin.raw("0 0 " <> sizes.size_3 <> " 0"),
+                font_size.raw(fonts.font_size_1),
+                font_weight.raw("600"),
+                color.raw(colors.gray_8),
               ]),
             ],
             [html.text("Comments")],
@@ -1228,30 +1267,30 @@ fn general_comments_section(
               html.div(
                 [
                   attribute.styles([
-                    #("background", "#dbeafe"),
-                    #("border-left", "3px solid #3b82f6"),
-                    #("padding", "0.75rem 1rem"),
-                    #("margin-bottom", "0.5rem"),
-                    #("border-radius", "0 8px 8px 0"),
-                    #("font-size", "0.875rem"),
-                    #("color", "#1e40af"),
-                    #("line-height", "1.5"),
+                    background.raw(colors.blue_2),
+                    border_left.raw("3px solid " <> colors.blue_6),
+                    padding.raw(sizes.size_3 <> " " <> sizes.size_4),
+                    margin_bottom.raw(sizes.size_2),
+                    #("border-radius", "0 " <> borders.radius_2 <> " " <> borders.radius_2 <> " 0"),
+                    font_size.raw(fonts.font_size_0),
+                    color.raw(colors.blue_9),
+                    line_height.raw("1.5"),
                   ]),
                 ],
                 [
                   html.div(
                     [
                       attribute.styles([
-                        #("display", "flex"),
-                        #("justify-content", "space-between"),
-                        #("margin-bottom", "0.375rem"),
-                        #("font-size", "0.75rem"),
-                        #("color", "#6b7280"),
+                        display.flex,
+                        justify_content.space_between,
+                        margin_bottom.raw("0.375rem"),
+                        font_size.raw(fonts.font_size_00),
+                        color.raw(colors.gray_6),
                       ]),
                     ],
                     [
                       html.span(
-                        [attribute.styles([#("font-weight", "600")])],
+                        [attribute.styles([font_weight.raw("600")])],
                         [html.text(comment.author)],
                       ),
                       html.span([], [html.text(comment.created_at)]),
@@ -1278,11 +1317,11 @@ fn bottom_navigation(current: Int, total: Int) -> Element(Msg) {
   html.div(
     [
       attribute.styles([
-        #("display", "flex"),
-        #("justify-content", "center"),
-        #("align-items", "center"),
-        #("gap", "1rem"),
-        #("padding", "1rem 0"),
+        display.flex,
+        justify_content.center,
+        align_items.center,
+        gap.raw(sizes.size_4),
+        padding.raw(sizes.size_4 <> " 0"),
       ]),
     ],
     [
@@ -1290,8 +1329,8 @@ fn bottom_navigation(current: Int, total: Int) -> Element(Msg) {
       html.span(
         [
           attribute.styles([
-            #("font-size", "0.875rem"),
-            #("color", "#6b7280"),
+            font_size.raw(fonts.font_size_0),
+            color.raw(colors.gray_6),
           ]),
         ],
         [
@@ -1325,21 +1364,21 @@ fn review_submission_section(
   html.div(
     [
       attribute.styles([
-        #("background", "#ffffff"),
-        #("border", "1px solid #e2e8f0"),
-        #("border-radius", "12px"),
-        #("padding", "1.25rem 1.5rem"),
-        #("margin-top", "1.5rem"),
+        background.raw("white"),
+        border.raw("1px solid " <> colors.gray_3),
+        border_radius.raw(borders.radius_3),
+        padding.raw(sizes.size_5 <> " " <> sizes.size_6),
+        margin_top.raw(sizes.size_5),
       ]),
     ],
     [
       html.h2(
         [
           attribute.styles([
-            #("margin", "0 0 0.75rem 0"),
-            #("font-size", "1rem"),
-            #("font-weight", "600"),
-            #("color", "#374151"),
+            margin.raw("0 0 " <> sizes.size_3 <> " 0"),
+            font_size.raw(fonts.font_size_1),
+            font_weight.raw("600"),
+            color.raw(colors.gray_8),
           ]),
         ],
         [html.text("Submit Review")],
@@ -1347,17 +1386,17 @@ fn review_submission_section(
       html.textarea(
         [
           attribute.styles([
-            #("width", "100%"),
-            #("min-height", "4rem"),
-            #("padding", "0.625rem"),
-            #("border", "1px solid #d1d5db"),
-            #("border-radius", "8px"),
-            #("font-family", "system-ui, -apple-system, sans-serif"),
-            #("font-size", "0.875rem"),
-            #("resize", "vertical"),
-            #("outline", "none"),
-            #("box-sizing", "border-box"),
-            #("margin-bottom", "0.75rem"),
+            width.raw("100%"),
+            min_height.raw("4rem"),
+            padding.raw("0.625rem"),
+            border.raw("1px solid " <> colors.gray_4),
+            border_radius.raw(borders.radius_2),
+            #("font-family", fonts.font_system_ui),
+            font_size.raw(fonts.font_size_0),
+            resize.vertical,
+            outline.none,
+            box_sizing.border_box,
+            margin_bottom.raw(sizes.size_3),
           ]),
           attribute.placeholder(
             "Leave a comment with your review (optional for approvals)...",
@@ -1370,31 +1409,31 @@ fn review_submission_section(
       html.div(
         [
           attribute.styles([
-            #("display", "flex"),
-            #("gap", "0.5rem"),
-            #("flex-wrap", "wrap"),
+            display.flex,
+            gap.raw(sizes.size_2),
+            flex_wrap.wrap,
           ]),
         ],
         [
           review_action_button(
             "Approve",
             "APPROVE",
-            "#16a34a",
-            "#15803d",
+            colors.green_7,
+            colors.green_8,
             submitting,
           ),
           review_action_button(
             "Request Changes",
             "REQUEST_CHANGES",
-            "#ea580c",
-            "#c2410c",
+            colors.orange_7,
+            colors.orange_8,
             submitting,
           ),
           review_action_button(
             "Comment",
             "COMMENT",
-            "#4f46e5",
-            "#4338ca",
+            colors.indigo_7,
+            colors.indigo_8,
             submitting,
           ),
         ],
@@ -1415,21 +1454,21 @@ fn review_action_button(
       event.on_click(SubmitReview(event_type)),
       attribute.disabled(submitting),
       attribute.styles([
-        #("padding", "0.5rem 1.25rem"),
-        #("background", case submitting {
-          True -> "#9ca3af"
+        padding.raw(sizes.size_2 <> " " <> sizes.size_5),
+        background.raw(case submitting {
+          True -> colors.gray_5
           False -> bg_color
         }),
-        #("color", "white"),
-        #("border", "none"),
-        #("border-radius", "6px"),
-        #("cursor", case submitting {
+        color.raw("white"),
+        border.none,
+        border_radius.raw(borders.radius_2),
+        cursor.raw(case submitting {
           True -> "not-allowed"
           False -> "pointer"
         }),
-        #("font-size", "0.875rem"),
-        #("font-weight", "500"),
-        #("transition", "background 0.15s"),
+        font_size.raw(fonts.font_size_0),
+        font_weight.raw("500"),
+        transition.raw("background 0.15s"),
       ]),
     ],
     [
