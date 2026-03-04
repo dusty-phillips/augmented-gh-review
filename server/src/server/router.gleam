@@ -14,6 +14,7 @@ const index_html = "<!DOCTYPE html>
 <head>
 <meta charset=\"utf-8\">
 <title>Augmented Review</title>
+<link rel=\"stylesheet\" href=\"https://unpkg.com/open-props\" />
 <link rel=\"stylesheet\" href=\"https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap\" />
 <link rel=\"stylesheet\" href=\"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-light.min.css\">
 <script src=\"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js\"></script>

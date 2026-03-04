@@ -842,7 +842,7 @@ fn diff_view(
       attribute.styles([
         #("overflow-x", "auto"),
         #("font-family", fonts.font_mono),
-        font_size.raw(fonts.font_size_00),
+        font_size.raw(fonts.font_size_1),
         line_height.raw("1.5"),
       ]),
     ],

@@ -15780,7 +15780,7 @@ function diff_view(chunk, commenting, chunk_comments, chunk_github_comments) {
     styles(toList([
       ["overflow-x", "auto"],
       ["font-family", font_mono],
-      raw8(font_size_00),
+      raw8(font_size_1),
       raw19("1.5")
     ]))
   ]), flat_map(file_indexed_lines, (entry) => {
