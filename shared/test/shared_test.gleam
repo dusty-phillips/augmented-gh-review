@@ -21,6 +21,7 @@ pub fn pull_request_round_trip_test() {
       draft: False,
       checks_status: "passing",
       checks_url: "",
+      reviewers: [],
     )
 
   original
@@ -43,6 +44,7 @@ pub fn pull_request_draft_true_round_trip_test() {
       draft: True,
       checks_status: "pending",
       checks_url: "",
+      reviewers: [],
     )
 
   original
@@ -106,6 +108,7 @@ pub fn pull_request_list_round_trip_test() {
       draft: False,
       checks_status: "passing",
       checks_url: "",
+      reviewers: [],
     ),
     PullRequest(
       number: 2,
@@ -117,6 +120,7 @@ pub fn pull_request_list_round_trip_test() {
       draft: True,
       checks_status: "pending",
       checks_url: "",
+      reviewers: [],
     ),
   ]
 
@@ -156,6 +160,7 @@ pub fn empty_strings_pull_request_test() {
       draft: False,
       checks_status: "passing",
       checks_url: "",
+      reviewers: [],
     )
 
   original

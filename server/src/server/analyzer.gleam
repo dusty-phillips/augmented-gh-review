@@ -57,30 +57,7 @@ fn llm_response_decoder() -> decode.Decoder(LlmResponse) {
 
 // --- Prompt building ---
 
-fn build_prompt(pr_detail: PrDetail, hunks: List(DiffHunk)) -> String {
-  let title = pr_detail.title
-  let body = case pr_detail.body {
-    "" -> "(no description)"
-    b -> b
-  }
-  let hunk_summary = diff_parser.build_hunk_summary(hunks)
-  let total_hunks = list.length(hunks)
-
-  "You are an expert code reviewer acting as a guide for a human reviewer. Your job is to turn a raw PR diff into a guided review experience — a narrative walkthrough that helps the reviewer understand the changes efficiently and catch issues.
-
-## PR Title
-" <> title <> "
-
-## PR Description
-" <> body <> "
-
-## Diff Hunks (" <> int.to_string(total_hunks) <> " total)
-
-The diff has been parsed into the following hunks. Each hunk has an index, file path, hunk header, line count, and a preview of its first few lines.
-
-" <> hunk_summary <> "
-
-## Instructions
+const analysis_instructions = "## Instructions
 
 ### Grouping
 Group hunks into logical review chunks. Each chunk should be a coherent unit the reviewer can understand in isolation (~100 lines). You may group hunks from the same or different files.
@@ -95,7 +72,7 @@ Order chunks so each one builds on what the reviewer has already seen:
 6. Tests
 
 ### Coverage
-Every hunk index (0 through " <> int.to_string(total_hunks - 1) <> ") MUST appear in exactly one chunk. Do not skip any.
+Every hunk index (0 through HUNK_MAX_INDEX) MUST appear in exactly one chunk. Do not skip any.
 
 ### Summary
 Write a 2-3 sentence summary that tells the reviewer: what problem does this PR solve, what approach does it take, and what are the key areas to scrutinize.
@@ -121,6 +98,44 @@ Return ONLY a JSON object (no markdown fences, no other text):
     }
   ]
 }"
+
+fn build_prompt(pr_detail: PrDetail, hunks: List(DiffHunk)) -> String {
+  let body = case pr_detail.body {
+    "" -> "(no description)"
+    b -> b
+  }
+  let total_hunks = list.length(hunks)
+  let instructions =
+    string.replace(
+      analysis_instructions,
+      "HUNK_MAX_INDEX",
+      int.to_string(total_hunks - 1),
+    )
+
+  "You are an expert code reviewer acting as a guide for a human reviewer. Your job is to turn a raw PR diff into a guided review experience — a narrative walkthrough that helps the reviewer understand the changes efficiently and catch issues.
+
+## PR Title
+"
+  <> pr_detail.title
+  <> "
+
+## PR Description
+"
+  <> body
+  <> "
+
+## Diff Hunks ("
+  <> int.to_string(total_hunks)
+  <> " total)
+
+The diff has been parsed into the following hunks. Each hunk has an index, file path, hunk header, line count, and a preview of its first few lines.
+
+"
+  <> diff_parser.build_hunk_summary(hunks)
+  <> "
+
+"
+  <> instructions
 }
 
 /// Extract JSON from Claude's response, handling potential markdown fences

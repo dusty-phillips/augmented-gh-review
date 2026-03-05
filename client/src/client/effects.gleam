@@ -135,3 +135,24 @@ pub fn start_auto_refresh() -> effect.Effect(Msg) {
     Nil
   })
 }
+
+pub fn reply_to_comment(
+  repo: String,
+  number: Int,
+  comment_id: Int,
+  body: String,
+) -> effect.Effect(Msg) {
+  rsvp.post(
+    "/api/prs/"
+      <> int.to_string(number)
+      <> "/reply?repo="
+      <> repo,
+    json.object([
+      #("comment_id", json.int(comment_id)),
+      #("body", json.string(body)),
+    ]),
+    rsvp.expect_ok_response(fn(resp) {
+      CommentPosted(result.map(resp, fn(_response) { Nil }))
+    }),
+  )
+}

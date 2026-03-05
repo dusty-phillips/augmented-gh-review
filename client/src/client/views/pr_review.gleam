@@ -2,11 +2,12 @@ import client/highlight
 import client/model.{
   type Model, type Msg, Analyzed, Analyzing, AnalyzePr, BackToDashboard,
   CancelComment, Commenting, GoToChunk, NextChunk, NotAnalyzed, NotCommenting,
-  PostingComment, PrevChunk, ReviewIdle, SetReviewBody, StartComment,
-  SubmitComment, SubmitReview, SubmittingReview, ToggleDescription,
-  UpdateCommentText,
+  PostingComment, PostingReply, PrevChunk, Replying, ReviewIdle, SetReviewBody,
+  StartComment, StartReply, SubmitComment, SubmitReply, SubmitReview,
+  SubmittingReview, ToggleDescription, UpdateCommentText,
 }
 import gleam/int
+import gleam/json
 import gleam/list
 import gleam/option
 import gleam/string
@@ -60,6 +61,8 @@ import open_props/borders
 import open_props/colors
 import open_props/fonts
 import open_props/sizes
+
+const heartbeat_interval_seconds = 3
 
 // ---------------------------------------------------------------------------
 // Main view
@@ -282,7 +285,7 @@ fn description_accordion(body: String, is_open: Bool) -> Element(Msg) {
               html.span(
                 [
                   attribute.styles([
-                    font_size.raw(fonts.font_size_0),
+                    font_size.raw(fonts.font_size_1),
                     color.raw(colors.gray_6),
                     width.raw(sizes.size_4),
                   ]),
@@ -316,7 +319,7 @@ fn description_accordion(body: String, is_open: Bool) -> Element(Msg) {
                     [
                       attribute.styles([
                         margin_top.raw(sizes.size_4),
-                        font_size.raw(fonts.font_size_0),
+                        font_size.raw(fonts.font_size_1),
                         line_height.raw(fonts.font_lineheight_4),
                         color.raw(colors.gray_8),
                         word_break.break_word,
@@ -333,44 +336,44 @@ fn description_accordion(body: String, is_open: Bool) -> Element(Msg) {
   }
 }
 
-fn back_button() -> Element(Msg) {
+fn styled_button(
+  label: String,
+  msg: Msg,
+  bg_color: String,
+  enabled: Bool,
+) -> Element(Msg) {
   html.button(
     [
-      event.on_click(BackToDashboard),
+      event.on_click(msg),
+      attribute.disabled(!enabled),
       attribute.styles([
-        padding.raw(sizes.size_2 <> " " <> sizes.size_4),
-        background.raw(colors.gray_6),
+        padding.raw(sizes.size_2 <> " " <> sizes.size_5),
+        background.raw(case enabled {
+          True -> bg_color
+          False -> colors.gray_5
+        }),
         color.raw("white"),
         border.none,
         border_radius.raw(borders.radius_2),
-        cursor.pointer,
-        font_size.raw(fonts.font_size_0),
+        cursor.raw(case enabled {
+          True -> "pointer"
+          False -> "not-allowed"
+        }),
+        font_size.raw(fonts.font_size_1),
         font_weight.raw("500"),
         transition.raw("background 0.15s"),
       ]),
     ],
-    [html.text("Back to Dashboard")],
+    [html.text(label)],
   )
 }
 
+fn back_button() -> Element(Msg) {
+  styled_button("Back to Dashboard", BackToDashboard, colors.gray_6, True)
+}
+
 fn analyze_button() -> Element(Msg) {
-  html.button(
-    [
-      event.on_click(AnalyzePr),
-      attribute.styles([
-        padding.raw(sizes.size_2 <> " " <> sizes.size_5),
-        background.raw(colors.indigo_7),
-        color.raw("white"),
-        border.none,
-        border_radius.raw(borders.radius_2),
-        cursor.pointer,
-        font_size.raw(fonts.font_size_0),
-        font_weight.raw("500"),
-        transition.raw("background 0.15s"),
-      ]),
-    ],
-    [html.text("Analyze PR")],
-  )
+  styled_button("Analyze PR", AnalyzePr, colors.indigo_7, True)
 }
 
 fn analyze_prompt() -> Element(Msg) {
@@ -409,7 +412,7 @@ fn error_banner(message: String) -> Element(Msg) {
         border.raw("1px solid " <> colors.red_4),
         border_radius.raw(borders.radius_2),
         color.raw(colors.red_10),
-        font_size.raw(fonts.font_size_0),
+        font_size.raw(fonts.font_size_1),
         white_space.pre_wrap,
         word_break.break_word,
       ]),
@@ -419,7 +422,7 @@ fn error_banner(message: String) -> Element(Msg) {
 }
 
 fn loading_indicator(heartbeats: Int) -> Element(Msg) {
-  let elapsed_seconds = heartbeats * 3
+  let elapsed_seconds = heartbeats * heartbeat_interval_seconds
   let progress_text = case heartbeats {
     0 -> "Connecting to AI analysis..."
     _ ->
@@ -571,7 +574,7 @@ fn chunk_navigator(
       html.span(
         [
           attribute.styles([
-            font_size.raw(fonts.font_size_0),
+            font_size.raw(fonts.font_size_1),
             color.raw(colors.gray_6),
             font_weight.raw("500"),
             min_width.raw("6rem"),
@@ -598,8 +601,10 @@ fn chunk_navigator(
             flex_wrap.wrap,
           ]),
         ],
-        make_range(0, total - 1)
-          |> list.map(fn(i) { chunk_pill(i, current, comments) }),
+        int.range(from: 0, to: total, with: [], run: fn(acc, i) {
+            [chunk_pill(i, current, comments), ..acc]
+          })
+          |> list.reverse,
       ),
     ],
   )
@@ -676,7 +681,7 @@ fn nav_button(label: String, msg: Msg, enabled: Bool) -> Element(Msg) {
           True -> "pointer"
           False -> "not-allowed"
         }),
-        font_size.raw(fonts.font_size_0),
+        font_size.raw(fonts.font_size_1),
         font_weight.raw("500"),
         transition.raw("background 0.15s"),
       ]),
@@ -744,7 +749,7 @@ fn chunk_panel(
                 border_radius.raw(borders.radius_2),
                 padding.raw(sizes.size_3 <> " " <> sizes.size_4),
                 margin_top.raw(sizes.size_2),
-                font_size.raw(fonts.font_size_0),
+                font_size.raw(fonts.font_size_1),
                 line_height.raw("1.5"),
                 color.raw(colors.gray_8),
               ]),
@@ -778,7 +783,7 @@ fn chunk_panel(
               attribute.styles([
                 color.raw(colors.gray_5),
                 text_decoration.none,
-                font_size.raw(fonts.font_size_0),
+                font_size.raw(fonts.font_size_1),
                 display.inline_flex,
                 align_items.center,
                 line_height.raw("1"),
@@ -824,17 +829,15 @@ fn diff_view(
   let commenting_display_line = case commenting {
     Commenting(dl, _, _) -> option.Some(dl)
     PostingComment(dl, _, _) -> option.Some(dl)
-    NotCommenting -> option.None
+    Replying(_, _) | PostingReply(_, _) | NotCommenting -> option.None
   }
   let comment_text = case commenting {
-    Commenting(_, _, text) -> text
-    PostingComment(_, _, text) -> text
-    NotCommenting -> ""
+    Commenting(_, _, text) | PostingComment(_, _, text) -> text
+    Replying(_, _) | PostingReply(_, _) | NotCommenting -> ""
   }
   let is_posting = case commenting {
     PostingComment(_, _, _) -> True
-    Commenting(_, _, _) -> False
-    NotCommenting -> False
+    _ -> False
   }
 
   html.div(
@@ -860,7 +863,7 @@ fn diff_view(
 
         list.flatten([
           [diff_line_row(entry.display_line, entry.file_line, entry.text, language)],
-          list.map(line_github_comments, fn(c) { github_comment_display(c) }),
+          list.map(line_github_comments, fn(c) { github_comment_display(c, commenting) }),
           list.map(line_comments, fn(c) { comment_display(c) }),
           case is_commenting {
             True -> [comment_input(comment_text, is_posting)]
@@ -967,12 +970,6 @@ fn parse_hunk_new_start(header: String) -> Int {
   }
 }
 
-fn make_range(from: Int, to: Int) -> List(Int) {
-  case from > to {
-    True -> []
-    False -> [from, ..make_range(from + 1, to)]
-  }
-}
 
 fn diff_line_row(
   display_line: Int,
@@ -1092,7 +1089,7 @@ fn comment_display(comment: LineComment) -> Element(Msg) {
         border_left.raw("3px solid " <> colors.yellow_6),
         padding.raw(sizes.size_2 <> " " <> sizes.size_3 <> " " <> sizes.size_2 <> " 4.25rem"),
         #("font-family", fonts.font_system_ui),
-        font_size.raw(fonts.font_size_0),
+        font_size.raw(fonts.font_size_1),
         color.raw(colors.orange_9),
         line_height.raw("1.4"),
       ]),
@@ -1127,12 +1124,12 @@ fn comment_input(text: String, posting_comment: Bool) -> Element(Msg) {
             border.raw("1px solid " <> colors.gray_4),
             border_radius.raw(borders.radius_2),
             #("font-family", fonts.font_system_ui),
-            font_size.raw(fonts.font_size_0),
+            font_size.raw(fonts.font_size_1),
             resize.vertical,
             outline.none,
           ]),
           attribute.placeholder("Add a comment..."),
-          attribute.value(text),
+          attribute.property("value", json.string(text)),
           event.on_input(UpdateCommentText),
         ],
         "",
@@ -1163,7 +1160,7 @@ fn comment_input(text: String, posting_comment: Bool) -> Element(Msg) {
                   True -> "not-allowed"
                   False -> "pointer"
                 }),
-                font_size.raw(fonts.font_size_0),
+                font_size.raw(fonts.font_size_1),
                 font_weight.raw("500"),
               ]),
             ],
@@ -1179,7 +1176,7 @@ fn comment_input(text: String, posting_comment: Bool) -> Element(Msg) {
                 border.none,
                 border_radius.raw(borders.radius_2),
                 cursor.pointer,
-                font_size.raw(fonts.font_size_0),
+                font_size.raw(fonts.font_size_1),
                 font_weight.raw("500"),
               ]),
             ],
@@ -1191,7 +1188,23 @@ fn comment_input(text: String, posting_comment: Bool) -> Element(Msg) {
   )
 }
 
-fn github_comment_display(comment: PrComment) -> Element(Msg) {
+fn github_comment_display(
+  comment: PrComment,
+  commenting: model.CommentingState,
+) -> Element(Msg) {
+  let is_replying = case commenting {
+    Replying(id, _) | PostingReply(id, _) if id == comment.id -> True
+    _ -> False
+  }
+  let reply_text = case commenting {
+    Replying(id, text) | PostingReply(id, text) if id == comment.id -> text
+    _ -> ""
+  }
+  let is_posting = case commenting {
+    PostingReply(id, _) if id == comment.id -> True
+    _ -> False
+  }
+
   html.div(
     [
       attribute.styles([
@@ -1199,7 +1212,7 @@ fn github_comment_display(comment: PrComment) -> Element(Msg) {
         border_left.raw("3px solid " <> colors.blue_6),
         padding.raw(sizes.size_2 <> " " <> sizes.size_3 <> " " <> sizes.size_2 <> " 4.25rem"),
         #("font-family", fonts.font_system_ui),
-        font_size.raw(fonts.font_size_0),
+        font_size.raw(fonts.font_size_1),
         color.raw(colors.blue_9),
         line_height.raw("1.4"),
       ]),
@@ -1210,8 +1223,9 @@ fn github_comment_display(comment: PrComment) -> Element(Msg) {
           attribute.styles([
             display.flex,
             justify_content.space_between,
+            align_items.center,
             margin_bottom.raw("0.25rem"),
-            font_size.raw(fonts.font_size_0),
+            font_size.raw(fonts.font_size_1),
             color.raw(colors.gray_6),
           ]),
         ],
@@ -1220,12 +1234,119 @@ fn github_comment_display(comment: PrComment) -> Element(Msg) {
             [attribute.styles([font_weight.raw("600")])],
             [html.text(comment.author)],
           ),
-          html.span([], [html.text(comment.created_at)]),
+          html.div(
+            [attribute.styles([display.flex, align_items.center, gap.raw(sizes.size_3)])],
+            [
+              html.span([], [html.text(comment.created_at)]),
+              case is_replying {
+                True -> html.text("")
+                False ->
+                  html.button(
+                    [
+                      event.on_click(StartReply(comment.id)),
+                      attribute.styles([
+                        background.none,
+                        border.none,
+                        color.raw(colors.blue_6),
+                        cursor.pointer,
+                        font_size.raw(fonts.font_size_0),
+                        padding.raw("0"),
+                        text_decoration.underline,
+                      ]),
+                    ],
+                    [html.text("Reply")],
+                  )
+              },
+            ],
+          ),
         ],
       ),
+      html.div([], markdown.render(comment.body)),
+      case is_replying {
+        False -> html.text("")
+        True -> reply_form(reply_text, is_posting)
+      },
+    ],
+  )
+}
+
+fn reply_form(reply_text: String, is_posting: Bool) -> Element(Msg) {
+  let submit_label = case is_posting {
+    True -> "Posting..."
+    False -> "Reply"
+  }
+  html.div(
+    [
+      attribute.styles([
+        margin_top.raw(sizes.size_2),
+        display.flex,
+        gap.raw(sizes.size_2),
+        align_items.flex_start,
+      ]),
+    ],
+    [
+      html.textarea(
+        [
+          attribute.styles([
+            flex.raw("1"),
+            min_height.raw("2.5rem"),
+            padding.raw(sizes.size_2),
+            border.raw("1px solid " <> colors.blue_4),
+            border_radius.raw(borders.radius_2),
+            #("font-family", fonts.font_system_ui),
+            font_size.raw(fonts.font_size_1),
+            resize.vertical,
+            outline.none,
+          ]),
+          attribute.placeholder("Write a reply..."),
+          attribute.property("value", json.string(reply_text)),
+          event.on_input(UpdateCommentText),
+        ],
+        "",
+      ),
       html.div(
-        [],
-        markdown.render(comment.body),
+        [attribute.styles([display.flex, flex_direction.column, gap.raw("0.375rem")])],
+        [
+          html.button(
+            [
+              event.on_click(SubmitReply),
+              attribute.disabled(is_posting),
+              attribute.styles([
+                padding.raw("0.375rem " <> sizes.size_3),
+                background.raw(case is_posting {
+                  True -> colors.gray_5
+                  False -> colors.blue_7
+                }),
+                color.raw("white"),
+                border.none,
+                border_radius.raw(borders.radius_2),
+                cursor.raw(case is_posting {
+                  True -> "not-allowed"
+                  False -> "pointer"
+                }),
+                font_size.raw(fonts.font_size_1),
+                font_weight.raw("500"),
+              ]),
+            ],
+            [html.text(submit_label)],
+          ),
+          html.button(
+            [
+              event.on_click(CancelComment),
+              attribute.styles([
+                padding.raw("0.375rem " <> sizes.size_3),
+                background.raw(colors.gray_3),
+                color.raw(colors.gray_8),
+                border.none,
+                border_radius.raw(borders.radius_2),
+                cursor.pointer,
+                font_size.raw(fonts.font_size_1),
+                font_weight.raw("500"),
+              ]),
+            ],
+            [html.text("Cancel")],
+          ),
+        ],
       ),
     ],
   )
@@ -1272,7 +1393,7 @@ fn general_comments_section(
                     padding.raw(sizes.size_3 <> " " <> sizes.size_4),
                     margin_bottom.raw(sizes.size_2),
                     #("border-radius", "0 " <> borders.radius_2 <> " " <> borders.radius_2 <> " 0"),
-                    font_size.raw(fonts.font_size_0),
+                    font_size.raw(fonts.font_size_1),
                     color.raw(colors.blue_9),
                     line_height.raw("1.5"),
                   ]),
@@ -1284,7 +1405,7 @@ fn general_comments_section(
                         display.flex,
                         justify_content.space_between,
                         margin_bottom.raw("0.375rem"),
-                        font_size.raw(fonts.font_size_0),
+                        font_size.raw(fonts.font_size_1),
                         color.raw(colors.gray_6),
                       ]),
                     ],
@@ -1329,7 +1450,7 @@ fn bottom_navigation(current: Int, total: Int) -> Element(Msg) {
       html.span(
         [
           attribute.styles([
-            font_size.raw(fonts.font_size_0),
+            font_size.raw(fonts.font_size_1),
             color.raw(colors.gray_6),
           ]),
         ],
@@ -1392,7 +1513,7 @@ fn review_submission_section(
             border.raw("1px solid " <> colors.gray_4),
             border_radius.raw(borders.radius_2),
             #("font-family", fonts.font_system_ui),
-            font_size.raw(fonts.font_size_0),
+            font_size.raw(fonts.font_size_1),
             resize.vertical,
             outline.none,
             box_sizing.border_box,
@@ -1401,7 +1522,7 @@ fn review_submission_section(
           attribute.placeholder(
             "Leave a comment with your review (optional for approvals)...",
           ),
-          attribute.value(review_body),
+          attribute.property("value", json.string(review_body)),
           event.on_input(SetReviewBody),
         ],
         "",
@@ -1419,21 +1540,18 @@ fn review_submission_section(
             "Approve",
             "APPROVE",
             colors.green_7,
-            colors.green_8,
             submitting,
           ),
           review_action_button(
             "Request Changes",
             "REQUEST_CHANGES",
             colors.orange_7,
-            colors.orange_8,
             submitting,
           ),
           review_action_button(
             "Comment",
             "COMMENT",
             colors.indigo_7,
-            colors.indigo_8,
             submitting,
           ),
         ],
@@ -1446,36 +1564,11 @@ fn review_action_button(
   label: String,
   event_type: String,
   bg_color: String,
-  _hover_color: String,
   submitting: Bool,
 ) -> Element(Msg) {
-  html.button(
-    [
-      event.on_click(SubmitReview(event_type)),
-      attribute.disabled(submitting),
-      attribute.styles([
-        padding.raw(sizes.size_2 <> " " <> sizes.size_5),
-        background.raw(case submitting {
-          True -> colors.gray_5
-          False -> bg_color
-        }),
-        color.raw("white"),
-        border.none,
-        border_radius.raw(borders.radius_2),
-        cursor.raw(case submitting {
-          True -> "not-allowed"
-          False -> "pointer"
-        }),
-        font_size.raw(fonts.font_size_0),
-        font_weight.raw("500"),
-        transition.raw("background 0.15s"),
-      ]),
-    ],
-    [
-      html.text(case submitting {
-        True -> "Submitting..."
-        False -> label
-      }),
-    ],
-  )
+  let display_label = case submitting {
+    True -> "Submitting..."
+    False -> label
+  }
+  styled_button(display_label, SubmitReview(event_type), bg_color, !submitting)
 }

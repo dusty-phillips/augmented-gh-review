@@ -3,6 +3,7 @@ import gleam/erlang/process
 import gleam/int
 import gleam/json
 import gleam/list
+import gleam/option
 import gleam/result
 import gleam/string
 import server/error_format
@@ -12,6 +13,25 @@ import shared/pr.{
 }
 import shellout
 import simplifile
+import wisp
+
+/// JSON fields requested when listing PRs via `gh pr list`.
+const pr_list_json_fields = "number,title,author,url,createdAt,reviewDecision,isDraft,statusCheckRollup,reviewRequests"
+
+/// Run the `gh` CLI with the given arguments, mapping failures to a
+/// human-readable error that includes the provided context string.
+fn run_gh(args: List(String), context: String) -> Result(String, String) {
+  shellout.command(run: "gh", with: args, in: ".", opt: [])
+  |> result.map_error(fn(err) {
+    let #(code, msg) = err
+    context <> " failed (exit " <> int.to_string(code) <> "): " <> msg
+  })
+}
+
+/// Generate a unique temporary file path to avoid race conditions.
+fn unique_tmp_path(prefix: String) -> String {
+  "/tmp/" <> prefix <> "_" <> wisp.random_string(16) <> ".json"
+}
 
 /// Parse the `author` field from gh CLI JSON output, which is an object like `{"login": "username"}`.
 fn author_decoder() -> decode.Decoder(String) {
@@ -94,6 +114,11 @@ fn gh_pull_request_decoder() -> decode.Decoder(PullRequest) {
       decode.success([]),
     ]),
   )
+  use reviewers <- decode.optional_field(
+    "reviewRequests",
+    [],
+    decode.list(decode.at(["login"], decode.string)),
+  )
   let conclusions = list.map(checks, fn(c) { c.conclusion })
   let checks_status = compute_checks_status(conclusions)
   let checks_url = first_failing_url(checks)
@@ -107,13 +132,13 @@ fn gh_pull_request_decoder() -> decode.Decoder(PullRequest) {
     draft: draft,
     checks_status: checks_status,
     checks_url: checks_url,
+    reviewers: reviewers,
   ))
 }
 
 /// Decoder for `gh pr view` JSON output (for detail view).
-fn gh_pr_detail_decoder() -> decode.Decoder(
-  #(Int, String, String, String, String, String, List(PrFile)),
-) {
+/// Decodes directly into PrDetail with an empty diff placeholder.
+fn gh_pr_detail_decoder() -> decode.Decoder(PrDetail) {
   use number <- decode.field("number", decode.int)
   use title <- decode.field("title", decode.string)
   use author <- decode.field("author", author_decoder())
@@ -124,7 +149,16 @@ fn gh_pr_detail_decoder() -> decode.Decoder(
   )
   use head_branch <- decode.field("headRefName", decode.string)
   use files <- decode.field("files", decode.list(gh_pr_file_decoder()))
-  decode.success(#(number, title, author, url, body, head_branch, files))
+  decode.success(PrDetail(
+    number: number,
+    title: title,
+    author: author,
+    url: url,
+    body: body,
+    head_branch: head_branch,
+    files: files,
+    diff: "",
+  ))
 }
 
 /// Decoder for individual file objects from gh CLI output.
@@ -135,75 +169,40 @@ fn gh_pr_file_decoder() -> decode.Decoder(PrFile) {
   decode.success(PrFile(path: path, additions: additions, deletions: deletions))
 }
 
-/// List PRs where review is requested from the current user.
-pub fn list_review_prs(
+/// Internal helper: list PRs with an optional `--search` filter.
+fn list_prs(
   repo: String,
+  search_filter: option.Option(String),
 ) -> Result(List(PullRequest), String) {
-  let args = [
-    "pr", "list", "-R", repo, "--search", "review-requested:@me", "--json",
-    "number,title,author,url,createdAt,reviewDecision,isDraft,statusCheckRollup",
-  ]
-  case shellout.command(run: "gh", with: args, in: ".", opt: []) {
-    Ok(output) -> {
-      let decoder = decode.list(gh_pull_request_decoder())
-      case json.parse(output, decoder) {
-        Ok(prs) -> Ok(prs)
-        Error(err) -> Error("Failed to parse PR list JSON: " <> error_format.json_decode_error(err))
-      }
-    }
-    Error(#(code, msg)) ->
-      Error(
-        "gh pr list failed (exit " <> int.to_string(code) <> "): " <> msg,
-      )
+  let base_args = ["pr", "list", "-R", repo, "--limit", "100"]
+  let search_args = case search_filter {
+    option.Some(filter) -> ["--search", filter]
+    option.None -> []
   }
+  let args =
+    list.flatten([base_args, search_args, ["--json", pr_list_json_fields]])
+
+  use output <- result.try(run_gh(args, "gh pr list"))
+
+  json.parse(output, decode.list(gh_pull_request_decoder()))
+  |> result.map_error(fn(err) {
+    "Failed to parse PR list JSON: " <> error_format.json_decode_error(err)
+  })
+}
+
+/// List PRs where review is requested from the current user.
+pub fn list_review_prs(repo: String) -> Result(List(PullRequest), String) {
+  list_prs(repo, option.Some("review-requested:@me"))
 }
 
 /// List PRs created by the current user.
-pub fn list_my_prs(
-  repo: String,
-) -> Result(List(PullRequest), String) {
-  let args = [
-    "pr", "list", "-R", repo, "--search", "author:@me", "--json",
-    "number,title,author,url,createdAt,reviewDecision,isDraft,statusCheckRollup",
-  ]
-  case shellout.command(run: "gh", with: args, in: ".", opt: []) {
-    Ok(output) -> {
-      let decoder = decode.list(gh_pull_request_decoder())
-      case json.parse(output, decoder) {
-        Ok(prs) -> Ok(prs)
-        Error(err) ->
-          Error("Failed to parse PR list JSON: " <> error_format.json_decode_error(err))
-      }
-    }
-    Error(#(code, msg)) ->
-      Error(
-        "gh pr list failed (exit " <> int.to_string(code) <> "): " <> msg,
-      )
-  }
+pub fn list_my_prs(repo: String) -> Result(List(PullRequest), String) {
+  list_prs(repo, option.Some("author:@me"))
 }
 
 /// List all open PRs in the repo.
-pub fn list_all_open_prs(
-  repo: String,
-) -> Result(List(PullRequest), String) {
-  let args = [
-    "pr", "list", "-R", repo, "--json",
-    "number,title,author,url,createdAt,reviewDecision,isDraft,statusCheckRollup",
-  ]
-  case shellout.command(run: "gh", with: args, in: ".", opt: []) {
-    Ok(output) -> {
-      let decoder = decode.list(gh_pull_request_decoder())
-      case json.parse(output, decoder) {
-        Ok(prs) -> Ok(prs)
-        Error(err) ->
-          Error("Failed to parse PR list JSON: " <> error_format.json_decode_error(err))
-      }
-    }
-    Error(#(code, msg)) ->
-      Error(
-        "gh pr list failed (exit " <> int.to_string(code) <> "): " <> msg,
-      )
-  }
+pub fn list_all_open_prs(repo: String) -> Result(List(PullRequest), String) {
+  list_prs(repo, option.None)
 }
 
 /// Fetch all three PR groups concurrently using Erlang processes.
@@ -263,47 +262,22 @@ pub fn get_pr_detail(
     "pr", "view", "-R", repo, number_str, "--json",
     "number,title,author,url,body,headRefName,files",
   ]
-  let view_result =
-    shellout.command(run: "gh", with: view_args, in: ".", opt: [])
 
   // Second call: get the diff
   let diff_args = ["pr", "diff", "-R", repo, number_str]
-  let diff_result =
-    shellout.command(run: "gh", with: diff_args, in: ".", opt: [])
 
-  use view_output <- result.try(
-    view_result
-    |> result.map_error(fn(err) {
-      let #(code, msg) = err
-      "gh pr view failed (exit " <> int.to_string(code) <> "): " <> msg
-    }),
-  )
+  use view_output <- result.try(run_gh(view_args, "gh pr view"))
+  use diff_output <- result.try(run_gh(diff_args, "gh pr diff"))
 
-  use diff_output <- result.try(
-    diff_result
-    |> result.map_error(fn(err) {
-      let #(code, msg) = err
-      "gh pr diff failed (exit " <> int.to_string(code) <> "): " <> msg
-    }),
-  )
-
-  use #(num, title, author, url, body, head_branch, files) <- result.try(
+  use detail <- result.try(
     json.parse(view_output, gh_pr_detail_decoder())
     |> result.map_error(fn(err) {
-      "Failed to parse PR detail JSON: " <> error_format.json_decode_error(err)
+      "Failed to parse PR detail JSON: "
+      <> error_format.json_decode_error(err)
     }),
   )
 
-  Ok(PrDetail(
-    number: num,
-    title: title,
-    author: author,
-    url: url,
-    body: body,
-    head_branch: head_branch,
-    files: files,
-    diff: diff_output,
-  ))
+  Ok(PrDetail(..detail, diff: diff_output))
 }
 
 /// Get the list of files changed in a specific PR.
@@ -315,20 +289,13 @@ pub fn get_pr_files(
   let args = [
     "pr", "view", "-R", repo, number_str, "--json", "files",
   ]
-  case shellout.command(run: "gh", with: args, in: ".", opt: []) {
-    Ok(output) -> {
-      let decoder = decode.at(["files"], decode.list(gh_pr_file_decoder()))
-      case json.parse(output, decoder) {
-        Ok(files) -> Ok(files)
-        Error(err) ->
-          Error("Failed to parse PR files JSON: " <> error_format.json_decode_error(err))
-      }
-    }
-    Error(#(code, msg)) ->
-      Error(
-        "gh pr view failed (exit " <> int.to_string(code) <> "): " <> msg,
-      )
-  }
+
+  use output <- result.try(run_gh(args, "gh pr view"))
+
+  json.parse(output, decode.at(["files"], decode.list(gh_pr_file_decoder())))
+  |> result.map_error(fn(err) {
+    "Failed to parse PR files JSON: " <> error_format.json_decode_error(err)
+  })
 }
 
 /// Decoder for review comments (line-level) from GitHub API.
@@ -389,49 +356,32 @@ pub fn get_pr_comments(
   let review_args = [
     "api", "repos/" <> repo <> "/pulls/" <> number_str <> "/comments",
   ]
-  let review_result =
-    shellout.command(run: "gh", with: review_args, in: ".", opt: [])
 
   // Fetch issue comments (general)
   let issue_args = [
     "api", "repos/" <> repo <> "/issues/" <> number_str <> "/comments",
   ]
-  let issue_result =
-    shellout.command(run: "gh", with: issue_args, in: ".", opt: [])
 
   use review_output <- result.try(
-    review_result
-    |> result.map_error(fn(err) {
-      let #(code, msg) = err
-      "gh api review comments failed (exit "
-      <> int.to_string(code)
-      <> "): "
-      <> msg
-    }),
+    run_gh(review_args, "gh api review comments"),
   )
-
   use issue_output <- result.try(
-    issue_result
-    |> result.map_error(fn(err) {
-      let #(code, msg) = err
-      "gh api issue comments failed (exit "
-      <> int.to_string(code)
-      <> "): "
-      <> msg
-    }),
+    run_gh(issue_args, "gh api issue comments"),
   )
 
   use review_comments <- result.try(
     json.parse(review_output, decode.list(gh_review_comment_decoder()))
     |> result.map_error(fn(err) {
-      "Failed to parse review comments JSON: " <> error_format.json_decode_error(err)
+      "Failed to parse review comments JSON: "
+      <> error_format.json_decode_error(err)
     }),
   )
 
   use issue_comments <- result.try(
     json.parse(issue_output, decode.list(gh_issue_comment_decoder()))
     |> result.map_error(fn(err) {
-      "Failed to parse issue comments JSON: " <> error_format.json_decode_error(err)
+      "Failed to parse issue comments JSON: "
+      <> error_format.json_decode_error(err)
     }),
   )
 
@@ -462,34 +412,18 @@ pub fn post_pr_review_comment(
         "-X", "POST",
         "-f", "body=" <> body,
       ]
-      case shellout.command(run: "gh", with: args, in: ".", opt: []) {
-        Ok(_) -> Ok(Nil)
-        Error(#(code, msg)) ->
-          Error(
-            "gh api post comment failed (exit "
-            <> int.to_string(code)
-            <> "): "
-            <> msg,
-          )
-      }
+      run_gh(args, "gh api post comment")
+      |> result.replace(Nil)
     }
     _ -> {
       // Line-specific comment via the pull request reviews API
-      // (the single-comment endpoint doesn't support line/subject_type)
       let sha_args = [
         "pr", "view", "-R", repo, number_str,
         "--json", "headRefOid", "-q", ".headRefOid",
       ]
       use commit_sha <- result.try(
-        shellout.command(run: "gh", with: sha_args, in: ".", opt: [])
-        |> result.map(string.trim)
-        |> result.map_error(fn(err) {
-          let #(code, msg) = err
-          "gh pr view for SHA failed (exit "
-          <> int.to_string(code)
-          <> "): "
-          <> msg
-        }),
+        run_gh(sha_args, "gh pr view for SHA")
+        |> result.map(string.trim),
       )
 
       // Use the reviews API with a COMMENT event and inline comments
@@ -509,7 +443,7 @@ pub fn post_pr_review_comment(
         ])
         |> json.to_string
 
-      let tmp_path = "/tmp/augmented_review_comment.json"
+      let tmp_path = unique_tmp_path("augmented_review_comment")
       use _ <- result.try(
         simplifile.write(tmp_path, json_body)
         |> result.map_error(fn(_) { "Failed to write temp comment file" }),
@@ -521,20 +455,11 @@ pub fn post_pr_review_comment(
         "-X", "POST",
         "--input", tmp_path,
       ]
-      let post_result =
-        shellout.command(run: "gh", with: args, in: ".", opt: [])
-      // Clean up temp file — best effort
+      let post_result = run_gh(args, "gh api post review comment")
+      // Clean up temp file -- best effort
       let _ = simplifile.delete(tmp_path)
-      case post_result {
-        Ok(_) -> Ok(Nil)
-        Error(#(code, msg)) ->
-          Error(
-            "gh api post review comment failed (exit "
-            <> int.to_string(code)
-            <> "): "
-            <> msg,
-          )
-      }
+      post_result
+      |> result.replace(Nil)
     }
   }
 }
@@ -556,7 +481,7 @@ pub fn submit_pr_review(
     ])
     |> json.to_string
 
-  let tmp_path = "/tmp/augmented_review_submit.json"
+  let tmp_path = unique_tmp_path("augmented_review_submit")
   use _ <- result.try(
     simplifile.write(tmp_path, json_body)
     |> result.map_error(fn(_) { "Failed to write temp review file" }),
@@ -568,18 +493,42 @@ pub fn submit_pr_review(
     "-X", "POST",
     "--input", tmp_path,
   ]
-  let post_result =
-    shellout.command(run: "gh", with: args, in: ".", opt: [])
-  // Clean up temp file — best effort
+  let post_result = run_gh(args, "gh api submit review")
+  // Clean up temp file -- best effort
   let _ = simplifile.delete(tmp_path)
-  case post_result {
-    Ok(_) -> Ok(Nil)
-    Error(#(code, msg)) ->
-      Error(
-        "gh api submit review failed (exit "
-        <> int.to_string(code)
-        <> "): "
-        <> msg,
-      )
-  }
+  post_result
+  |> result.replace(Nil)
+}
+
+/// Reply to an existing review comment.
+pub fn reply_to_comment(
+  repo: String,
+  number: Int,
+  comment_id: Int,
+  body: String,
+) -> Result(Nil, String) {
+  let number_str = int.to_string(number)
+  let json_body =
+    json.object([
+      #("body", json.string(body)),
+      #("in_reply_to", json.int(comment_id)),
+    ])
+    |> json.to_string
+
+  let tmp_path = unique_tmp_path("augmented_review_reply")
+  use _ <- result.try(
+    simplifile.write(tmp_path, json_body)
+    |> result.map_error(fn(_) { "Failed to write temp reply file" }),
+  )
+
+  let args = [
+    "api",
+    "repos/" <> repo <> "/pulls/" <> number_str <> "/comments",
+    "-X", "POST",
+    "--input", tmp_path,
+  ]
+  let post_result = run_gh(args, "gh api reply")
+  let _ = simplifile.delete(tmp_path)
+  post_result
+  |> result.replace(Nil)
 }

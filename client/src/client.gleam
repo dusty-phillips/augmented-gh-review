@@ -3,11 +3,12 @@ import client/model.{
   type Model, type Msg, Analyzed, Analyzing, AnalyzePr, BackToDashboard,
   CancelComment, CommentPosted, Commenting, Dashboard, FetchPrs, GoToChunk,
   GotAnalysis, GotGithubComments, GotPrDetail, GotPrs, Model, NextChunk,
-  NotAnalyzed, NotCommenting, PostingComment, PrevChunk, PrReview, RefreshPrs,
-  ReviewIdle, ReviewSubmitted, SelectPr, SetRepo, SetReviewBody,
-  SseAnalysisComplete, SseAnalysisError, SseConnectionError, SseHeartbeat,
-  StartComment, SubmitComment, SubmitReview, SubmittingReview, ToggleDescription,
-  UpdateCommentText, UrlChanged,
+  NotAnalyzed, NotCommenting, PostingComment, PostingReply, PrevChunk, PrReview,
+  RefreshPrs, Replying, ReviewIdle, ReviewSubmitted, SelectPr, SetRepo,
+  SetReviewBody, SseAnalysisComplete, SseAnalysisError, SseConnectionError,
+  SseHeartbeat, StartComment, StartReply, SubmitComment, SubmitReply,
+  SubmitReview, SubmittingReview, ToggleDescription, UpdateCommentText,
+  UrlChanged,
 }
 import client/views/dashboard
 import client/views/pr_review
@@ -24,6 +25,8 @@ import lustre/element.{type Element}
 import modem
 import rsvp
 import shared/pr
+
+const default_repo = "GC-AI-Inc/app-gc-ai"
 
 pub fn main() {
   let app = lustre.application(init, update, view)
@@ -58,8 +61,6 @@ fn reset_pr_state(model: Model) -> Model {
 }
 
 fn init(_flags: Nil) -> #(Model, effect.Effect(Msg)) {
-  let default_repo = "GC-AI-Inc/app-gc-ai"
-
   // Check the initial URL to determine if we should load a specific PR
   let #(initial_view, initial_loading, initial_effect) =
     case modem.initial_uri() {
@@ -351,68 +352,37 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
           Model(..model, commenting: PostingComment(dl, fl, text)),
           effect.none(),
         )
+        Replying(id, _) -> #(
+          Model(..model, commenting: Replying(id, text)),
+          effect.none(),
+        )
+        PostingReply(id, _) -> #(
+          Model(..model, commenting: PostingReply(id, text)),
+          effect.none(),
+        )
         NotCommenting -> #(model, effect.none())
       }
 
-    SubmitComment ->
-      case model.commenting, model.selected_pr, model.analysis_state {
-        Commenting(display_line, file_line, text), option.Some(detail), Analyzed(analysis) -> {
-          let comment =
-            pr.LineComment(
-              chunk_index: model.current_chunk,
-              line_number: display_line,
-              body: text,
-            )
-          // Get file_path from the current chunk, stripping " (+N more)" suffix
-          let file_path = case
-            list.drop(analysis.chunks, model.current_chunk)
-            |> list.first
-          {
-            Ok(chunk) ->
-              case string.split_once(chunk.file_path, " (+") {
-                Ok(#(path, _)) -> path
-                Error(_) -> chunk.file_path
-              }
-            Error(_) -> ""
-          }
-          #(
-            Model(
-              ..model,
-              comments: [comment, ..model.comments],
-              commenting: PostingComment(
-                display_line: display_line,
-                file_line: file_line,
-                text: text,
-              ),
-            ),
-            effects.post_github_comment(
-              model.active_repo,
-              detail.number,
-              text,
-              file_path,
-              file_line,
-            ),
-          )
-        }
-        Commenting(display_line, _, text), option.Some(_), _ -> {
-          // No analysis loaded, just save locally
-          let comment =
-            pr.LineComment(
-              chunk_index: model.current_chunk,
-              line_number: display_line,
-              body: text,
-            )
-          #(
-            Model(
-              ..model,
-              comments: [comment, ..model.comments],
-              commenting: NotCommenting,
-            ),
-            effect.none(),
-          )
-        }
-        _, _, _ -> #(model, effect.none())
+    StartReply(comment_id) -> #(
+      Model(..model, commenting: Replying(comment_id, "")),
+      effect.none(),
+    )
+
+    SubmitReply ->
+      case model.commenting, model.selected_pr {
+        Replying(comment_id, text), option.Some(detail) -> #(
+          Model(..model, commenting: PostingReply(comment_id, text)),
+          effects.reply_to_comment(
+            model.active_repo,
+            detail.number,
+            comment_id,
+            text,
+          ),
+        )
+        _, _ -> #(model, effect.none())
       }
+
+    SubmitComment -> handle_submit_comment(model)
 
     GotGithubComments(Ok(comments)) -> #(
       Model(..model, github_comments: comments),
@@ -450,28 +420,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       effect.none(),
     )
 
-    SubmitReview(event) ->
-      case model.selected_pr, model.review {
-        option.Some(detail), ReviewIdle(body) -> #(
-          Model(..model, review: SubmittingReview(body: body), error: option.None),
-          effects.submit_review(
-            model.active_repo,
-            detail.number,
-            event,
-            body,
-          ),
-        )
-        option.Some(detail), SubmittingReview(body) -> #(
-          Model(..model, review: SubmittingReview(body: body), error: option.None),
-          effects.submit_review(
-            model.active_repo,
-            detail.number,
-            event,
-            body,
-          ),
-        )
-        option.None, _ -> #(model, effect.none())
-      }
+    SubmitReview(event) -> handle_submit_review(model, event)
 
     ReviewSubmitted(Ok(_)) ->
       case model.selected_pr {
@@ -506,31 +455,113 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       effect.none(),
     )
 
-    UrlChanged(uri) ->
-      case parse_route(uri) {
-        PrRoute(number) ->
-          case model.view {
-            // Already viewing this PR, no-op
-            PrReview ->
-              case model.selected_pr {
-                option.Some(detail) if detail.number == number -> #(
-                  model,
-                  effect.none(),
-                )
-                _ -> {
-                  let new_model = reset_pr_state(model)
-                  #(
-                    Model(
-                      ..new_model,
-                      loading: True,
-                      view: PrReview,
-                      error: option.None,
-                    ),
-                    effects.fetch_pr_detail(model.active_repo, number),
-                  )
-                }
-              }
-            Dashboard -> {
+    UrlChanged(uri) -> handle_url_changed(model, uri)
+  }
+}
+
+fn handle_submit_comment(model: Model) -> #(Model, effect.Effect(Msg)) {
+  case model.commenting, model.selected_pr, model.analysis_state {
+    Commenting(display_line, file_line, text), option.Some(detail), Analyzed(analysis) -> {
+      let comment =
+        pr.LineComment(
+          chunk_index: model.current_chunk,
+          line_number: display_line,
+          body: text,
+        )
+      // Get file_path from the current chunk, stripping " (+N more)" suffix
+      let file_path = case
+        list.drop(analysis.chunks, model.current_chunk)
+        |> list.first
+      {
+        Ok(chunk) ->
+          case string.split_once(chunk.file_path, " (+") {
+            Ok(#(path, _)) -> path
+            Error(_) -> chunk.file_path
+          }
+        Error(_) -> ""
+      }
+      #(
+        Model(
+          ..model,
+          comments: [comment, ..model.comments],
+          commenting: PostingComment(
+            display_line: display_line,
+            file_line: file_line,
+            text: text,
+          ),
+        ),
+        effects.post_github_comment(
+          model.active_repo,
+          detail.number,
+          text,
+          file_path,
+          file_line,
+        ),
+      )
+    }
+    Commenting(display_line, _, text), option.Some(_), _ -> {
+      // No analysis loaded, just save locally
+      let comment =
+        pr.LineComment(
+          chunk_index: model.current_chunk,
+          line_number: display_line,
+          body: text,
+        )
+      #(
+        Model(
+          ..model,
+          comments: [comment, ..model.comments],
+          commenting: NotCommenting,
+        ),
+        effect.none(),
+      )
+    }
+    _, _, _ -> #(model, effect.none())
+  }
+}
+
+fn handle_submit_review(
+  model: Model,
+  event: String,
+) -> #(Model, effect.Effect(Msg)) {
+  case model.selected_pr, model.review {
+    option.Some(detail), ReviewIdle(body) -> #(
+      Model(..model, review: SubmittingReview(body: body), error: option.None),
+      effects.submit_review(
+        model.active_repo,
+        detail.number,
+        event,
+        body,
+      ),
+    )
+    option.Some(detail), SubmittingReview(body) -> #(
+      Model(..model, review: SubmittingReview(body: body), error: option.None),
+      effects.submit_review(
+        model.active_repo,
+        detail.number,
+        event,
+        body,
+      ),
+    )
+    option.None, _ -> #(model, effect.none())
+  }
+}
+
+fn handle_url_changed(
+  model: Model,
+  uri: uri.Uri,
+) -> #(Model, effect.Effect(Msg)) {
+  case parse_route(uri) {
+    PrRoute(number) ->
+      case model.view {
+        // Already viewing this PR, no-op
+        PrReview ->
+          case model.selected_pr {
+            option.Some(detail) if detail.number == number -> #(
+              model,
+              effect.none(),
+            )
+            _ -> {
               let new_model = reset_pr_state(model)
               #(
                 Model(
@@ -543,22 +574,34 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
               )
             }
           }
-        DashboardRoute ->
-          case model.view {
-            Dashboard -> #(model, effect.none())
-            PrReview -> {
-              let new_model = reset_pr_state(model)
-              #(
-                Model(
-                  ..new_model,
-                  view: Dashboard,
-                  selected_pr: option.None,
-                  error: option.None,
-                ),
-                effect.none(),
-              )
-            }
-          }
+        Dashboard -> {
+          let new_model = reset_pr_state(model)
+          #(
+            Model(
+              ..new_model,
+              loading: True,
+              view: PrReview,
+              error: option.None,
+            ),
+            effects.fetch_pr_detail(model.active_repo, number),
+          )
+        }
+      }
+    DashboardRoute ->
+      case model.view {
+        Dashboard -> #(model, effect.none())
+        PrReview -> {
+          let new_model = reset_pr_state(model)
+          #(
+            Model(
+              ..new_model,
+              view: Dashboard,
+              selected_pr: option.None,
+              error: option.None,
+            ),
+            effect.none(),
+          )
+        }
       }
   }
 }

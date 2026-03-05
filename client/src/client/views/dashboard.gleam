@@ -2,6 +2,7 @@ import client/model.{type Model, type Msg, FetchPrs, SelectPr, SetRepo}
 import gleam/int
 import gleam/list
 import gleam/option
+import gleam/string
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
@@ -317,9 +318,30 @@ fn pr_row(pull_request: PullRequest) -> Element(Msg) {
         ],
         [html.text(pull_request.title)],
       ),
-      html.td([attribute.styles([padding.raw(sizes.size_3 <> " " <> sizes.size_4)])], [
-        html.text(pull_request.author),
-      ]),
+      html.td(
+        [attribute.styles([padding.raw(sizes.size_3 <> " " <> sizes.size_4)])],
+        [
+          html.text(pull_request.author),
+          case pull_request.reviewers {
+            [] -> html.text("")
+            reviewers ->
+              html.span(
+                [
+                  attribute.styles([
+                    margin.raw("0 0 0 " <> sizes.size_2),
+                    font_size.raw(fonts.font_size_0),
+                    color.raw(colors.gray_6),
+                  ]),
+                ],
+                [
+                  html.text(
+                    " → " <> string.join(reviewers, ", "),
+                  ),
+                ],
+              )
+          },
+        ],
+      ),
       html.td([attribute.styles([padding.raw(sizes.size_3 <> " " <> sizes.size_4)])], [
         checks_badge(pull_request.checks_status, pull_request.checks_url),
       ]),

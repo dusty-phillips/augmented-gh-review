@@ -15,6 +15,8 @@ pub type CommentingState {
   NotCommenting
   Commenting(display_line: Int, file_line: Int, text: String)
   PostingComment(display_line: Int, file_line: Int, text: String)
+  Replying(comment_id: Int, text: String)
+  PostingReply(comment_id: Int, text: String)
 }
 
 pub type ReviewState {
@@ -69,6 +71,8 @@ pub type Msg {
   SubmitComment
   GotGithubComments(Result(List(PrComment), rsvp.Error))
   CommentPosted(Result(Nil, rsvp.Error))
+  StartReply(Int)
+  SubmitReply
   UrlChanged(Uri)
   ToggleDescription
   SubmitReview(String)

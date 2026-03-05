@@ -1981,6 +1981,38 @@ function max(a, b) {
     return b;
   }
 }
+function range_loop(loop$current, loop$stop, loop$increment, loop$acc, loop$reducer) {
+  while (true) {
+    let current = loop$current;
+    let stop = loop$stop;
+    let increment = loop$increment;
+    let acc = loop$acc;
+    let reducer = loop$reducer;
+    let $ = current === stop;
+    if ($) {
+      return acc;
+    } else {
+      let acc$1 = reducer(acc, current);
+      let current$1 = current + increment;
+      loop$current = current$1;
+      loop$stop = stop;
+      loop$increment = increment;
+      loop$acc = acc$1;
+      loop$reducer = reducer;
+    }
+  }
+}
+function range(start, stop, acc, reducer) {
+  let _block;
+  let $ = start < stop;
+  if ($) {
+    _block = 1;
+  } else {
+    _block = -1;
+  }
+  let increment = _block;
+  return range_loop(start, stop, increment, acc, reducer);
+}
 
 // build/dev/javascript/gleam_stdlib/gleam/string_tree.mjs
 function reverse2(tree) {
@@ -7021,7 +7053,7 @@ function post(url, body, handler) {
 }
 // build/dev/javascript/shared/shared/pr.mjs
 class PullRequest extends CustomType {
-  constructor(number, title2, author, url, created_at, review_decision, draft, checks_status, checks_url) {
+  constructor(number, title2, author, url, created_at, review_decision, draft, checks_status, checks_url, reviewers) {
     super();
     this.number = number;
     this.title = title2;
@@ -7032,6 +7064,7 @@ class PullRequest extends CustomType {
     this.draft = draft;
     this.checks_status = checks_status;
     this.checks_url = checks_url;
+    this.reviewers = reviewers;
   }
 }
 class PrFile extends CustomType {
@@ -7111,7 +7144,9 @@ function pull_request_decoder() {
               return field("draft", bool, (draft) => {
                 return field("checks_status", string2, (checks_status) => {
                   return field("checks_url", string2, (checks_url) => {
-                    return success(new PullRequest(number, title2, author, url, created_at, review_decision, draft, checks_status, checks_url));
+                    return field("reviewers", list2(string2), (reviewers) => {
+                      return success(new PullRequest(number, title2, author, url, created_at, review_decision, draft, checks_status, checks_url, reviewers));
+                    });
                   });
                 });
               });
@@ -7248,6 +7283,20 @@ class PostingComment extends CustomType {
     super();
     this.display_line = display_line;
     this.file_line = file_line;
+    this.text = text4;
+  }
+}
+class Replying extends CustomType {
+  constructor(comment_id, text4) {
+    super();
+    this.comment_id = comment_id;
+    this.text = text4;
+  }
+}
+class PostingReply extends CustomType {
+  constructor(comment_id, text4) {
+    super();
+    this.comment_id = comment_id;
     this.text = text4;
   }
 }
@@ -7395,6 +7444,14 @@ class CommentPosted extends CustomType {
     this[0] = $0;
   }
 }
+class StartReply extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class SubmitReply extends CustomType {
+}
 class UrlChanged extends CustomType {
   constructor($0) {
     super();
@@ -7488,6 +7545,16 @@ function start_auto_refresh() {
     return;
   });
 }
+function reply_to_comment(repo, number, comment_id, body) {
+  return post("/api/prs/" + to_string(number) + "/reply?repo=" + repo, object2(toList([
+    ["comment_id", int3(comment_id)],
+    ["body", string3(body)]
+  ])), expect_ok_response((resp) => {
+    return new CommentPosted(map4(resp, (_) => {
+      return;
+    }));
+  }));
+}
 
 // build/dev/javascript/lustre/lustre/event.mjs
 function on(name, handler) {
@@ -7515,12 +7582,13 @@ function on_input(msg) {
 var center = ["align-items", "center"];
 var flex_start = ["align-items", "flex-start"];
 // build/dev/javascript/monks_of_style/monks/background.mjs
+var none3 = ["background", "none"];
 function raw(value2) {
   return ["background", value2];
 }
 
 // build/dev/javascript/monks_of_style/monks/border.mjs
-var none3 = ["border", "none"];
+var none4 = ["border", "none"];
 function raw2(value2) {
   return ["border", value2];
 }
@@ -7603,7 +7671,8 @@ var right = ["text-align", "right"];
 var center2 = ["text-align", "center"];
 
 // build/dev/javascript/monks_of_style/monks/text_decoration.mjs
-var none4 = ["text-decoration", "none"];
+var none5 = ["text-decoration", "none"];
+var underline = ["text-decoration", "underline"];
 
 // build/dev/javascript/monks_of_style/monks/white_space.mjs
 var pre2 = ["white-space", "pre"];
@@ -7638,16 +7707,16 @@ var violet_2 = "var(--violet-2)";
 var violet_9 = "var(--violet-9)";
 var indigo_6 = "var(--indigo-6)";
 var indigo_7 = "var(--indigo-7)";
-var indigo_8 = "var(--indigo-8)";
 var indigo_12 = "var(--indigo-12)";
 var blue_1 = "var(--blue-1)";
 var blue_2 = "var(--blue-2)";
 var blue_3 = "var(--blue-3)";
+var blue_4 = "var(--blue-4)";
 var blue_6 = "var(--blue-6)";
+var blue_7 = "var(--blue-7)";
 var blue_9 = "var(--blue-9)";
 var green_2 = "var(--green-2)";
 var green_7 = "var(--green-7)";
-var green_8 = "var(--green-8)";
 var green_10 = "var(--green-10)";
 var yellow_0 = "var(--yellow-0)";
 var yellow_1 = "var(--yellow-1)";
@@ -7657,7 +7726,6 @@ var yellow_6 = "var(--yellow-6)";
 var yellow_7 = "var(--yellow-7)";
 var yellow_10 = "var(--yellow-10)";
 var orange_7 = "var(--orange-7)";
-var orange_8 = "var(--orange-8)";
 var orange_9 = "var(--orange-9)";
 
 // build/dev/javascript/open_props/open_props/fonts.mjs
@@ -7711,7 +7779,7 @@ function repo_selector(model) {
         raw14(size_2 + " " + size_4),
         raw(indigo_6),
         raw5("white"),
-        none3,
+        none4,
         raw4(radius_2),
         pointer,
         raw8(font_size_1)
@@ -7856,7 +7924,7 @@ function checks_badge(status, checks_url) {
       href(url),
       target("_blank"),
       title("View failing check"),
-      styles(toList([inline_flex, none4])),
+      styles(toList([inline_flex, none5])),
       (() => {
         let _pipe = on_click(new FetchPrs);
         return stop_propagation(_pipe);
@@ -7884,7 +7952,7 @@ function pr_row(pull_request) {
         })(),
         styles(toList([
           raw5(indigo_6),
-          none4,
+          none5,
           raw9("500")
         ])),
         class$("hover-underline")
@@ -7898,7 +7966,24 @@ function pr_row(pull_request) {
     ]), toList([text3(pull_request.title)])),
     td(toList([
       styles(toList([raw14(size_3 + " " + size_4)]))
-    ]), toList([text3(pull_request.author)])),
+    ]), toList([
+      text3(pull_request.author),
+      (() => {
+        let $ = pull_request.reviewers;
+        if ($ instanceof Empty) {
+          return text3("");
+        } else {
+          let reviewers = $;
+          return span(toList([
+            styles(toList([
+              raw11("0 0 0 " + size_2),
+              raw8(font_size_0),
+              raw5(gray_6)
+            ]))
+          ]), toList([text3(" → " + join(reviewers, ", "))]));
+        }
+      })()
+    ])),
     td(toList([
       styles(toList([raw14(size_3 + " " + size_4)]))
     ]), toList([
@@ -8046,7 +8131,7 @@ function raw22(value2) {
 }
 
 // build/dev/javascript/monks_of_style/monks/outline.mjs
-var none5 = ["outline", "none"];
+var none6 = ["outline", "none"];
 
 // build/dev/javascript/monks_of_style/monks/overflow.mjs
 var hidden = ["overflow", "hidden"];
@@ -8064,7 +8149,7 @@ function raw23(value2) {
 }
 
 // build/dev/javascript/monks_of_style/monks/user_select.mjs
-var none6 = ["user-select", "none"];
+var none7 = ["user-select", "none"];
 
 // build/dev/javascript/monks_of_style/monks/word_break.mjs
 var break_word = ["word-break", "break-word"];
@@ -14372,6 +14457,9 @@ function do_parse_linkref(ctx, acc, inlines) {
 function configure2() {
   return new Options3(false, true, false, false, false, false, false);
 }
+function extended(_, on2) {
+  return new Options3(on2, on2, on2, on2, on2, on2, on2);
+}
 function split_frontmatter_from_input(input2) {
   let fms = new$6(toList([`---
 `, `---\r
@@ -14929,25 +15017,69 @@ function render_markdown(markdown, render_options, components) {
 
 // build/dev/javascript/client/client/markdown.mjs
 var FILEPATH6 = "src/client/markdown.gleam";
+var github_proxy_prefixes = /* @__PURE__ */ toList([
+  "https://github.com/",
+  "https://user-images.githubusercontent.com/",
+  "https://avatars.githubusercontent.com/"
+]);
+function convert_picture_tags(text4) {
+  let $ = compile2("<picture[^>]*>[\\s\\S]*?(<img[^>]*>)[\\s\\S]*?</picture>", new Options2(true, true));
+  let re;
+  if ($ instanceof Ok) {
+    re = $[0];
+  } else {
+    throw makeError("let_assert", FILEPATH6, "client/markdown", 65, "convert_picture_tags", "Pattern match failed, no pattern matched the value.", {
+      value: $,
+      start: 1776,
+      end: 1951,
+      pattern_start: 1787,
+      pattern_end: 1793
+    });
+  }
+  let matches2 = scan2(re, text4);
+  return fold2(matches2, text4, (acc, m) => {
+    let _block;
+    let $1 = m.submatches;
+    if ($1 instanceof Empty) {
+      _block = "";
+    } else {
+      let $2 = $1.head;
+      if ($2 instanceof Some) {
+        let img3 = $2[0];
+        _block = img3;
+      } else {
+        _block = "";
+      }
+    }
+    let img_tag = _block;
+    return replace(acc, m.content, img_tag);
+  });
+}
 function convert_html_images(text4) {
   let $ = compile2('<img[^>]*?\\bsrc="([^"]*?)"[^>]*/?>', new Options2(true, false));
   let img_re;
   if ($ instanceof Ok) {
     img_re = $[0];
   } else {
-    throw makeError("let_assert", FILEPATH6, "client/markdown", 35, "convert_html_images", "Pattern match failed, no pattern matched the value.", { value: $, start: 995, end: 1157, pattern_start: 1006, pattern_end: 1016 });
+    throw makeError("let_assert", FILEPATH6, "client/markdown", 82, "convert_html_images", "Pattern match failed, no pattern matched the value.", {
+      value: $,
+      start: 2300,
+      end: 2462,
+      pattern_start: 2311,
+      pattern_end: 2321
+    });
   }
   let $1 = compile2('\\balt="([^"]*?)"', new Options2(true, false));
   let alt_re;
   if ($1 instanceof Ok) {
     alt_re = $1[0];
   } else {
-    throw makeError("let_assert", FILEPATH6, "client/markdown", 40, "convert_html_images", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH6, "client/markdown", 87, "convert_html_images", "Pattern match failed, no pattern matched the value.", {
       value: $1,
-      start: 1160,
-      end: 1304,
-      pattern_start: 1171,
-      pattern_end: 1181
+      start: 2465,
+      end: 2609,
+      pattern_start: 2476,
+      pattern_end: 2486
     });
   }
   let matches2 = scan2(img_re, text4);
@@ -14990,24 +15122,135 @@ function convert_html_images(text4) {
     return replace(acc, m.content, replacement);
   });
 }
+function convert_details_tags(text4) {
+  let $ = compile2("<details[^>]*>[\\s\\S]*?<summary[^>]*>([\\s\\S]*?)</summary>([\\s\\S]*?)</details>", new Options2(true, true));
+  let re;
+  if ($ instanceof Ok) {
+    re = $[0];
+  } else {
+    throw makeError("let_assert", FILEPATH6, "client/markdown", 114, "convert_details_tags", "Pattern match failed, no pattern matched the value.", {
+      value: $,
+      start: 3231,
+      end: 3432,
+      pattern_start: 3242,
+      pattern_end: 3248
+    });
+  }
+  let matches2 = scan2(re, text4);
+  return fold2(matches2, text4, (acc, m) => {
+    let _block;
+    let $2 = m.submatches;
+    if ($2 instanceof Empty) {
+      _block = ["Details", ""];
+    } else {
+      let $3 = $2.head;
+      if ($3 instanceof Some) {
+        let $4 = $2.tail;
+        if ($4 instanceof Empty) {
+          let s = $3[0];
+          _block = [trim(s), ""];
+        } else {
+          let $5 = $4.head;
+          if ($5 instanceof Some) {
+            let s = $3[0];
+            let b = $5[0];
+            _block = [trim(s), trim(b)];
+          } else {
+            let s = $3[0];
+            _block = [trim(s), ""];
+          }
+        }
+      } else {
+        _block = ["Details", ""];
+      }
+    }
+    let $1 = _block;
+    let summary;
+    let body;
+    summary = $1[0];
+    body = $1[1];
+    let replacement = "> **" + summary + `**
+>
+> ` + replace(body, `
+`, `
+> `);
+    return replace(acc, m.content, replacement);
+  });
+}
+function convert_video_tags(text4) {
+  let $ = compile2('<video[^>]*?\\bsrc="([^"]*?)"[^>]*/?>(?:[\\s\\S]*?</video>)?', new Options2(true, true));
+  let re;
+  if ($ instanceof Ok) {
+    re = $[0];
+  } else {
+    throw makeError("let_assert", FILEPATH6, "client/markdown", 133, "convert_video_tags", "Pattern match failed, no pattern matched the value.", {
+      value: $,
+      start: 3966,
+      end: 4148,
+      pattern_start: 3977,
+      pattern_end: 3983
+    });
+  }
+  let matches2 = scan2(re, text4);
+  return fold2(matches2, text4, (acc, m) => {
+    let _block;
+    let $1 = m.submatches;
+    if ($1 instanceof Empty) {
+      _block = "";
+    } else {
+      let $2 = $1.head;
+      if ($2 instanceof Some) {
+        let s = $2[0];
+        _block = s;
+      } else {
+        _block = "";
+      }
+    }
+    let src3 = _block;
+    let replacement = "[Video](" + src3 + ")";
+    return replace(acc, m.content, replacement);
+  });
+}
 function render(text4) {
-  let processed = convert_html_images(text4);
   let _block;
-  let _pipe = default$();
-  _block = img2(_pipe, (src3, alt2, _) => {
+  let _pipe = text4;
+  let _pipe$1 = convert_picture_tags(_pipe);
+  let _pipe$2 = convert_html_images(_pipe$1);
+  let _pipe$3 = convert_details_tags(_pipe$2);
+  _block = convert_video_tags(_pipe$3);
+  let processed = _block;
+  let _block$1;
+  let _pipe$4 = default$();
+  _block$1 = img2(_pipe$4, (src3, alt2, _) => {
+    let needs_proxy = any(github_proxy_prefixes, (prefix) => {
+      return starts_with(src3, prefix);
+    });
+    let _block$2;
+    if (needs_proxy) {
+      _block$2 = "/api/image-proxy?url=" + src3;
+    } else {
+      _block$2 = src3;
+    }
+    let proxied_src = _block$2;
     return img(toList([
-      src(src3),
+      src(proxied_src),
       alt(alt2),
       styles(toList([
         ["max-width", "100%"],
+        ["min-width", "20px"],
+        ["min-height", "20px"],
         ["height", "auto"],
         ["border-radius", "8px"],
-        ["margin", "0.5rem 0"]
+        ["margin", "0.5rem 0"],
+        ["display", "block"]
       ]))
     ]));
   });
-  let img_components = _block;
-  return render_markdown(processed, configure2(), img_components);
+  let custom_components = _block$1;
+  return render_markdown(processed, (() => {
+    let _pipe$5 = configure2();
+    return extended(_pipe$5, true);
+  })(), custom_components);
 }
 
 // build/dev/javascript/client/client/views/pr_review.mjs
@@ -15019,6 +15262,7 @@ class DiffLineEntry extends CustomType {
     this.text = text4;
   }
 }
+var heartbeat_interval_seconds = 3;
 function description_accordion(body, is_open) {
   let $ = trim(body);
   if ($ === "") {
@@ -15048,13 +15292,13 @@ function description_accordion(body, is_open) {
           flex,
           center,
           raw10(size_2),
-          none6,
+          none7,
           raw23("background 0.15s")
         ]))
       ]), toList([
         span(toList([
           styles(toList([
-            raw8(font_size_0),
+            raw8(font_size_1),
             raw5(gray_6),
             raw15(size_4)
           ]))
@@ -15078,7 +15322,7 @@ function description_accordion(body, is_open) {
             div(toList([
               styles(toList([
                 raw20(size_4),
-                raw8(font_size_0),
+                raw8(font_size_1),
                 raw19(font_lineheight_4),
                 raw5(gray_8),
                 break_word
@@ -15092,37 +15336,40 @@ function description_accordion(body, is_open) {
     ]));
   }
 }
-function back_button() {
+function styled_button(label2, msg, bg_color, enabled) {
   return button(toList([
-    on_click(new BackToDashboard),
-    styles(toList([
-      raw14(size_2 + " " + size_4),
-      raw(gray_6),
-      raw5("white"),
-      none3,
-      raw4(radius_2),
-      pointer,
-      raw8(font_size_0),
-      raw9("500"),
-      raw23("background 0.15s")
-    ]))
-  ]), toList([text3("Back to Dashboard")]));
-}
-function analyze_button() {
-  return button(toList([
-    on_click(new AnalyzePr),
+    on_click(msg),
+    disabled(!enabled),
     styles(toList([
       raw14(size_2 + " " + size_5),
-      raw(indigo_7),
+      raw((() => {
+        if (enabled) {
+          return bg_color;
+        } else {
+          return gray_5;
+        }
+      })()),
       raw5("white"),
-      none3,
+      none4,
       raw4(radius_2),
-      pointer,
-      raw8(font_size_0),
+      raw6((() => {
+        if (enabled) {
+          return "pointer";
+        } else {
+          return "not-allowed";
+        }
+      })()),
+      raw8(font_size_1),
       raw9("500"),
       raw23("background 0.15s")
     ]))
-  ]), toList([text3("Analyze PR")]));
+  ]), toList([text3(label2)]));
+}
+function back_button() {
+  return styled_button("Back to Dashboard", new BackToDashboard, gray_6, true);
+}
+function analyze_button() {
+  return styled_button("Analyze PR", new AnalyzePr, indigo_7, true);
 }
 function header_area(title2, number, url, head_branch, model) {
   return div(toList([
@@ -15156,7 +15403,7 @@ function header_area(title2, number, url, head_branch, model) {
           styles(toList([
             raw5(gray_6),
             raw9("400"),
-            none4
+            none5
           ]))
         ]), toList([text3("#" + to_string(number))])),
         text3(title2),
@@ -15166,7 +15413,7 @@ function header_area(title2, number, url, head_branch, model) {
           title(url),
           styles(toList([
             raw5(gray_5),
-            none4,
+            none5,
             raw8(font_size_3),
             inline_flex,
             center
@@ -15244,49 +15491,11 @@ function error_banner2(message2) {
       raw2("1px solid " + red_4),
       raw4(radius_2),
       raw5(red_10),
-      raw8(font_size_0),
+      raw8(font_size_1),
       pre_wrap,
       break_word
     ]))
   ]), toList([text3(message2)]));
-}
-function loading_indicator2(heartbeats) {
-  let elapsed_seconds = heartbeats * 3;
-  let _block;
-  if (heartbeats === 0) {
-    _block = "Connecting to AI analysis...";
-  } else {
-    _block = "Analyzing PR with AI... (" + to_string(elapsed_seconds) + "s elapsed)";
-  }
-  let progress_text = _block;
-  return div(toList([
-    styles(toList([
-      center2,
-      raw14(size_10 + " " + size_7),
-      raw(gray_1),
-      raw4(radius_3),
-      raw2("1px solid " + gray_2)
-    ]))
-  ]), toList([
-    div(toList([
-      styles(toList([
-        inline_block,
-        raw15(size_7),
-        ["height", size_7],
-        raw2("3px solid " + gray_2),
-        ["border-top-color", indigo_7],
-        raw4("50%"),
-        raw16("spin 0.8s linear infinite"),
-        raw12(size_4)
-      ]))
-    ]), toList([])),
-    p(toList([
-      styles(toList([
-        raw5(gray_6),
-        raw8(font_size_1)
-      ]))
-    ]), toList([text3(progress_text)]))
-  ]));
 }
 function chunk_pill(index5, current, comments) {
   let is_active = index5 === current;
@@ -15306,7 +15515,7 @@ function chunk_pill(index5, current, comments) {
       raw15("1.25rem"),
       ["height", "1.25rem"],
       raw4("50%"),
-      none3,
+      none4,
       raw(bg),
       pointer,
       relative2,
@@ -15354,7 +15563,7 @@ function nav_button(label2, msg, enabled) {
           return gray_5;
         }
       })()),
-      none3,
+      none4,
       raw4(radius_2),
       raw6((() => {
         if (enabled) {
@@ -15363,11 +15572,77 @@ function nav_button(label2, msg, enabled) {
           return "not-allowed";
         }
       })()),
-      raw8(font_size_0),
+      raw8(font_size_1),
       raw9("500"),
       raw23("background 0.15s")
     ]))
   ]), toList([text3(label2)]));
+}
+function chunk_navigator(current, total, comments) {
+  return div(toList([
+    styles(toList([
+      flex,
+      center,
+      raw10(size_3),
+      wrap
+    ]))
+  ]), toList([
+    nav_button("Prev", new PrevChunk, current > 0),
+    span(toList([
+      styles(toList([
+        raw8(font_size_1),
+        raw5(gray_6),
+        raw9("500"),
+        raw22("6rem"),
+        center2
+      ]))
+    ]), toList([
+      text3("Chunk " + to_string(current + 1) + " of " + to_string(total))
+    ])),
+    nav_button("Next", new NextChunk, current < total - 1),
+    div(toList([
+      styles(toList([
+        flex,
+        raw10("0.375rem"),
+        ["margin-left", size_2],
+        wrap
+      ]))
+    ]), (() => {
+      let _pipe = range(0, total, toList([]), (acc, i) => {
+        return prepend(chunk_pill(i, current, comments), acc);
+      });
+      return reverse(_pipe);
+    })())
+  ]));
+}
+function summary_panel(summary, current, total, comments) {
+  return div(toList([
+    styles(toList([
+      raw("white"),
+      raw2("1px solid " + gray_3),
+      raw4(radius_3),
+      raw14(size_5 + " " + size_6),
+      raw12(size_5)
+    ]))
+  ]), toList([
+    h2(toList([
+      styles(toList([
+        raw11("0 0 " + size_3 + " 0"),
+        raw8(font_size_1),
+        raw9("600"),
+        raw5(gray_8)
+      ]))
+    ]), toList([text3("AI Summary")])),
+    p(toList([
+      styles(toList([
+        raw11("0 0 " + size_4 + " 0"),
+        raw5(gray_7),
+        raw19(font_lineheight_4),
+        raw8(font_size_1)
+      ]))
+    ]), toList([text3(summary)])),
+    chunk_navigator(current, total, comments)
+  ]));
 }
 function parse_hunk_new_start(header) {
   let $ = split2(header, "+");
@@ -15436,80 +15711,6 @@ function index_file_lines_acc(loop$lines, loop$display_idx, loop$current_file_li
 function index_with_file_lines(lines) {
   let _pipe = index_file_lines_acc(lines, 1, 0, toList([]));
   return reverse(_pipe);
-}
-function make_range(from3, to) {
-  let $ = from3 > to;
-  if ($) {
-    return toList([]);
-  } else {
-    return prepend(from3, make_range(from3 + 1, to));
-  }
-}
-function chunk_navigator(current, total, comments) {
-  return div(toList([
-    styles(toList([
-      flex,
-      center,
-      raw10(size_3),
-      wrap
-    ]))
-  ]), toList([
-    nav_button("Prev", new PrevChunk, current > 0),
-    span(toList([
-      styles(toList([
-        raw8(font_size_0),
-        raw5(gray_6),
-        raw9("500"),
-        raw22("6rem"),
-        center2
-      ]))
-    ]), toList([
-      text3("Chunk " + to_string(current + 1) + " of " + to_string(total))
-    ])),
-    nav_button("Next", new NextChunk, current < total - 1),
-    div(toList([
-      styles(toList([
-        flex,
-        raw10("0.375rem"),
-        ["margin-left", size_2],
-        wrap
-      ]))
-    ]), (() => {
-      let _pipe = make_range(0, total - 1);
-      return map2(_pipe, (i) => {
-        return chunk_pill(i, current, comments);
-      });
-    })())
-  ]));
-}
-function summary_panel(summary, current, total, comments) {
-  return div(toList([
-    styles(toList([
-      raw("white"),
-      raw2("1px solid " + gray_3),
-      raw4(radius_3),
-      raw14(size_5 + " " + size_6),
-      raw12(size_5)
-    ]))
-  ]), toList([
-    h2(toList([
-      styles(toList([
-        raw11("0 0 " + size_3 + " 0"),
-        raw8(font_size_1),
-        raw9("600"),
-        raw5(gray_8)
-      ]))
-    ]), toList([text3("AI Summary")])),
-    p(toList([
-      styles(toList([
-        raw11("0 0 " + size_4 + " 0"),
-        raw5(gray_7),
-        raw19(font_lineheight_4),
-        raw8(font_size_1)
-      ]))
-    ]), toList([text3(summary)])),
-    chunk_navigator(current, total, comments)
-  ]));
 }
 function line_colors(line) {
   if (line.startsWith("+")) {
@@ -15580,7 +15781,7 @@ function diff_line_row(display_line, file_line, line, language) {
         raw14("0 " + size_2),
         right,
         raw5(gray_5),
-        none6,
+        none7,
         raw((() => {
           if (bg === "transparent") {
             return gray_1;
@@ -15625,7 +15826,7 @@ function comment_display(comment) {
       raw17("3px solid " + yellow_6),
       raw14(size_2 + " " + size_3 + " " + size_2 + " 4.25rem"),
       ["font-family", font_system_ui],
-      raw8(font_size_0),
+      raw8(font_size_1),
       raw5(orange_9),
       raw19("1.4")
     ]))
@@ -15657,12 +15858,12 @@ function comment_input(text4, posting_comment) {
         raw2("1px solid " + gray_4),
         raw4(radius_2),
         ["font-family", font_system_ui],
-        raw8(font_size_0),
+        raw8(font_size_1),
         vertical,
-        none5
+        none6
       ])),
       placeholder("Add a comment..."),
-      value(text4),
+      property2("value", string3(text4)),
       on_input((var0) => {
         return new UpdateCommentText(var0);
       })
@@ -15683,7 +15884,7 @@ function comment_input(text4, posting_comment) {
             }
           })()),
           raw5("white"),
-          none3,
+          none4,
           raw4(radius_2),
           raw6((() => {
             if (posting_comment) {
@@ -15692,7 +15893,7 @@ function comment_input(text4, posting_comment) {
               return "pointer";
             }
           })()),
-          raw8(font_size_0),
+          raw8(font_size_1),
           raw9("500")
         ]))
       ]), toList([text3(button_text)])),
@@ -15702,24 +15903,155 @@ function comment_input(text4, posting_comment) {
           raw14("0.375rem " + size_3),
           raw(gray_3),
           raw5(gray_8),
-          none3,
+          none4,
           raw4(radius_2),
           pointer,
-          raw8(font_size_0),
+          raw8(font_size_1),
           raw9("500")
         ]))
       ]), toList([text3("Cancel")]))
     ]))
   ]));
 }
-function github_comment_display(comment) {
+function reply_form(reply_text, is_posting) {
+  let _block;
+  if (is_posting) {
+    _block = "Posting...";
+  } else {
+    _block = "Reply";
+  }
+  let submit_label = _block;
+  return div(toList([
+    styles(toList([
+      raw20(size_2),
+      flex,
+      raw10(size_2),
+      flex_start
+    ]))
+  ]), toList([
+    textarea(toList([
+      styles(toList([
+        raw7("1"),
+        raw21("2.5rem"),
+        raw14(size_2),
+        raw2("1px solid " + blue_4),
+        raw4(radius_2),
+        ["font-family", font_system_ui],
+        raw8(font_size_1),
+        vertical,
+        none6
+      ])),
+      placeholder("Write a reply..."),
+      property2("value", string3(reply_text)),
+      on_input((var0) => {
+        return new UpdateCommentText(var0);
+      })
+    ]), ""),
+    div(toList([
+      styles(toList([flex, column, raw10("0.375rem")]))
+    ]), toList([
+      button(toList([
+        on_click(new SubmitReply),
+        disabled(is_posting),
+        styles(toList([
+          raw14("0.375rem " + size_3),
+          raw((() => {
+            if (is_posting) {
+              return gray_5;
+            } else {
+              return blue_7;
+            }
+          })()),
+          raw5("white"),
+          none4,
+          raw4(radius_2),
+          raw6((() => {
+            if (is_posting) {
+              return "not-allowed";
+            } else {
+              return "pointer";
+            }
+          })()),
+          raw8(font_size_1),
+          raw9("500")
+        ]))
+      ]), toList([text3(submit_label)])),
+      button(toList([
+        on_click(new CancelComment),
+        styles(toList([
+          raw14("0.375rem " + size_3),
+          raw(gray_3),
+          raw5(gray_8),
+          none4,
+          raw4(radius_2),
+          pointer,
+          raw8(font_size_1),
+          raw9("500")
+        ]))
+      ]), toList([text3("Cancel")]))
+    ]))
+  ]));
+}
+function github_comment_display(comment, commenting) {
+  let _block;
+  if (commenting instanceof Replying) {
+    let id2 = commenting.comment_id;
+    if (id2 === comment.id) {
+      _block = true;
+    } else {
+      _block = false;
+    }
+  } else if (commenting instanceof PostingReply) {
+    let id2 = commenting.comment_id;
+    if (id2 === comment.id) {
+      _block = true;
+    } else {
+      _block = false;
+    }
+  } else {
+    _block = false;
+  }
+  let is_replying = _block;
+  let _block$1;
+  if (commenting instanceof Replying) {
+    let id2 = commenting.comment_id;
+    if (id2 === comment.id) {
+      let text4 = commenting.text;
+      _block$1 = text4;
+    } else {
+      _block$1 = "";
+    }
+  } else if (commenting instanceof PostingReply) {
+    let id2 = commenting.comment_id;
+    if (id2 === comment.id) {
+      let text4 = commenting.text;
+      _block$1 = text4;
+    } else {
+      _block$1 = "";
+    }
+  } else {
+    _block$1 = "";
+  }
+  let reply_text = _block$1;
+  let _block$2;
+  if (commenting instanceof PostingReply) {
+    let id2 = commenting.comment_id;
+    if (id2 === comment.id) {
+      _block$2 = true;
+    } else {
+      _block$2 = false;
+    }
+  } else {
+    _block$2 = false;
+  }
+  let is_posting = _block$2;
   return div(toList([
     styles(toList([
       raw(blue_2),
       raw17("3px solid " + blue_6),
       raw14(size_2 + " " + size_3 + " " + size_2 + " 4.25rem"),
       ["font-family", font_system_ui],
-      raw8(font_size_0),
+      raw8(font_size_1),
       raw5(blue_9),
       raw19("1.4")
     ]))
@@ -15728,15 +16060,49 @@ function github_comment_display(comment) {
       styles(toList([
         flex,
         space_between,
+        center,
         raw12("0.25rem"),
-        raw8(font_size_0),
+        raw8(font_size_1),
         raw5(gray_6)
       ]))
     ]), toList([
       span(toList([styles(toList([raw9("600")]))]), toList([text3(comment.author)])),
-      span(toList([]), toList([text3(comment.created_at)]))
+      div(toList([
+        styles(toList([
+          flex,
+          center,
+          raw10(size_3)
+        ]))
+      ]), toList([
+        span(toList([]), toList([text3(comment.created_at)])),
+        (() => {
+          if (is_replying) {
+            return text3("");
+          } else {
+            return button(toList([
+              on_click(new StartReply(comment.id)),
+              styles(toList([
+                none3,
+                none4,
+                raw5(blue_6),
+                pointer,
+                raw8(font_size_0),
+                raw14("0"),
+                underline
+              ]))
+            ]), toList([text3("Reply")]));
+          }
+        })()
+      ]))
     ])),
-    div(toList([]), render(comment.body))
+    div(toList([]), render(comment.body)),
+    (() => {
+      if (is_replying) {
+        return reply_form(reply_text, is_posting);
+      } else {
+        return text3("");
+      }
+    })()
   ]));
 }
 function diff_view(chunk, commenting, chunk_comments, chunk_github_comments) {
@@ -15750,9 +16116,13 @@ function diff_view(chunk, commenting, chunk_comments, chunk_github_comments) {
   } else if (commenting instanceof Commenting) {
     let dl = commenting.display_line;
     _block = new Some(dl);
-  } else {
+  } else if (commenting instanceof PostingComment) {
     let dl = commenting.display_line;
     _block = new Some(dl);
+  } else if (commenting instanceof Replying) {
+    _block = new None;
+  } else {
+    _block = new None;
   }
   let commenting_display_line = _block;
   let _block$1;
@@ -15761,18 +16131,20 @@ function diff_view(chunk, commenting, chunk_comments, chunk_github_comments) {
   } else if (commenting instanceof Commenting) {
     let text4 = commenting.text;
     _block$1 = text4;
-  } else {
+  } else if (commenting instanceof PostingComment) {
     let text4 = commenting.text;
     _block$1 = text4;
+  } else if (commenting instanceof Replying) {
+    _block$1 = "";
+  } else {
+    _block$1 = "";
   }
   let comment_text = _block$1;
   let _block$2;
-  if (commenting instanceof NotCommenting) {
-    _block$2 = false;
-  } else if (commenting instanceof Commenting) {
-    _block$2 = false;
-  } else {
+  if (commenting instanceof PostingComment) {
     _block$2 = true;
+  } else {
+    _block$2 = false;
   }
   let is_posting = _block$2;
   return div(toList([
@@ -15795,7 +16167,7 @@ function diff_view(chunk, commenting, chunk_comments, chunk_github_comments) {
         diff_line_row(entry.display_line, entry.file_line, entry.text, language)
       ]),
       map2(line_github_comments, (c) => {
-        return github_comment_display(c);
+        return github_comment_display(c, commenting);
       }),
       map2(line_comments, (c) => {
         return comment_display(c);
@@ -15847,7 +16219,7 @@ function chunk_panel(chunk, pr_url, commenting, comments, github_comments) {
           raw4(radius_2),
           raw14(size_3 + " " + size_4),
           raw20(size_2),
-          raw8(font_size_0),
+          raw8(font_size_1),
           raw19("1.5"),
           raw5(gray_8)
         ]))
@@ -15873,8 +16245,8 @@ function chunk_panel(chunk, pr_url, commenting, comments, github_comments) {
         title("View files on GitHub"),
         styles(toList([
           raw5(gray_5),
-          none4,
-          raw8(font_size_0),
+          none5,
+          raw8(font_size_1),
           inline_flex,
           center,
           raw19("1")
@@ -15921,7 +16293,7 @@ function general_comments_section(github_comments) {
               "border-radius",
               "0 " + radius_2 + " " + radius_2 + " 0"
             ],
-            raw8(font_size_0),
+            raw8(font_size_1),
             raw5(blue_9),
             raw19("1.5")
           ]))
@@ -15931,7 +16303,7 @@ function general_comments_section(github_comments) {
               flex,
               space_between,
               raw12("0.375rem"),
-              raw8(font_size_0),
+              raw8(font_size_1),
               raw5(gray_6)
             ]))
           ]), toList([
@@ -15959,7 +16331,7 @@ function bottom_navigation(current, total) {
     nav_button("Previous Chunk", new PrevChunk, current > 0),
     span(toList([
       styles(toList([
-        raw8(font_size_0),
+        raw8(font_size_1),
         raw5(gray_6)
       ]))
     ]), toList([
@@ -15968,42 +16340,15 @@ function bottom_navigation(current, total) {
     nav_button("Next Chunk", new NextChunk, current < total - 1)
   ]));
 }
-function review_action_button(label2, event_type, bg_color, _, submitting) {
-  return button(toList([
-    on_click(new SubmitReview(event_type)),
-    disabled(submitting),
-    styles(toList([
-      raw14(size_2 + " " + size_5),
-      raw((() => {
-        if (submitting) {
-          return gray_5;
-        } else {
-          return bg_color;
-        }
-      })()),
-      raw5("white"),
-      none3,
-      raw4(radius_2),
-      raw6((() => {
-        if (submitting) {
-          return "not-allowed";
-        } else {
-          return "pointer";
-        }
-      })()),
-      raw8(font_size_0),
-      raw9("500"),
-      raw23("background 0.15s")
-    ]))
-  ]), toList([
-    text3((() => {
-      if (submitting) {
-        return "Submitting...";
-      } else {
-        return label2;
-      }
-    })())
-  ]));
+function review_action_button(label2, event_type, bg_color, submitting) {
+  let _block;
+  if (submitting) {
+    _block = "Submitting...";
+  } else {
+    _block = label2;
+  }
+  let display_label = _block;
+  return styled_button(display_label, new SubmitReview(event_type), bg_color, !submitting);
 }
 function review_submission_section(review) {
   let _block;
@@ -16047,14 +16392,14 @@ function review_submission_section(review) {
         raw2("1px solid " + gray_4),
         raw4(radius_2),
         ["font-family", font_system_ui],
-        raw8(font_size_0),
+        raw8(font_size_1),
         vertical,
-        none5,
+        none6,
         border_box,
         raw12(size_3)
       ])),
       placeholder("Leave a comment with your review (optional for approvals)..."),
-      value(review_body),
+      property2("value", string3(review_body)),
       on_input((var0) => {
         return new SetReviewBody(var0);
       })
@@ -16062,9 +16407,9 @@ function review_submission_section(review) {
     div(toList([
       styles(toList([flex, raw10(size_2), wrap]))
     ]), toList([
-      review_action_button("Approve", "APPROVE", green_7, green_8, submitting),
-      review_action_button("Request Changes", "REQUEST_CHANGES", orange_7, orange_8, submitting),
-      review_action_button("Comment", "COMMENT", indigo_7, indigo_8, submitting)
+      review_action_button("Approve", "APPROVE", green_7, submitting),
+      review_action_button("Request Changes", "REQUEST_CHANGES", orange_7, submitting),
+      review_action_button("Comment", "COMMENT", indigo_7, submitting)
     ]))
   ]));
 }
@@ -16087,6 +16432,44 @@ function analysis_view(analysis, pr_url, model) {
     })(),
     bottom_navigation(current, chunk_count),
     review_submission_section(model.review)
+  ]));
+}
+function loading_indicator2(heartbeats) {
+  let elapsed_seconds = heartbeats * heartbeat_interval_seconds;
+  let _block;
+  if (heartbeats === 0) {
+    _block = "Connecting to AI analysis...";
+  } else {
+    _block = "Analyzing PR with AI... (" + to_string(elapsed_seconds) + "s elapsed)";
+  }
+  let progress_text = _block;
+  return div(toList([
+    styles(toList([
+      center2,
+      raw14(size_10 + " " + size_7),
+      raw(gray_1),
+      raw4(radius_3),
+      raw2("1px solid " + gray_2)
+    ]))
+  ]), toList([
+    div(toList([
+      styles(toList([
+        inline_block,
+        raw15(size_7),
+        ["height", size_7],
+        raw2("3px solid " + gray_2),
+        ["border-top-color", indigo_7],
+        raw4("50%"),
+        raw16("spin 0.8s linear infinite"),
+        raw12(size_4)
+      ]))
+    ]), toList([])),
+    p(toList([
+      styles(toList([
+        raw5(gray_6),
+        raw8(font_size_1)
+      ]))
+    ]), toList([text3(progress_text)]))
   ]));
 }
 function view3(model) {
@@ -16161,6 +16544,7 @@ class PrRoute extends CustomType {
     this[0] = $0;
   }
 }
+var default_repo = "GC-AI-Inc/app-gc-ai";
 function format_error(err) {
   if (err instanceof BadBody) {
     return "Bad response body";
@@ -16219,46 +16603,126 @@ function parse_route(uri) {
     }
   }
 }
-function init2(_) {
-  let default_repo = "GC-AI-Inc/app-gc-ai";
-  let _block;
-  let $1 = do_initial_uri();
-  if ($1 instanceof Ok) {
-    let uri = $1[0];
-    let $2 = parse_route(uri);
-    if ($2 instanceof DashboardRoute) {
-      _block = [new Dashboard, true, fetch_prs(default_repo)];
+function handle_submit_comment(model) {
+  let $ = model.commenting;
+  let $1 = model.selected_pr;
+  let $2 = model.analysis_state;
+  if ($1 instanceof Some) {
+    if ($2 instanceof Analyzed) {
+      if ($ instanceof Commenting) {
+        let detail = $1[0];
+        let analysis = $2.result;
+        let display_line = $.display_line;
+        let file_line = $.file_line;
+        let text4 = $.text;
+        let comment = new LineComment(model.current_chunk, display_line, text4);
+        let _block;
+        let $3 = (() => {
+          let _pipe = drop(analysis.chunks, model.current_chunk);
+          return first(_pipe);
+        })();
+        if ($3 instanceof Ok) {
+          let chunk = $3[0];
+          let $4 = split_once(chunk.file_path, " (+");
+          if ($4 instanceof Ok) {
+            let path = $4[0][0];
+            _block = path;
+          } else {
+            _block = chunk.file_path;
+          }
+        } else {
+          _block = "";
+        }
+        let file_path = _block;
+        return [
+          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, prepend(comment, model.comments), new PostingComment(display_line, file_line, text4), model.github_comments, model.description_open, model.review),
+          post_github_comment(model.active_repo, detail.number, text4, file_path, file_line)
+        ];
+      } else {
+        return [model, none()];
+      }
+    } else if ($ instanceof Commenting) {
+      let display_line = $.display_line;
+      let text4 = $.text;
+      let comment = new LineComment(model.current_chunk, display_line, text4);
+      return [
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, prepend(comment, model.comments), new NotCommenting, model.github_comments, model.description_open, model.review),
+        none()
+      ];
     } else {
-      let number = $2[0];
-      _block = [
-        new PrReview,
-        true,
-        batch(toList([
-          fetch_prs(default_repo),
-          fetch_pr_detail(default_repo, number)
-        ]))
+      return [model, none()];
+    }
+  } else {
+    return [model, none()];
+  }
+}
+function handle_submit_review(model, event4) {
+  let $ = model.selected_pr;
+  let $1 = model.review;
+  if ($ instanceof Some) {
+    if ($1 instanceof ReviewIdle) {
+      let detail = $[0];
+      let body = $1.body;
+      return [
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new SubmittingReview(body)),
+        submit_review(model.active_repo, detail.number, event4, body)
+      ];
+    } else {
+      let detail = $[0];
+      let body = $1.body;
+      return [
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new SubmittingReview(body)),
+        submit_review(model.active_repo, detail.number, event4, body)
       ];
     }
   } else {
-    _block = [new Dashboard, true, fetch_prs(default_repo)];
+    return [model, none()];
   }
-  let $ = _block;
-  let initial_view;
-  let initial_loading;
-  let initial_effect;
-  initial_view = $[0];
-  initial_loading = $[1];
-  initial_effect = $[2];
-  return [
-    new Model(toList([default_repo]), default_repo, new None, new None, initial_loading, initial_view, new None, new NotAnalyzed, 0, toList([]), new NotCommenting, toList([]), false, new ReviewIdle("")),
-    batch(toList([
-      init((var0) => {
-        return new UrlChanged(var0);
-      }),
-      initial_effect,
-      start_auto_refresh()
-    ]))
-  ];
+}
+function handle_url_changed(model, uri) {
+  let $ = parse_route(uri);
+  if ($ instanceof DashboardRoute) {
+    let $1 = model.view;
+    if ($1 instanceof Dashboard) {
+      return [model, none()];
+    } else {
+      let new_model = reset_pr_state(model);
+      return [
+        new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new None, new_model.loading, new Dashboard, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review),
+        none()
+      ];
+    }
+  } else {
+    let number = $[0];
+    let $1 = model.view;
+    if ($1 instanceof Dashboard) {
+      let new_model = reset_pr_state(model);
+      return [
+        new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review),
+        fetch_pr_detail(model.active_repo, number)
+      ];
+    } else {
+      let $2 = model.selected_pr;
+      if ($2 instanceof Some) {
+        let detail = $2[0];
+        if (detail.number === number) {
+          return [model, none()];
+        } else {
+          let new_model = reset_pr_state(model);
+          return [
+            new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review),
+            fetch_pr_detail(model.active_repo, number)
+          ];
+        }
+      } else {
+        let new_model = reset_pr_state(model);
+        return [
+          new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review),
+          fetch_pr_detail(model.active_repo, number)
+        ];
+      }
+    }
+  }
 }
 function update2(model, msg) {
   if (msg instanceof GotPrs) {
@@ -16463,60 +16927,28 @@ function update2(model, msg) {
         new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new Commenting(dl, fl, text4), model.github_comments, model.description_open, model.review),
         none()
       ];
-    } else {
+    } else if ($ instanceof PostingComment) {
       let dl = $.display_line;
       let fl = $.file_line;
       return [
         new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new PostingComment(dl, fl, text4), model.github_comments, model.description_open, model.review),
         none()
       ];
+    } else if ($ instanceof Replying) {
+      let id2 = $.comment_id;
+      return [
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new Replying(id2, text4), model.github_comments, model.description_open, model.review),
+        none()
+      ];
+    } else {
+      let id2 = $.comment_id;
+      return [
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new PostingReply(id2, text4), model.github_comments, model.description_open, model.review),
+        none()
+      ];
     }
   } else if (msg instanceof SubmitComment) {
-    let $ = model.commenting;
-    let $1 = model.selected_pr;
-    let $2 = model.analysis_state;
-    if ($1 instanceof Some && $ instanceof Commenting) {
-      if ($2 instanceof Analyzed) {
-        let detail = $1[0];
-        let display_line = $.display_line;
-        let file_line = $.file_line;
-        let text4 = $.text;
-        let analysis = $2.result;
-        let comment = new LineComment(model.current_chunk, display_line, text4);
-        let _block;
-        let $3 = (() => {
-          let _pipe = drop(analysis.chunks, model.current_chunk);
-          return first(_pipe);
-        })();
-        if ($3 instanceof Ok) {
-          let chunk = $3[0];
-          let $4 = split_once(chunk.file_path, " (+");
-          if ($4 instanceof Ok) {
-            let path = $4[0][0];
-            _block = path;
-          } else {
-            _block = chunk.file_path;
-          }
-        } else {
-          _block = "";
-        }
-        let file_path = _block;
-        return [
-          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, prepend(comment, model.comments), new PostingComment(display_line, file_line, text4), model.github_comments, model.description_open, model.review),
-          post_github_comment(model.active_repo, detail.number, text4, file_path, file_line)
-        ];
-      } else {
-        let display_line = $.display_line;
-        let text4 = $.text;
-        let comment = new LineComment(model.current_chunk, display_line, text4);
-        return [
-          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, prepend(comment, model.comments), new NotCommenting, model.github_comments, model.description_open, model.review),
-          none()
-        ];
-      }
-    } else {
-      return [model, none()];
-    }
+    return handle_submit_comment(model);
   } else if (msg instanceof GotGithubComments) {
     let $ = msg[0];
     if ($ instanceof Ok) {
@@ -16555,51 +16987,29 @@ function update2(model, msg) {
         none()
       ];
     }
+  } else if (msg instanceof StartReply) {
+    let comment_id = msg[0];
+    return [
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new Replying(comment_id, ""), model.github_comments, model.description_open, model.review),
+      none()
+    ];
+  } else if (msg instanceof SubmitReply) {
+    let $ = model.commenting;
+    let $1 = model.selected_pr;
+    if ($1 instanceof Some && $ instanceof Replying) {
+      let detail = $1[0];
+      let comment_id = $.comment_id;
+      let text4 = $.text;
+      return [
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new PostingReply(comment_id, text4), model.github_comments, model.description_open, model.review),
+        reply_to_comment(model.active_repo, detail.number, comment_id, text4)
+      ];
+    } else {
+      return [model, none()];
+    }
   } else if (msg instanceof UrlChanged) {
     let uri = msg[0];
-    let $ = parse_route(uri);
-    if ($ instanceof DashboardRoute) {
-      let $1 = model.view;
-      if ($1 instanceof Dashboard) {
-        return [model, none()];
-      } else {
-        let new_model = reset_pr_state(model);
-        return [
-          new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new None, new_model.loading, new Dashboard, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review),
-          none()
-        ];
-      }
-    } else {
-      let number = $[0];
-      let $1 = model.view;
-      if ($1 instanceof Dashboard) {
-        let new_model = reset_pr_state(model);
-        return [
-          new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review),
-          fetch_pr_detail(model.active_repo, number)
-        ];
-      } else {
-        let $2 = model.selected_pr;
-        if ($2 instanceof Some) {
-          let detail = $2[0];
-          if (detail.number === number) {
-            return [model, none()];
-          } else {
-            let new_model = reset_pr_state(model);
-            return [
-              new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review),
-              fetch_pr_detail(model.active_repo, number)
-            ];
-          }
-        } else {
-          let new_model = reset_pr_state(model);
-          return [
-            new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review),
-            fetch_pr_detail(model.active_repo, number)
-          ];
-        }
-      }
-    }
+    return handle_url_changed(model, uri);
   } else if (msg instanceof ToggleDescription) {
     return [
       new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, !model.description_open, model.review),
@@ -16607,27 +17017,7 @@ function update2(model, msg) {
     ];
   } else if (msg instanceof SubmitReview) {
     let event4 = msg[0];
-    let $ = model.selected_pr;
-    let $1 = model.review;
-    if ($ instanceof Some) {
-      if ($1 instanceof ReviewIdle) {
-        let detail = $[0];
-        let body = $1.body;
-        return [
-          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new SubmittingReview(body)),
-          submit_review(model.active_repo, detail.number, event4, body)
-        ];
-      } else {
-        let detail = $[0];
-        let body = $1.body;
-        return [
-          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new SubmittingReview(body)),
-          submit_review(model.active_repo, detail.number, event4, body)
-        ];
-      }
-    } else {
-      return [model, none()];
-    }
+    return handle_submit_review(model, event4);
   } else if (msg instanceof SetReviewBody) {
     let text4 = msg[0];
     return [
@@ -16678,11 +17068,57 @@ function view4(model) {
     return view3(model);
   }
 }
+function init2(_) {
+  let _block;
+  let $1 = do_initial_uri();
+  if ($1 instanceof Ok) {
+    let uri = $1[0];
+    let $2 = parse_route(uri);
+    if ($2 instanceof DashboardRoute) {
+      _block = [new Dashboard, true, fetch_prs(default_repo)];
+    } else {
+      let number = $2[0];
+      _block = [
+        new PrReview,
+        true,
+        batch(toList([
+          fetch_prs(default_repo),
+          fetch_pr_detail(default_repo, number)
+        ]))
+      ];
+    }
+  } else {
+    _block = [new Dashboard, true, fetch_prs(default_repo)];
+  }
+  let $ = _block;
+  let initial_view;
+  let initial_loading;
+  let initial_effect;
+  initial_view = $[0];
+  initial_loading = $[1];
+  initial_effect = $[2];
+  return [
+    new Model(toList([default_repo]), default_repo, new None, new None, initial_loading, initial_view, new None, new NotAnalyzed, 0, toList([]), new NotCommenting, toList([]), false, new ReviewIdle("")),
+    batch(toList([
+      init((var0) => {
+        return new UrlChanged(var0);
+      }),
+      initial_effect,
+      start_auto_refresh()
+    ]))
+  ];
+}
 function main() {
   let app = application(init2, update2, view4);
   let $ = start4(app, "#app", undefined);
   if (!($ instanceof Ok)) {
-    throw makeError("let_assert", FILEPATH7, "client", 30, "main", "Pattern match failed, no pattern matched the value.", { value: $, start: 984, end: 1033, pattern_start: 995, pattern_end: 1000 });
+    throw makeError("let_assert", FILEPATH7, "client", 33, "main", "Pattern match failed, no pattern matched the value.", {
+      value: $,
+      start: 1079,
+      end: 1128,
+      pattern_start: 1090,
+      pattern_end: 1095
+    });
   }
   return;
 }

@@ -14,6 +14,7 @@ pub type PullRequest {
     draft: Bool,
     checks_status: String,
     checks_url: String,
+    reviewers: List(String),
   )
 }
 
@@ -86,6 +87,7 @@ pub fn encode_pull_request(pr: PullRequest) -> json.Json {
     #("draft", json.bool(pr.draft)),
     #("checks_status", json.string(pr.checks_status)),
     #("checks_url", json.string(pr.checks_url)),
+    #("reviewers", json.array(pr.reviewers, json.string)),
   ])
 }
 
@@ -183,6 +185,7 @@ pub fn pull_request_decoder() -> decode.Decoder(PullRequest) {
   use draft <- decode.field("draft", decode.bool)
   use checks_status <- decode.field("checks_status", decode.string)
   use checks_url <- decode.field("checks_url", decode.string)
+  use reviewers <- decode.field("reviewers", decode.list(decode.string))
   decode.success(PullRequest(
     number: number,
     title: title,
@@ -193,6 +196,7 @@ pub fn pull_request_decoder() -> decode.Decoder(PullRequest) {
     draft: draft,
     checks_status: checks_status,
     checks_url: checks_url,
+    reviewers: reviewers,
   ))
 }
 

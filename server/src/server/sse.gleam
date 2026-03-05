@@ -7,6 +7,7 @@ import gleam/int
 import gleam/json
 import gleam/list
 import gleam/otp/actor
+import gleam/result
 import gleam/string
 import gleam/string_tree
 import mist
@@ -14,6 +15,8 @@ import server/analyzer
 import server/github
 import shared/pr
 import wisp
+
+const heartbeat_interval_ms = 3000
 
 /// Messages the SSE actor can receive
 pub type SseMsg {
@@ -35,30 +38,63 @@ pub type SseState {
 pub fn maybe_handle_sse(
   req: request.Request(mist.Connection),
 ) -> Result(response.Response(mist.ResponseData), Nil) {
-  case request.path_segments(req) {
-    ["api", "prs", number_str, "analyze-stream"] -> {
-      case req.method {
-        http.Get -> {
-          case get_query_value(req, "repo") {
-            Error(_) -> {
-              Ok(json_error_response("Missing repo query parameter", 400))
-            }
-            Ok(repo) -> {
-              case int.parse(number_str) {
-                Error(_) -> {
-                  Ok(json_error_response("Invalid PR number", 400))
-                }
-                Ok(number) -> {
-                  Ok(handle_sse_analyze(req, repo, number))
-                }
-              }
-            }
-          }
-        }
+  use #(number_str) <- require_route(req, ["api", "prs", "analyze-stream"])
+  use Nil <- require_method(req, http.Get)
+  use repo <- require_query(req, "repo")
+  use number <- require_parse_int(number_str)
+  Ok(handle_sse_analyze(req, repo, number))
+}
+
+/// Match the expected route pattern, extracting the dynamic segment.
+/// Returns Error(Nil) if the path doesn't match.
+fn require_route(
+  req: request.Request(mist.Connection),
+  pattern: List(String),
+  next: fn(#(String)) -> Result(response.Response(mist.ResponseData), Nil),
+) -> Result(response.Response(mist.ResponseData), Nil) {
+  case pattern {
+    ["api", "prs", "analyze-stream"] ->
+      case request.path_segments(req) {
+        ["api", "prs", number_str, "analyze-stream"] -> next(#(number_str))
         _ -> Error(Nil)
       }
-    }
     _ -> Error(Nil)
+  }
+}
+
+/// Require a specific HTTP method, returning Error(Nil) for non-matches.
+fn require_method(
+  req: request.Request(mist.Connection),
+  method: http.Method,
+  next: fn(Nil) -> Result(response.Response(mist.ResponseData), Nil),
+) -> Result(response.Response(mist.ResponseData), Nil) {
+  case req.method == method {
+    True -> next(Nil)
+    False -> Error(Nil)
+  }
+}
+
+/// Require a query parameter, returning an error response if missing.
+fn require_query(
+  req: request.Request(mist.Connection),
+  key: String,
+  next: fn(String) -> Result(response.Response(mist.ResponseData), Nil),
+) -> Result(response.Response(mist.ResponseData), Nil) {
+  case get_query_value(req, key) {
+    Ok(value) -> next(value)
+    Error(_) ->
+      Ok(json_error_response("Missing " <> key <> " query parameter", 400))
+  }
+}
+
+/// Require a string to parse as an integer, returning an error response if invalid.
+fn require_parse_int(
+  str: String,
+  next: fn(Int) -> Result(response.Response(mist.ResponseData), Nil),
+) -> Result(response.Response(mist.ResponseData), Nil) {
+  case int.parse(str) {
+    Ok(n) -> next(n)
+    Error(_) -> Ok(json_error_response("Invalid PR number", 400))
   }
 }
 
@@ -106,7 +142,7 @@ fn handle_sse_analyze(
         })
 
       // Schedule first heartbeat
-      let _ = process.send_after(subject, 3000, Heartbeat)
+      let _ = process.send_after(subject, heartbeat_interval_ms, Heartbeat)
 
       Ok(actor.initialised(SseState(heartbeat_count: 0, self: subject)))
     },
@@ -161,7 +197,7 @@ fn handle_sse_analyze(
           let _ = mist.send_event(conn, event)
 
           // Schedule next heartbeat
-          let _ = process.send_after(state.self, 3000, Heartbeat)
+          let _ = process.send_after(state.self, heartbeat_interval_ms, Heartbeat)
 
           actor.continue(SseState(..state, heartbeat_count: new_count))
         }
@@ -171,30 +207,33 @@ fn handle_sse_analyze(
 }
 
 fn run_analysis(subject: Subject(SseMsg), repo: String, number: Int) -> Nil {
-  case github.get_pr_detail(repo, number) {
-    Error(msg) -> {
-      process.send(subject, AnalysisError("GitHub fetch failed: " <> msg))
-    }
-    Ok(pr_detail) -> {
+  let result = {
+    use pr_detail <- result.try(
+      github.get_pr_detail(repo, number)
+      |> result.map_error(fn(msg) { "GitHub fetch failed: " <> msg }),
+    )
+
+    wisp.log_info(
+      "SSE: Analyzing PR #"
+      <> int.to_string(number)
+      <> " ("
+      <> int.to_string(string.length(pr_detail.diff))
+      <> " chars of diff)",
+    )
+
+    analyzer.analyze_pr(pr_detail)
+  }
+
+  case result {
+    Ok(analysis) -> {
       wisp.log_info(
-        "SSE: Analyzing PR #"
-        <> int.to_string(number)
-        <> " ("
-        <> int.to_string(string.length(pr_detail.diff))
-        <> " chars of diff)",
+        "SSE: Analysis complete for PR #" <> int.to_string(number),
       )
-      case analyzer.analyze_pr(pr_detail) {
-        Ok(analysis) -> {
-          wisp.log_info(
-            "SSE: Analysis complete for PR #" <> int.to_string(number),
-          )
-          process.send(subject, AnalysisDone(analysis))
-        }
-        Error(msg) -> {
-          wisp.log_error("SSE: Analysis failed: " <> msg)
-          process.send(subject, AnalysisError(msg))
-        }
-      }
+      process.send(subject, AnalysisDone(analysis))
+    }
+    Error(msg) -> {
+      wisp.log_error("SSE: Analysis failed: " <> msg)
+      process.send(subject, AnalysisError(msg))
     }
   }
 }
