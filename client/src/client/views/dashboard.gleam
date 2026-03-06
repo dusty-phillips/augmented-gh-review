@@ -53,6 +53,7 @@ pub fn view(model: Model) -> Element(Msg) {
         [html.text("Augmented Review Dashboard")],
       ),
       repo_selector(model),
+      production_pr_banner(model.pr_groups),
       case model.error {
         option.Some(err) -> error_banner(err)
         option.None -> html.text("")
@@ -109,6 +110,54 @@ fn repo_selector(model: Model) -> Element(Msg) {
       ),
     ],
   )
+}
+
+fn production_pr_banner(
+  pr_groups: option.Option(PrGroups),
+) -> Element(Msg) {
+  case pr_groups {
+    option.Some(groups) ->
+      case groups.production_pr {
+        option.Some(prod_pr) ->
+          html.a(
+            [
+              attribute.href(prod_pr.url),
+              attribute.target("_blank"),
+              attribute.styles([
+                display.flex,
+                align_items.center,
+                gap.raw(sizes.size_3),
+                padding.raw(sizes.size_3 <> " " <> sizes.size_4),
+                margin_bottom.raw(sizes.size_4),
+                background.raw(colors.violet_1),
+                border.raw("1px solid " <> colors.violet_4),
+                border_radius.raw(borders.radius_2),
+                color.raw(colors.violet_9),
+                font_size.raw(fonts.font_size_1),
+                font_weight.raw("500"),
+                text_decoration.none,
+                cursor.pointer,
+              ]),
+            ],
+            [
+              html.span(
+                [
+                  attribute.class("material-symbols-outlined"),
+                  attribute.styles([font_size.raw(fonts.font_size_3)]),
+                ],
+                [html.text("rocket_launch")],
+              ),
+              html.text(prod_pr.title),
+              html.span(
+                [attribute.styles([color.raw(colors.violet_6)])],
+                [html.text(" #" <> int.to_string(prod_pr.number))],
+              ),
+            ],
+          )
+        option.None -> html.text("")
+      }
+    option.None -> html.text("")
+  }
 }
 
 fn error_banner(message: String) -> Element(Msg) {

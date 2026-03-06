@@ -1,5 +1,6 @@
 import gleam/dynamic/decode
 import gleam/json
+import gleam/option
 
 // --- Types ---
 
@@ -27,6 +28,7 @@ pub type PrGroups {
     created_by_me: List(PullRequest),
     review_requested: List(PullRequest),
     all_open: List(PullRequest),
+    production_pr: option.Option(PullRequest),
   )
 }
 
@@ -103,6 +105,10 @@ pub fn encode_pr_groups(groups: PrGroups) -> json.Json {
       json.array(groups.review_requested, encode_pull_request),
     ),
     #("all_open", json.array(groups.all_open, encode_pull_request)),
+    #("production_pr", case groups.production_pr {
+      option.Some(pr) -> encode_pull_request(pr)
+      option.None -> json.null()
+    }),
   ])
 }
 
@@ -214,10 +220,17 @@ pub fn pr_groups_decoder() -> decode.Decoder(PrGroups) {
     decode.list(pull_request_decoder()),
   )
   use all_open <- decode.field("all_open", decode.list(pull_request_decoder()))
+  use production_pr <- decode.field(
+    "production_pr",
+    decode.one_of(decode.map(pull_request_decoder(), option.Some), [
+      decode.success(option.None),
+    ]),
+  )
   decode.success(PrGroups(
     created_by_me: created_by_me,
     review_requested: review_requested,
     all_open: all_open,
+    production_pr: production_pr,
   ))
 }
 

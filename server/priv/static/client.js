@@ -7076,11 +7076,12 @@ class PrFile extends CustomType {
   }
 }
 class PrGroups extends CustomType {
-  constructor(created_by_me, review_requested, all_open) {
+  constructor(created_by_me, review_requested, all_open, production_pr) {
     super();
     this.created_by_me = created_by_me;
     this.review_requested = review_requested;
     this.all_open = all_open;
+    this.production_pr = production_pr;
   }
 }
 class PrDetail extends CustomType {
@@ -7161,7 +7162,11 @@ function pr_groups_decoder() {
   return field("created_by_me", list2(pull_request_decoder()), (created_by_me) => {
     return field("review_requested", list2(pull_request_decoder()), (review_requested) => {
       return field("all_open", list2(pull_request_decoder()), (all_open) => {
-        return success(new PrGroups(created_by_me, review_requested, all_open));
+        return field("production_pr", one_of(map3(pull_request_decoder(), (var0) => {
+          return new Some(var0);
+        }), toList([success(new None)])), (production_pr) => {
+          return success(new PrGroups(created_by_me, review_requested, all_open, production_pr));
+        });
       });
     });
   });
@@ -7703,7 +7708,10 @@ var red_2 = "var(--red-2)";
 var red_4 = "var(--red-4)";
 var red_7 = "var(--red-7)";
 var red_10 = "var(--red-10)";
+var violet_1 = "var(--violet-1)";
 var violet_2 = "var(--violet-2)";
+var violet_4 = "var(--violet-4)";
+var violet_6 = "var(--violet-6)";
 var violet_9 = "var(--violet-9)";
 var indigo_6 = "var(--indigo-6)";
 var indigo_7 = "var(--indigo-7)";
@@ -7786,6 +7794,45 @@ function repo_selector(model) {
       ]))
     ]), toList([text3("Fetch PRs")]))
   ]));
+}
+function production_pr_banner(pr_groups) {
+  if (pr_groups instanceof Some) {
+    let groups = pr_groups[0];
+    let $ = groups.production_pr;
+    if ($ instanceof Some) {
+      let prod_pr = $[0];
+      return a(toList([
+        href(prod_pr.url),
+        target("_blank"),
+        styles(toList([
+          flex,
+          center,
+          raw10(size_3),
+          raw14(size_3 + " " + size_4),
+          raw12(size_4),
+          raw(violet_1),
+          raw2("1px solid " + violet_4),
+          raw4(radius_2),
+          raw5(violet_9),
+          raw8(font_size_1),
+          raw9("500"),
+          none5,
+          pointer
+        ]))
+      ]), toList([
+        span(toList([
+          class$("material-symbols-outlined"),
+          styles(toList([raw8(font_size_3)]))
+        ]), toList([text3("rocket_launch")])),
+        text3(prod_pr.title),
+        span(toList([styles(toList([raw5(violet_6)]))]), toList([text3(" #" + to_string(prod_pr.number))]))
+      ]));
+    } else {
+      return text3("");
+    }
+  } else {
+    return text3("");
+  }
 }
 function error_banner(message2) {
   return div(toList([
@@ -8062,6 +8109,7 @@ function view2(model) {
       ]))
     ]), toList([text3("Augmented Review Dashboard")])),
     repo_selector(model),
+    production_pr_banner(model.pr_groups),
     (() => {
       let $ = model.error;
       if ($ instanceof Some) {

@@ -205,14 +205,24 @@ pub fn list_all_open_prs(repo: String) -> Result(List(PullRequest), String) {
   list_prs(repo, option.None)
 }
 
-/// Fetch all three PR groups concurrently using Erlang processes.
+/// Find the open "Production Release" PR, if any.
+pub fn find_production_pr(
+  repo: String,
+) -> Result(option.Option(PullRequest), String) {
+  case list_prs(repo, option.Some("Production Release in:title")) {
+    Ok([first, ..]) -> Ok(option.Some(first))
+    Ok([]) -> Ok(option.None)
+    Error(msg) -> Error(msg)
+  }
+}
+
+/// Fetch all PR groups (including production PR) concurrently.
 pub fn list_all_pr_groups(repo: String) -> Result(PrGroups, String) {
-  // Create subjects to receive results from spawned processes
   let created_subject = process.new_subject()
   let review_subject = process.new_subject()
   let all_subject = process.new_subject()
+  let prod_subject = process.new_subject()
 
-  // Spawn three concurrent processes
   process.spawn(fn() {
     process.send(created_subject, list_my_prs(repo))
   })
@@ -222,14 +232,16 @@ pub fn list_all_pr_groups(repo: String) -> Result(PrGroups, String) {
   process.spawn(fn() {
     process.send(all_subject, list_all_open_prs(repo))
   })
+  process.spawn(fn() {
+    process.send(prod_subject, find_production_pr(repo))
+  })
 
-  // Collect results with a 30 second timeout
   let timeout = 30_000
   let created_result = process.receive(created_subject, timeout)
   let review_result = process.receive(review_subject, timeout)
   let all_result = process.receive(all_subject, timeout)
+  let prod_result = process.receive(prod_subject, timeout)
 
-  // Unwrap the nested Results
   use created <- result.try(case created_result {
     Ok(r) -> r
     Error(Nil) -> Error("Timeout fetching created-by-me PRs")
@@ -242,11 +254,17 @@ pub fn list_all_pr_groups(repo: String) -> Result(PrGroups, String) {
     Ok(r) -> r
     Error(Nil) -> Error("Timeout fetching all open PRs")
   })
+  // Production PR is optional — don't fail if it times out
+  let production_pr = case prod_result {
+    Ok(Ok(pr)) -> pr
+    _ -> option.None
+  }
 
   Ok(PrGroups(
     created_by_me: created,
     review_requested: review,
     all_open: all_open,
+    production_pr: production_pr,
   ))
 }
 
