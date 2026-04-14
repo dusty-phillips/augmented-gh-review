@@ -28,28 +28,48 @@ pub fn render(text: String) -> List(Element(msg)) {
   let custom_components =
     components.default()
     |> components.img(fn(src, alt, _title) {
-      // Proxy GitHub URLs through our server (they need auth)
-      let needs_proxy =
-        list.any(github_proxy_prefixes, fn(prefix) {
-          string.starts_with(src, prefix)
-        })
-      let proxied_src = case needs_proxy {
-        True -> "/api/image-proxy?url=" <> src
-        False -> src
+      // Release download URLs don't work with token auth — show as link
+      case string.contains(src, "/releases/download/") {
+        True ->
+          html.a(
+            [
+              attribute.href(src),
+              attribute.target("_blank"),
+              attribute.styles([
+                #("color", "var(--indigo-6)"),
+                #("word-break", "break-all"),
+              ]),
+            ],
+            [html.text(case alt {
+              "" -> src
+              a -> a <> " (download)"
+            })],
+          )
+        False -> {
+          // Proxy other GitHub URLs through our server (they need auth)
+          let needs_proxy =
+            list.any(github_proxy_prefixes, fn(prefix) {
+              string.starts_with(src, prefix)
+            })
+          let proxied_src = case needs_proxy {
+            True -> "/api/image-proxy?url=" <> src
+            False -> src
+          }
+          html.img([
+            attribute.src(proxied_src),
+            attribute.alt(alt),
+            attribute.styles([
+              #("max-width", "100%"),
+              #("min-width", "20px"),
+              #("min-height", "20px"),
+              #("height", "auto"),
+              #("border-radius", "8px"),
+              #("margin", "0.5rem 0"),
+              #("display", "block"),
+            ]),
+          ])
+        }
       }
-      html.img([
-        attribute.src(proxied_src),
-        attribute.alt(alt),
-        attribute.styles([
-          #("max-width", "100%"),
-          #("min-width", "20px"),
-          #("min-height", "20px"),
-          #("height", "auto"),
-          #("border-radius", "8px"),
-          #("margin", "0.5rem 0"),
-          #("display", "block"),
-        ]),
-      ])
     })
 
   maud.render_markdown(

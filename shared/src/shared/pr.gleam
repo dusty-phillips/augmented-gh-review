@@ -4,6 +4,10 @@ import gleam/option
 
 // --- Types ---
 
+pub type FeedbackCount {
+  FeedbackCount(author: String, count: Int)
+}
+
 pub type PullRequest {
   PullRequest(
     number: Int,
@@ -16,6 +20,9 @@ pub type PullRequest {
     checks_status: String,
     checks_url: String,
     reviewers: List(String),
+    base_ref_name: String,
+    head_ref_name: String,
+    feedback: List(FeedbackCount),
   )
 }
 
@@ -78,6 +85,13 @@ pub type PrComment {
 
 // --- Encoders ---
 
+pub fn encode_feedback_count(fc: FeedbackCount) -> json.Json {
+  json.object([
+    #("author", json.string(fc.author)),
+    #("count", json.int(fc.count)),
+  ])
+}
+
 pub fn encode_pull_request(pr: PullRequest) -> json.Json {
   json.object([
     #("number", json.int(pr.number)),
@@ -90,6 +104,9 @@ pub fn encode_pull_request(pr: PullRequest) -> json.Json {
     #("checks_status", json.string(pr.checks_status)),
     #("checks_url", json.string(pr.checks_url)),
     #("reviewers", json.array(pr.reviewers, json.string)),
+    #("base_ref_name", json.string(pr.base_ref_name)),
+    #("head_ref_name", json.string(pr.head_ref_name)),
+    #("feedback", json.array(pr.feedback, encode_feedback_count)),
   ])
 }
 
@@ -181,6 +198,12 @@ pub fn encode_pr_comment_list(comments: List(PrComment)) -> json.Json {
 
 // --- Decoders ---
 
+pub fn feedback_count_decoder() -> decode.Decoder(FeedbackCount) {
+  use author <- decode.field("author", decode.string)
+  use count <- decode.field("count", decode.int)
+  decode.success(FeedbackCount(author: author, count: count))
+}
+
 pub fn pull_request_decoder() -> decode.Decoder(PullRequest) {
   use number <- decode.field("number", decode.int)
   use title <- decode.field("title", decode.string)
@@ -192,6 +215,13 @@ pub fn pull_request_decoder() -> decode.Decoder(PullRequest) {
   use checks_status <- decode.field("checks_status", decode.string)
   use checks_url <- decode.field("checks_url", decode.string)
   use reviewers <- decode.field("reviewers", decode.list(decode.string))
+  use base_ref_name <- decode.field("base_ref_name", decode.string)
+  use head_ref_name <- decode.field("head_ref_name", decode.string)
+  use feedback <- decode.optional_field(
+    "feedback",
+    [],
+    decode.list(feedback_count_decoder()),
+  )
   decode.success(PullRequest(
     number: number,
     title: title,
@@ -203,6 +233,9 @@ pub fn pull_request_decoder() -> decode.Decoder(PullRequest) {
     checks_status: checks_status,
     checks_url: checks_url,
     reviewers: reviewers,
+    base_ref_name: base_ref_name,
+    head_ref_name: head_ref_name,
+    feedback: feedback,
   ))
 }
 

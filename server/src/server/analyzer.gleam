@@ -209,10 +209,21 @@ fn reassemble_chunk(
       <> " more)"
   }
 
-  let diff_content =
-    matched_hunks
-    |> list.map(fn(h) { h.header <> "\n" <> h.lines })
-    |> string.join("\n")
+  // Build diff content with file separators when the file changes
+  let diff_content = case matched_hunks {
+    [] -> ""
+    [first, ..rest] -> {
+      let first_content = first.header <> "\n" <> first.lines
+      list.fold(rest, #(first.file_path, first_content), fn(acc, h) {
+        let #(prev_file, content) = acc
+        let separator = case h.file_path == prev_file {
+          True -> "\n"
+          False -> "\n== " <> h.file_path <> " ==\n"
+        }
+        #(h.file_path, content <> separator <> h.header <> "\n" <> h.lines)
+      }).1
+    }
+  }
 
   ReviewChunk(
     index: llm_chunk.index,

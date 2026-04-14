@@ -1,3 +1,4 @@
+import gleam/dict
 import gleam/dynamic/decode
 import gleam/erlang/process
 import gleam/int
@@ -8,24 +9,57 @@ import gleam/result
 import gleam/string
 import server/error_format
 import shared/pr.{
-  type PrComment, type PrDetail, type PrFile, type PrGroups, type PullRequest,
-  PrComment, PrDetail, PrFile, PrGroups, PullRequest,
+  type FeedbackCount, type PrComment, type PrDetail, type PrFile,
+  type PrGroups, type PullRequest, FeedbackCount, PrComment, PrDetail, PrFile,
+  PrGroups, PullRequest,
 }
 import shellout
 import simplifile
 import wisp
 
 /// JSON fields requested when listing PRs via `gh pr list`.
-const pr_list_json_fields = "number,title,author,url,createdAt,reviewDecision,isDraft,statusCheckRollup,reviewRequests"
+const pr_list_json_fields = "number,title,author,url,createdAt,reviewDecision,isDraft,statusCheckRollup,reviewRequests,baseRefName,headRefName"
 
-/// Run the `gh` CLI with the given arguments, mapping failures to a
+
+/// Run the `gh` CLI with the given arguments, retrying up to 2 times on
+/// transient errors (stream resets, HTTP 5xx). Maps failures to a
 /// human-readable error that includes the provided context string.
 fn run_gh(args: List(String), context: String) -> Result(String, String) {
-  shellout.command(run: "gh", with: args, in: ".", opt: [])
-  |> result.map_error(fn(err) {
-    let #(code, msg) = err
-    context <> " failed (exit " <> int.to_string(code) <> "): " <> msg
-  })
+  run_gh_with_retries(args, context, 2)
+}
+
+fn is_transient_error(msg: String) -> Bool {
+  string.contains(msg, "stream error")
+  || string.contains(msg, "CANCEL")
+  || string.contains(msg, "HTTP 502")
+  || string.contains(msg, "HTTP 503")
+  || string.contains(msg, "HTTP 504")
+  || string.contains(msg, "couldn't respond to your request in time")
+}
+
+fn run_gh_with_retries(
+  args: List(String),
+  context: String,
+  retries_left: Int,
+) -> Result(String, String) {
+  case shellout.command(run: "gh", with: args, in: ".", opt: []) {
+    Ok(output) -> Ok(output)
+    Error(#(code, msg)) ->
+      case retries_left > 0 && is_transient_error(msg) {
+        True -> {
+          process.sleep(1000)
+          run_gh_with_retries(args, context, retries_left - 1)
+        }
+        False ->
+          Error(
+            context
+            <> " failed (exit "
+            <> int.to_string(code)
+            <> "): "
+            <> msg,
+          )
+      }
+  }
 }
 
 /// Generate a unique temporary file path to avoid race conditions.
@@ -96,6 +130,110 @@ fn first_failing_url(checks: List(CheckInfo)) -> String {
   }
 }
 
+/// Count comments per non-self commenter (bot filtering happens later).
+fn count_feedback(
+  pr_author: String,
+  comment_authors: List(String),
+  review_authors: List(String),
+) -> List(FeedbackCount) {
+  let all_authors = list.append(comment_authors, review_authors)
+  let relevant =
+    list.filter(all_authors, fn(author) { author != pr_author })
+  let counts =
+    list.fold(relevant, dict.new(), fn(acc, author) {
+      let current = result.unwrap(dict.get(acc, author), 0)
+      dict.insert(acc, author, current + 1)
+    })
+  dict.to_list(counts)
+  |> list.map(fn(pair) { FeedbackCount(author: pair.0, count: pair.1) })
+  |> list.sort(fn(a, b) { int.compare(b.count, a.count) })
+}
+
+/// Check if a GitHub login is a human User account (not a Bot, Organization, etc.).
+fn is_human_user(login: String) -> Bool {
+  case run_gh(["api", "users/" <> login, "--jq", ".type"], "gh api user type") {
+    Ok(output) -> string.trim(output) == "User"
+    // If lookup fails (e.g. GitHub App not visible via users API), assume not human
+    Error(_) -> False
+  }
+}
+
+/// Collect all unique feedback authors across a list of PRs.
+fn collect_feedback_authors(prs: List(PullRequest)) -> List(String) {
+  list.flat_map(prs, fn(p) { list.map(p.feedback, fn(fc) { fc.author }) })
+  |> list.unique
+}
+
+/// Remove non-human accounts from feedback on all PRs.
+fn filter_bot_feedback(prs: List(PullRequest)) -> List(PullRequest) {
+  let all_authors = collect_feedback_authors(prs)
+  let human_authors =
+    list.filter(all_authors, is_human_user)
+    |> list.fold(dict.new(), fn(acc, a) { dict.insert(acc, a, True) })
+  list.map(prs, fn(p) {
+    PullRequest(
+      ..p,
+      feedback: list.filter(p.feedback, fn(fc) {
+        result.unwrap(dict.get(human_authors, fc.author), False)
+      }),
+    )
+  })
+}
+
+/// Fetch comment and review authors for a single PR using lightweight REST API calls.
+/// Returns a list of author logins (may contain duplicates for counting).
+fn fetch_pr_feedback_authors(
+  repo: String,
+  number: Int,
+) -> #(List(String), List(String)) {
+  let number_str = int.to_string(number)
+  let comment_authors =
+    case
+      run_gh(
+        [
+          "api", "repos/" <> repo <> "/issues/" <> number_str <> "/comments",
+          "--jq", ".[].user.login",
+        ],
+        "gh api issue comments",
+      )
+    {
+      Ok(output) ->
+        string.split(string.trim(output), "\n")
+        |> list.filter(fn(s) { s != "" })
+      Error(_) -> []
+    }
+  let review_authors =
+    case
+      run_gh(
+        [
+          "api", "repos/" <> repo <> "/pulls/" <> number_str <> "/reviews",
+          "--jq", ".[].user.login",
+        ],
+        "gh api reviews",
+      )
+    {
+      Ok(output) ->
+        string.split(string.trim(output), "\n")
+        |> list.filter(fn(s) { s != "" })
+      Error(_) -> []
+    }
+  #(comment_authors, review_authors)
+}
+
+/// Enrich a PR with feedback counts by fetching comments/reviews individually.
+fn enrich_with_feedback(repo: String, pr: PullRequest) -> PullRequest {
+  case pr.draft, pr.review_decision {
+    True, _ -> pr
+    _, "APPROVED" -> pr
+    _, _ -> {
+      let #(comment_authors, review_authors) =
+        fetch_pr_feedback_authors(repo, pr.number)
+      let feedback = count_feedback(pr.author, comment_authors, review_authors)
+      PullRequest(..pr, feedback: feedback)
+    }
+  }
+}
+
 /// Decoder for a single PR from `gh pr list` JSON output.
 fn gh_pull_request_decoder() -> decode.Decoder(PullRequest) {
   use number <- decode.field("number", decode.int)
@@ -117,8 +255,13 @@ fn gh_pull_request_decoder() -> decode.Decoder(PullRequest) {
   use reviewers <- decode.optional_field(
     "reviewRequests",
     [],
-    decode.list(decode.at(["login"], decode.string)),
+    decode.list(decode.one_of(decode.at(["login"], decode.string), [
+      decode.at(["name"], decode.string),
+      decode.at(["slug"], decode.string),
+    ])),
   )
+  use base_ref_name <- decode.field("baseRefName", decode.string)
+  use head_ref_name <- decode.field("headRefName", decode.string)
   let conclusions = list.map(checks, fn(c) { c.conclusion })
   let checks_status = compute_checks_status(conclusions)
   let checks_url = first_failing_url(checks)
@@ -133,6 +276,9 @@ fn gh_pull_request_decoder() -> decode.Decoder(PullRequest) {
     checks_status: checks_status,
     checks_url: checks_url,
     reviewers: reviewers,
+    base_ref_name: base_ref_name,
+    head_ref_name: head_ref_name,
+    feedback: [],
   ))
 }
 
@@ -195,14 +341,18 @@ pub fn list_review_prs(repo: String) -> Result(List(PullRequest), String) {
   list_prs(repo, option.Some("review-requested:@me"))
 }
 
-/// List PRs created by the current user.
+/// List PRs created by the current user (with feedback counts, bots filtered out).
 pub fn list_my_prs(repo: String) -> Result(List(PullRequest), String) {
-  list_prs(repo, option.Some("author:@me"))
+  use prs <- result.try(
+    list_prs(repo, option.Some("author:@me")),
+  )
+  let enriched = list.map(prs, fn(p) { enrich_with_feedback(repo, p) })
+  Ok(filter_bot_feedback(enriched))
 }
 
-/// List all open PRs in the repo.
+/// List all open PRs in the repo, ordered by last updated.
 pub fn list_all_open_prs(repo: String) -> Result(List(PullRequest), String) {
-  list_prs(repo, option.None)
+  list_prs(repo, option.Some("sort:updated-desc"))
 }
 
 /// Find the open "Production Release" PR, if any.

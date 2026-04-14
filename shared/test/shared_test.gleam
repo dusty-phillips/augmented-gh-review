@@ -22,6 +22,9 @@ pub fn pull_request_round_trip_test() {
       checks_status: "passing",
       checks_url: "",
       reviewers: [],
+      base_ref_name: "main",
+      head_ref_name: "feature",
+      feedback: [],
     )
 
   original
@@ -45,6 +48,9 @@ pub fn pull_request_draft_true_round_trip_test() {
       checks_status: "pending",
       checks_url: "",
       reviewers: [],
+      base_ref_name: "main",
+      head_ref_name: "feature",
+      feedback: [],
     )
 
   original
@@ -109,6 +115,9 @@ pub fn pull_request_list_round_trip_test() {
       checks_status: "passing",
       checks_url: "",
       reviewers: [],
+      base_ref_name: "main",
+      head_ref_name: "feature",
+      feedback: [],
     ),
     PullRequest(
       number: 2,
@@ -121,6 +130,9 @@ pub fn pull_request_list_round_trip_test() {
       checks_status: "pending",
       checks_url: "",
       reviewers: [],
+      base_ref_name: "main",
+      head_ref_name: "feature",
+      feedback: [],
     ),
   ]
 
@@ -161,6 +173,9 @@ pub fn empty_strings_pull_request_test() {
       checks_status: "passing",
       checks_url: "",
       reviewers: [],
+      base_ref_name: "main",
+      head_ref_name: "feature",
+      feedback: [],
     )
 
   original

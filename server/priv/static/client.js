@@ -533,6 +533,12 @@ function toTransient(dict) {
     dict
   };
 }
+function fromTransient(transient) {
+  if (transient.root === transient.dict.root) {
+    return transient.dict;
+  }
+  return new Dict(transient.size, transient.root);
+}
 function nextGeneration(dict) {
   const root = dict.root;
   if (root[generationKey] < Number.MAX_SAFE_INTEGER) {
@@ -559,6 +565,11 @@ function insert(dict, key, value) {
     return dict;
   }
   return new Dict(globalTransient.size, root);
+}
+function destructiveTransientInsert(key, value, transient) {
+  const hash = getHash(key);
+  transient.root = insertIntoNode(transient, transient.root, key, value, hash, 0);
+  return transient;
 }
 function insertIntoNode(transient, node, key, value, hash, shift) {
   const data2 = node.data;
@@ -656,6 +667,24 @@ function hashbit(hash, shift) {
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/dict.mjs
+function from_list_loop(loop$transient, loop$list) {
+  while (true) {
+    let transient = loop$transient;
+    let list = loop$list;
+    if (list instanceof Empty) {
+      return fromTransient(transient);
+    } else {
+      let rest = list.tail;
+      let key = list.head[0];
+      let value = list.head[1];
+      loop$transient = destructiveTransientInsert(key, value, transient);
+      loop$list = rest;
+    }
+  }
+}
+function from_list(list) {
+  return from_list_loop(toTransient(make()), list);
+}
 function upsert(dict, key, fun) {
   let $ = get(dict, key);
   if ($ instanceof Ok) {
@@ -741,6 +770,27 @@ function reverse_and_prepend(loop$prefix, loop$suffix) {
 function reverse(list) {
   return reverse_and_prepend(list, toList([]));
 }
+function is_empty2(list) {
+  return isEqual(list, toList([]));
+}
+function contains(loop$list, loop$elem) {
+  while (true) {
+    let list = loop$list;
+    let elem = loop$elem;
+    if (list instanceof Empty) {
+      return false;
+    } else {
+      let first$1 = list.head;
+      if (isEqual(first$1, elem)) {
+        return true;
+      } else {
+        let rest$1 = list.tail;
+        loop$list = rest$1;
+        loop$elem = elem;
+      }
+    }
+  }
+}
 function first(list) {
   if (list instanceof Empty) {
     return new Error(undefined);
@@ -776,6 +826,34 @@ function filter_loop(loop$list, loop$fun, loop$acc) {
 function filter(list, predicate) {
   return filter_loop(list, predicate, toList([]));
 }
+function filter_map_loop(loop$list, loop$fun, loop$acc) {
+  while (true) {
+    let list = loop$list;
+    let fun = loop$fun;
+    let acc = loop$acc;
+    if (list instanceof Empty) {
+      return reverse(acc);
+    } else {
+      let first$1 = list.head;
+      let rest$1 = list.tail;
+      let _block;
+      let $ = fun(first$1);
+      if ($ instanceof Ok) {
+        let first$2 = $[0];
+        _block = prepend(first$2, acc);
+      } else {
+        _block = acc;
+      }
+      let new_acc = _block;
+      loop$list = rest$1;
+      loop$fun = fun;
+      loop$acc = new_acc;
+    }
+  }
+}
+function filter_map(list, fun) {
+  return filter_map_loop(list, fun, toList([]));
+}
 function map_loop(loop$list, loop$fun, loop$acc) {
   while (true) {
     let list = loop$list;
@@ -794,6 +872,28 @@ function map_loop(loop$list, loop$fun, loop$acc) {
 }
 function map2(list, fun) {
   return map_loop(list, fun, toList([]));
+}
+function index_map_loop(loop$list, loop$fun, loop$index, loop$acc) {
+  while (true) {
+    let list = loop$list;
+    let fun = loop$fun;
+    let index2 = loop$index;
+    let acc = loop$acc;
+    if (list instanceof Empty) {
+      return reverse(acc);
+    } else {
+      let first$1 = list.head;
+      let rest$1 = list.tail;
+      let acc$1 = prepend(fun(first$1, index2), acc);
+      loop$list = rest$1;
+      loop$fun = fun;
+      loop$index = index2 + 1;
+      loop$acc = acc$1;
+    }
+  }
+}
+function index_map(list, fun) {
+  return index_map_loop(list, fun, 0, toList([]));
 }
 function drop(loop$list, loop$n) {
   while (true) {
@@ -1302,6 +1402,23 @@ function each(loop$list, loop$f) {
     }
   }
 }
+function last(loop$list) {
+  while (true) {
+    let list = loop$list;
+    if (list instanceof Empty) {
+      return new Error(undefined);
+    } else {
+      let $ = list.tail;
+      if ($ instanceof Empty) {
+        let last$1 = list.head;
+        return new Ok(last$1);
+      } else {
+        let rest$1 = $;
+        loop$list = rest$1;
+      }
+    }
+  }
+}
 
 // build/dev/javascript/gleam_stdlib/gleam/dynamic/decode.mjs
 class DecodeError extends CustomType {
@@ -1521,6 +1638,41 @@ function subfield(field_path, field_decoder, next) {
 }
 function field(field_name, field_decoder, next) {
   return subfield(toList([field_name]), field_decoder, next);
+}
+function optional_field(key, default$, field_decoder, next) {
+  return new Decoder((data2) => {
+    let _block;
+    let _block$1;
+    let $1 = index2(data2, key);
+    if ($1 instanceof Ok) {
+      let $22 = $1[0];
+      if ($22 instanceof Some) {
+        let data$1 = $22[0];
+        _block$1 = field_decoder.function(data$1);
+      } else {
+        _block$1 = [default$, toList([])];
+      }
+    } else {
+      let kind = $1[0];
+      _block$1 = [
+        default$,
+        toList([new DecodeError(kind, classify_dynamic(data2), toList([]))])
+      ];
+    }
+    let _pipe = _block$1;
+    _block = push_path(_pipe, toList([key]));
+    let $ = _block;
+    let out;
+    let errors1;
+    out = $[0];
+    errors1 = $[1];
+    let $2 = next(out).function(data2);
+    let out$1;
+    let errors2;
+    out$1 = $2[0];
+    errors2 = $2[1];
+    return [out$1, append(errors1, errors2)];
+  });
 }
 
 // build/dev/javascript/gleam_stdlib/gleam_stdlib.mjs
@@ -2181,6 +2333,13 @@ function drop_start(string3, num_graphemes) {
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/result.mjs
+function is_ok(result) {
+  if (result instanceof Ok) {
+    return true;
+  } else {
+    return false;
+  }
+}
 function map4(result, fun) {
   if (result instanceof Ok) {
     let x = result[0];
@@ -3625,6 +3784,26 @@ function textarea(attrs, content) {
   return element2("textarea", prepend(property2("value", string3(content)), attrs), toList([text2(content)]));
 }
 
+// build/dev/javascript/gleam_stdlib/gleam/set.mjs
+class Set2 extends CustomType {
+  constructor(dict2) {
+    super();
+    this.dict = dict2;
+  }
+}
+var token = undefined;
+function new$2() {
+  return new Set2(make());
+}
+function contains2(set, member) {
+  let _pipe = set.dict;
+  let _pipe$1 = get(_pipe, member);
+  return is_ok(_pipe$1);
+}
+function insert3(set, member) {
+  return new Set2(insert(set.dict, member, token));
+}
+
 // build/dev/javascript/lustre/lustre/vdom/patch.mjs
 class Patch extends CustomType {
   constructor(index4, removed, changes, children) {
@@ -3695,7 +3874,7 @@ var move_kind = 3;
 var remove_kind = 4;
 var replace_kind = 5;
 var insert_kind = 6;
-function new$3(index4, removed, changes, children) {
+function new$4(index4, removed, changes, children) {
   return new Patch(index4, removed, changes, children);
 }
 function replace_text(content) {
@@ -3716,7 +3895,7 @@ function remove2(index4) {
 function replace2(index4, with$) {
   return new Replace(replace_kind, index4, with$);
 }
-function insert3(children, before) {
+function insert4(children, before) {
   return new Insert(insert_kind, children, before);
 }
 
@@ -4005,7 +4184,7 @@ function compose_mapper(mapper, child_mapper) {
 function new_events() {
   return new Events(empty3(), empty3());
 }
-function new$4() {
+function new$5() {
   return new Cache(new_events(), empty3(), empty3(), empty_list, empty_list);
 }
 function tick(cache) {
@@ -4020,16 +4199,16 @@ function update_events(cache, events2) {
 function memos(cache) {
   return cache.vdoms;
 }
-function get_old_memo(cache, old, new$5) {
-  return get_or_compute(cache.old_vdoms, old, new$5);
+function get_old_memo(cache, old, new$6) {
+  return get_or_compute(cache.old_vdoms, old, new$6);
 }
-function keep_memo(cache, old, new$5) {
-  let node = get_or_compute(cache.old_vdoms, old, new$5);
-  let vdoms = insert2(cache.vdoms, new$5, node);
+function keep_memo(cache, old, new$6) {
+  let node = get_or_compute(cache.old_vdoms, old, new$6);
+  let vdoms = insert2(cache.vdoms, new$6, node);
   return new Cache(cache.events, vdoms, cache.old_vdoms, cache.dispatched_paths, cache.next_dispatched_paths);
 }
-function add_memo(cache, new$5, node) {
-  let vdoms = insert2(cache.vdoms, new$5, node);
+function add_memo(cache, new$6, node) {
+  let vdoms = insert2(cache.vdoms, new$6, node);
   return new Cache(cache.events, vdoms, cache.old_vdoms, cache.dispatched_paths, cache.next_dispatched_paths);
 }
 function get_subtree(events2, path, old_mapper) {
@@ -4196,7 +4375,7 @@ function add_child(cache, events2, parent, index4, child2) {
   return add_children(cache, events2, parent, index4, children);
 }
 function from_node(root2) {
-  let cache = new$4();
+  let cache = new$5();
   let $ = add_child(cache, cache.events, root, 0, root2);
   let cache$1;
   let events$1;
@@ -4576,17 +4755,17 @@ function diff_attributes(loop$controlled, loop$path, loop$events, loop$old, loop
     let path = loop$path;
     let events2 = loop$events;
     let old = loop$old;
-    let new$5 = loop$new;
+    let new$6 = loop$new;
     let added = loop$added;
     let removed = loop$removed;
     if (old instanceof Empty) {
-      if (new$5 instanceof Empty) {
+      if (new$6 instanceof Empty) {
         return new AttributeChange(added, removed, events2);
       } else {
-        let $ = new$5.head;
+        let $ = new$6.head;
         if ($ instanceof Event2) {
           let next = $;
-          let new$1 = new$5.tail;
+          let new$1 = new$6.tail;
           let name = $.name;
           let handler = $.handler;
           let events$1 = add_event(events2, path, name, handler);
@@ -4600,7 +4779,7 @@ function diff_attributes(loop$controlled, loop$path, loop$events, loop$old, loop
           loop$removed = removed;
         } else {
           let next = $;
-          let new$1 = new$5.tail;
+          let new$1 = new$6.tail;
           let added$1 = prepend(next, added);
           loop$controlled = controlled;
           loop$path = path;
@@ -4611,7 +4790,7 @@ function diff_attributes(loop$controlled, loop$path, loop$events, loop$old, loop
           loop$removed = removed;
         }
       }
-    } else if (new$5 instanceof Empty) {
+    } else if (new$6 instanceof Empty) {
       let $ = old.head;
       if ($ instanceof Event2) {
         let prev = $;
@@ -4623,7 +4802,7 @@ function diff_attributes(loop$controlled, loop$path, loop$events, loop$old, loop
         loop$path = path;
         loop$events = events$1;
         loop$old = old$1;
-        loop$new = new$5;
+        loop$new = new$6;
         loop$added = added;
         loop$removed = removed$1;
       } else {
@@ -4634,15 +4813,15 @@ function diff_attributes(loop$controlled, loop$path, loop$events, loop$old, loop
         loop$path = path;
         loop$events = events2;
         loop$old = old$1;
-        loop$new = new$5;
+        loop$new = new$6;
         loop$added = added;
         loop$removed = removed$1;
       }
     } else {
       let prev = old.head;
       let remaining_old = old.tail;
-      let next = new$5.head;
-      let remaining_new = new$5.tail;
+      let next = new$6.head;
+      let remaining_new = new$6.tail;
       let $ = compare4(prev, next);
       if ($ instanceof Lt) {
         if (prev instanceof Event2) {
@@ -4651,7 +4830,7 @@ function diff_attributes(loop$controlled, loop$path, loop$events, loop$old, loop
           loop$path = path;
           loop$events = remove_event(events2, path, name);
           loop$old = remaining_old;
-          loop$new = new$5;
+          loop$new = new$6;
           loop$added = added;
           loop$removed = prepend(prev, removed);
         } else {
@@ -4659,7 +4838,7 @@ function diff_attributes(loop$controlled, loop$path, loop$events, loop$old, loop
           loop$path = path;
           loop$events = events2;
           loop$old = remaining_old;
-          loop$new = new$5;
+          loop$new = new$6;
           loop$added = added;
           loop$removed = prepend(prev, removed);
         }
@@ -4816,7 +4995,7 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
   while (true) {
     let old = loop$old;
     let old_keyed = loop$old_keyed;
-    let new$5 = loop$new;
+    let new$6 = loop$new;
     let new_keyed = loop$new_keyed;
     let moved = loop$moved;
     let moved_offset = loop$moved_offset;
@@ -4829,21 +5008,21 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
     let cache = loop$cache;
     let events2 = loop$events;
     if (old instanceof Empty) {
-      if (new$5 instanceof Empty) {
+      if (new$6 instanceof Empty) {
         let patch = new Patch(patch_index, removed, changes, children);
         return new PartialDiff(patch, cache, events2);
       } else {
-        let $ = add_children(cache, events2, path, node_index, new$5);
+        let $ = add_children(cache, events2, path, node_index, new$6);
         let cache$1;
         let events$1;
         cache$1 = $[0];
         events$1 = $[1];
-        let insert4 = insert3(new$5, node_index - moved_offset);
-        let changes$1 = prepend(insert4, changes);
+        let insert5 = insert4(new$6, node_index - moved_offset);
+        let changes$1 = prepend(insert5, changes);
         let patch = new Patch(patch_index, removed, changes$1, children);
         return new PartialDiff(patch, cache$1, events$1);
       }
-    } else if (new$5 instanceof Empty) {
+    } else if (new$6 instanceof Empty) {
       let prev = old.head;
       let old$1 = old.tail;
       let _block;
@@ -4857,7 +5036,7 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
       let events$1 = remove_child(cache, events2, path, node_index, prev);
       loop$old = old$1;
       loop$old_keyed = old_keyed;
-      loop$new = new$5;
+      loop$new = new$6;
       loop$new_keyed = new_keyed;
       loop$moved = moved;
       loop$moved_offset = moved_offset;
@@ -4871,10 +5050,10 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
       loop$events = events$1;
     } else {
       let prev = old.head;
-      let next = new$5.head;
+      let next = new$6.head;
       if (prev.key !== next.key) {
         let old_remaining = old.tail;
-        let new_remaining = new$5.tail;
+        let new_remaining = new$6.tail;
         let next_did_exist = has_key(old_keyed, next.key);
         let prev_does_exist = has_key(new_keyed, prev.key);
         if (prev_does_exist) {
@@ -4883,7 +5062,7 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
             if ($) {
               loop$old = old_remaining;
               loop$old_keyed = old_keyed;
-              loop$new = new$5;
+              loop$new = new$6;
               loop$new_keyed = new_keyed;
               loop$moved = moved;
               loop$moved_offset = moved_offset - 1;
@@ -4902,7 +5081,7 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
               let moved$1 = insert2(moved, next.key, undefined);
               loop$old = prepend(match, old);
               loop$old_keyed = old_keyed;
-              loop$new = new$5;
+              loop$new = new$6;
               loop$new_keyed = new_keyed;
               loop$moved = moved$1;
               loop$moved_offset = moved_offset + 1;
@@ -4922,8 +5101,8 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
             let events$1;
             cache$1 = $[0];
             events$1 = $[1];
-            let insert4 = insert3(toList([next]), before);
-            let changes$1 = prepend(insert4, changes);
+            let insert5 = insert4(toList([next]), before);
+            let changes$1 = prepend(insert5, changes);
             loop$old = old;
             loop$old_keyed = old_keyed;
             loop$new = new_remaining;
@@ -4945,7 +5124,7 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
           let events$1 = remove_child(cache, events2, path, node_index, prev);
           loop$old = old_remaining;
           loop$old_keyed = old_keyed;
-          loop$new = new$5;
+          loop$new = new$6;
           loop$new_keyed = new_keyed;
           loop$moved = moved;
           loop$moved_offset = moved_offset - 1;
@@ -4982,12 +5161,12 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
       } else {
         let $ = old.head;
         if ($ instanceof Fragment) {
-          let $1 = new$5.head;
+          let $1 = new$6.head;
           if ($1 instanceof Fragment) {
             let prev2 = $;
             let old$1 = old.tail;
             let next2 = $1;
-            let new$1 = new$5.tail;
+            let new$1 = new$6.tail;
             let $2 = do_diff(prev2.children, prev2.keyed_children, next2.children, next2.keyed_children, empty3(), 0, 0, 0, node_index, empty_list, empty_list, add2(path, node_index, next2.key), cache, events2);
             let patch;
             let cache$1;
@@ -5031,7 +5210,7 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
             let prev2 = $;
             let old_remaining = old.tail;
             let next2 = $1;
-            let new_remaining = new$5.tail;
+            let new_remaining = new$6.tail;
             let change = replace2(node_index - moved_offset, next2);
             let $2 = replace_child(cache, events2, path, node_index, prev2, next2);
             let cache$1;
@@ -5054,13 +5233,13 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
             loop$events = events$1;
           }
         } else if ($ instanceof Element) {
-          let $1 = new$5.head;
+          let $1 = new$6.head;
           if ($1 instanceof Element) {
             let prev2 = $;
             let next2 = $1;
             if (prev2.namespace === next2.namespace && prev2.tag === next2.tag) {
               let old$1 = old.tail;
-              let new$1 = new$5.tail;
+              let new$1 = new$6.tail;
               let child_path = add2(path, node_index, next2.key);
               let controlled = is_controlled(cache, next2.namespace, next2.tag, child_path);
               let $2 = diff_attributes(controlled, child_path, events2, prev2.attributes, next2.attributes, empty_list, empty_list);
@@ -5120,7 +5299,7 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
               let prev3 = $;
               let old_remaining = old.tail;
               let next3 = $1;
-              let new_remaining = new$5.tail;
+              let new_remaining = new$6.tail;
               let change = replace2(node_index - moved_offset, next3);
               let $2 = replace_child(cache, events2, path, node_index, prev3, next3);
               let cache$1;
@@ -5146,7 +5325,7 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
             let prev2 = $;
             let old_remaining = old.tail;
             let next2 = $1;
-            let new_remaining = new$5.tail;
+            let new_remaining = new$6.tail;
             let change = replace2(node_index - moved_offset, next2);
             let $2 = replace_child(cache, events2, path, node_index, prev2, next2);
             let cache$1;
@@ -5169,13 +5348,13 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
             loop$events = events$1;
           }
         } else if ($ instanceof Text) {
-          let $1 = new$5.head;
+          let $1 = new$6.head;
           if ($1 instanceof Text) {
             let prev2 = $;
             let next2 = $1;
             if (prev2.content === next2.content) {
               let old$1 = old.tail;
-              let new$1 = new$5.tail;
+              let new$1 = new$6.tail;
               loop$old = old$1;
               loop$old_keyed = old_keyed;
               loop$new = new$1;
@@ -5193,8 +5372,8 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
             } else {
               let old$1 = old.tail;
               let next3 = $1;
-              let new$1 = new$5.tail;
-              let child2 = new$3(node_index, 0, toList([replace_text(next3.content)]), empty_list);
+              let new$1 = new$6.tail;
+              let child2 = new$4(node_index, 0, toList([replace_text(next3.content)]), empty_list);
               loop$old = old$1;
               loop$old_keyed = old_keyed;
               loop$new = new$1;
@@ -5214,7 +5393,7 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
             let prev2 = $;
             let old_remaining = old.tail;
             let next2 = $1;
-            let new_remaining = new$5.tail;
+            let new_remaining = new$6.tail;
             let change = replace2(node_index - moved_offset, next2);
             let $2 = replace_child(cache, events2, path, node_index, prev2, next2);
             let cache$1;
@@ -5237,12 +5416,12 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
             loop$events = events$1;
           }
         } else if ($ instanceof UnsafeInnerHtml) {
-          let $1 = new$5.head;
+          let $1 = new$6.head;
           if ($1 instanceof UnsafeInnerHtml) {
             let prev2 = $;
             let old$1 = old.tail;
             let next2 = $1;
-            let new$1 = new$5.tail;
+            let new$1 = new$6.tail;
             let child_path = add2(path, node_index, next2.key);
             let $2 = diff_attributes(false, child_path, events2, prev2.attributes, next2.attributes, empty_list, empty_list);
             let added_attrs;
@@ -5270,7 +5449,7 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
             if (child_changes$1 instanceof Empty) {
               _block$2 = children;
             } else {
-              _block$2 = prepend(new$3(node_index, 0, child_changes$1, toList([])), children);
+              _block$2 = prepend(new$4(node_index, 0, child_changes$1, toList([])), children);
             }
             let children$1 = _block$2;
             loop$old = old$1;
@@ -5291,7 +5470,7 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
             let prev2 = $;
             let old_remaining = old.tail;
             let next2 = $1;
-            let new_remaining = new$5.tail;
+            let new_remaining = new$6.tail;
             let change = replace2(node_index - moved_offset, next2);
             let $2 = replace_child(cache, events2, path, node_index, prev2, next2);
             let cache$1;
@@ -5314,12 +5493,12 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
             loop$events = events$1;
           }
         } else if ($ instanceof Map2) {
-          let $1 = new$5.head;
+          let $1 = new$6.head;
           if ($1 instanceof Map2) {
             let prev2 = $;
             let old$1 = old.tail;
             let next2 = $1;
-            let new$1 = new$5.tail;
+            let new$1 = new$6.tail;
             let child_path = add2(path, node_index, next2.key);
             let child_key = child(child_path);
             let $2 = do_diff(prepend(prev2.child, empty_list), empty3(), prepend(next2.child, empty_list), empty3(), empty3(), 0, 0, 0, node_index, empty_list, empty_list, subtree(child_path), cache, get_subtree(events2, child_key, prev2.mapper));
@@ -5366,7 +5545,7 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
             let prev2 = $;
             let old_remaining = old.tail;
             let next2 = $1;
-            let new_remaining = new$5.tail;
+            let new_remaining = new$6.tail;
             let change = replace2(node_index - moved_offset, next2);
             let $2 = replace_child(cache, events2, path, node_index, prev2, next2);
             let cache$1;
@@ -5389,12 +5568,12 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
             loop$events = events$1;
           }
         } else {
-          let $1 = new$5.head;
+          let $1 = new$6.head;
           if ($1 instanceof Memo) {
             let prev2 = $;
             let old$1 = old.tail;
             let next2 = $1;
-            let new$1 = new$5.tail;
+            let new$1 = new$6.tail;
             let $2 = equal_lists(prev2.dependencies, next2.dependencies);
             if ($2) {
               let cache$1 = keep_memo(cache, prev2.view, next2.view);
@@ -5435,7 +5614,7 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
             let prev2 = $;
             let old_remaining = old.tail;
             let next2 = $1;
-            let new_remaining = new$5.tail;
+            let new_remaining = new$6.tail;
             let change = replace2(node_index - moved_offset, next2);
             let $2 = replace_child(cache, events2, path, node_index, prev2, next2);
             let cache$1;
@@ -5462,9 +5641,9 @@ function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved,
     }
   }
 }
-function diff(cache, old, new$5) {
+function diff(cache, old, new$6) {
   let cache$1 = tick(cache);
-  let $ = do_diff(prepend(old, empty_list), empty3(), prepend(new$5, empty_list), empty3(), empty3(), 0, 0, 0, 0, empty_list, empty_list, root, cache$1, events(cache$1));
+  let $ = do_diff(prepend(old, empty_list), empty3(), prepend(new$6, empty_list), empty3(), empty3(), 0, 0, 0, 0, empty_list, empty_list, root, cache$1, events(cache$1));
   let patch;
   let cache$2;
   let events2;
@@ -5880,8 +6059,8 @@ class Reconciler {
     const throttle = throttles.get(type);
     if (throttle) {
       const now = Date.now();
-      const last = throttle.last || 0;
-      if (now > last + throttle.delay) {
+      const last2 = throttle.last || 0;
+      if (now > last2 + throttle.delay) {
         throttle.last = now;
         throttle.lastEvent = event3;
         this.#dispatch(event3, data2);
@@ -6005,6 +6184,9 @@ function fragment3(children) {
   keyed_children = $[0];
   children$1 = $[1];
   return fragment("", children$1, keyed_children);
+}
+function div2(attributes, children) {
+  return element3("div", attributes, children);
 }
 
 // build/dev/javascript/lustre/lustre/vdom/virtualise.ffi.mjs
@@ -6202,7 +6384,7 @@ class Runtime {
     };
     this.#reconciler = new Reconciler(this.root, decodeEvent, dispatch2, options);
     this.#vdom = virtualise(this.root);
-    this.#cache = new$4();
+    this.#cache = new$5();
     this.#handleEffects(effects);
     this.#render();
   }
@@ -7042,8 +7224,15 @@ function post(url, body, handler) {
   }
 }
 // build/dev/javascript/shared/shared/pr.mjs
+class FeedbackCount extends CustomType {
+  constructor(author, count2) {
+    super();
+    this.author = author;
+    this.count = count2;
+  }
+}
 class PullRequest extends CustomType {
-  constructor(number, title2, author, url, created_at, review_decision, draft, checks_status, checks_url, reviewers) {
+  constructor(number, title2, author, url, created_at, review_decision, draft, checks_status, checks_url, reviewers, base_ref_name, head_ref_name, feedback) {
     super();
     this.number = number;
     this.title = title2;
@@ -7055,6 +7244,9 @@ class PullRequest extends CustomType {
     this.checks_status = checks_status;
     this.checks_url = checks_url;
     this.reviewers = reviewers;
+    this.base_ref_name = base_ref_name;
+    this.head_ref_name = head_ref_name;
+    this.feedback = feedback;
   }
 }
 class PrFile extends CustomType {
@@ -7125,6 +7317,13 @@ class PrComment extends CustomType {
     this.in_reply_to_id = in_reply_to_id;
   }
 }
+function feedback_count_decoder() {
+  return field("author", string2, (author) => {
+    return field("count", int2, (count2) => {
+      return success(new FeedbackCount(author, count2));
+    });
+  });
+}
 function pull_request_decoder() {
   return field("number", int2, (number) => {
     return field("title", string2, (title2) => {
@@ -7136,7 +7335,13 @@ function pull_request_decoder() {
                 return field("checks_status", string2, (checks_status) => {
                   return field("checks_url", string2, (checks_url) => {
                     return field("reviewers", list2(string2), (reviewers) => {
-                      return success(new PullRequest(number, title2, author, url, created_at, review_decision, draft, checks_status, checks_url, reviewers));
+                      return field("base_ref_name", string2, (base_ref_name) => {
+                        return field("head_ref_name", string2, (head_ref_name) => {
+                          return optional_field("feedback", toList([]), list2(feedback_count_decoder()), (feedback) => {
+                            return success(new PullRequest(number, title2, author, url, created_at, review_decision, draft, checks_status, checks_url, reviewers, base_ref_name, head_ref_name, feedback));
+                          });
+                        });
+                      });
                     });
                   });
                 });
@@ -7322,7 +7527,7 @@ class Analyzed extends CustomType {
   }
 }
 class Model extends CustomType {
-  constructor(repos, active_repo, pr_groups, selected_pr, loading, view2, error, analysis_state, current_chunk, comments, commenting, github_comments, description_open, review) {
+  constructor(repos, active_repo, pr_groups, selected_pr, loading, view2, error, analysis_state, current_chunk, comments, commenting, github_comments, description_open, review, hide_bot_comments) {
     super();
     this.repos = repos;
     this.active_repo = active_repo;
@@ -7338,6 +7543,7 @@ class Model extends CustomType {
     this.github_comments = github_comments;
     this.description_open = description_open;
     this.review = review;
+    this.hide_bot_comments = hide_bot_comments;
   }
 }
 class GotPrs extends CustomType {
@@ -7454,6 +7660,8 @@ class UrlChanged extends CustomType {
   }
 }
 class ToggleDescription extends CustomType {
+}
+class ToggleBotComments extends CustomType {
 }
 class SubmitReview extends CustomType {
   constructor($0) {
@@ -7703,8 +7911,11 @@ var violet_2 = "var(--violet-2)";
 var violet_4 = "var(--violet-4)";
 var violet_6 = "var(--violet-6)";
 var violet_9 = "var(--violet-9)";
+var indigo_1 = "var(--indigo-1)";
+var indigo_4 = "var(--indigo-4)";
 var indigo_6 = "var(--indigo-6)";
 var indigo_7 = "var(--indigo-7)";
+var indigo_9 = "var(--indigo-9)";
 var indigo_12 = "var(--indigo-12)";
 var blue_1 = "var(--blue-1)";
 var blue_2 = "var(--blue-2)";
@@ -7712,6 +7923,7 @@ var blue_3 = "var(--blue-3)";
 var blue_4 = "var(--blue-4)";
 var blue_6 = "var(--blue-6)";
 var blue_7 = "var(--blue-7)";
+var blue_8 = "var(--blue-8)";
 var blue_9 = "var(--blue-9)";
 var green_2 = "var(--green-2)";
 var green_7 = "var(--green-7)";
@@ -7723,6 +7935,7 @@ var yellow_5 = "var(--yellow-5)";
 var yellow_6 = "var(--yellow-6)";
 var yellow_7 = "var(--yellow-7)";
 var yellow_10 = "var(--yellow-10)";
+var orange_1 = "var(--orange-1)";
 var orange_7 = "var(--orange-7)";
 var orange_9 = "var(--orange-9)";
 
@@ -7745,6 +7958,67 @@ var size_6 = "var(--size-6)";
 var size_7 = "var(--size-7)";
 var size_9 = "var(--size-9)";
 var size_10 = "var(--size-10)";
+
+// build/dev/javascript/client/client/stack_tree.mjs
+class FlatEntry extends CustomType {
+  constructor(pr, depth, is_last, in_stack) {
+    super();
+    this.pr = pr;
+    this.depth = depth;
+    this.is_last = is_last;
+    this.in_stack = in_stack;
+  }
+}
+function flatten_node(pull_request, children_map, depth, is_last, visited) {
+  let $ = contains2(visited, pull_request.number);
+  if ($) {
+    return toList([]);
+  } else {
+    let visited$1 = insert3(visited, pull_request.number);
+    let _block;
+    let $1 = get(children_map, pull_request.head_ref_name);
+    if ($1 instanceof Ok) {
+      let kids = $1[0];
+      _block = kids;
+    } else {
+      _block = toList([]);
+    }
+    let children = _block;
+    let in_stack = depth > 0 || !is_empty2(children);
+    let entry = new FlatEntry(pull_request, depth, is_last, in_stack);
+    return prepend(entry, flatten_forest(children, children_map, depth + 1, visited$1));
+  }
+}
+function flatten_forest(prs, children_map, depth, visited) {
+  let count2 = length(prs);
+  let _pipe = prs;
+  let _pipe$1 = index_map(_pipe, (pull_request, idx) => {
+    let is_last = idx === count2 - 1;
+    return flatten_node(pull_request, children_map, depth, is_last, visited);
+  });
+  return flatten(_pipe$1);
+}
+function build_and_flatten(prs) {
+  let head_ref_names = fold2(prs, new$2(), (acc, pull_request) => {
+    return insert3(acc, pull_request.head_ref_name);
+  });
+  let children_map = fold2(prs, make(), (acc, pull_request) => {
+    let _block;
+    let $ = get(acc, pull_request.base_ref_name);
+    if ($ instanceof Ok) {
+      let children = $[0];
+      _block = children;
+    } else {
+      _block = toList([]);
+    }
+    let existing = _block;
+    return insert(acc, pull_request.base_ref_name, prepend(pull_request, existing));
+  });
+  let roots = filter(prs, (pull_request) => {
+    return !contains2(head_ref_names, pull_request.base_ref_name);
+  });
+  return flatten_forest(roots, children_map, 0, new$2());
+}
 
 // build/dev/javascript/client/client/views/dashboard.mjs
 function repo_selector(model) {
@@ -7847,33 +8121,99 @@ function loading_indicator() {
     ]))
   ]), toList([text3("Loading pull requests...")]));
 }
-function section_header(title2, count2) {
+function count_by_state(prs) {
+  let $ = fold2(prs, [0, 0, 0, 0, 0], (acc, p2) => {
+    let a2;
+    let c;
+    let r;
+    let d;
+    let n;
+    a2 = acc[0];
+    c = acc[1];
+    r = acc[2];
+    d = acc[3];
+    n = acc[4];
+    let $1 = p2.draft;
+    let $2 = p2.review_decision;
+    if ($1) {
+      return [a2, c, r, d + 1, n];
+    } else if ($2 === "APPROVED") {
+      return [a2 + 1, c, r, d, n];
+    } else if ($2 === "CHANGES_REQUESTED") {
+      return [a2, c + 1, r, d, n];
+    } else if ($2 === "REVIEW_REQUIRED") {
+      return [a2, c, r + 1, d, n];
+    } else {
+      return [a2, c, r, d, n + 1];
+    }
+  });
+  let approved;
+  let changes;
+  let review;
+  let draft;
+  let no_reviews;
+  approved = $[0];
+  changes = $[1];
+  review = $[2];
+  draft = $[3];
+  no_reviews = $[4];
+  let _pipe = toList([
+    [green_2, green_10, "Approved", approved],
+    [red_2, red_10, "Changes", changes],
+    [yellow_2, yellow_10, "Review", review],
+    [blue_2, blue_9, "Draft", draft],
+    [gray_1, gray_6, "No reviews", no_reviews]
+  ]);
+  return filter(_pipe, (entry) => {
+    return entry[3] > 0;
+  });
+}
+function state_count_badge(bg, fg, label2, count2) {
+  return span(toList([
+    styles(toList([
+      raw14("0.15rem " + size_2),
+      raw4("10px"),
+      raw8(font_size_0),
+      raw9("500"),
+      nowrap,
+      raw(bg),
+      raw5(fg)
+    ]))
+  ]), toList([text3(label2 + " " + to_string(count2))]));
+}
+function section_header(title2, count2, prs) {
   return div(toList([
     styles(toList([
       flex,
       center,
       raw10(size_2),
-      raw12(size_3)
+      raw12(size_3),
+      ["flex-wrap", "wrap"]
     ]))
-  ]), toList([
-    h2(toList([
-      styles(toList([
-        raw5(indigo_12),
-        raw8(font_size_2),
-        raw11("0")
-      ]))
-    ]), toList([text3(title2)])),
-    span(toList([
-      styles(toList([
-        raw(indigo_6),
-        raw5("white"),
-        raw14("0.15rem " + size_2),
-        raw4("10px"),
-        raw8(font_size_0),
-        raw9("600")
-      ]))
-    ]), toList([text3(to_string(count2))]))
-  ]));
+  ]), flatten(toList([
+    toList([
+      h2(toList([
+        styles(toList([
+          raw5(indigo_12),
+          raw8(font_size_2),
+          raw11("0")
+        ]))
+      ]), toList([text3(title2)])),
+      span(toList([
+        styles(toList([
+          raw(indigo_6),
+          raw5("white"),
+          raw14("0.15rem " + size_2),
+          raw4("10px"),
+          raw8(font_size_0),
+          raw9("600")
+        ]))
+      ]), toList([text3(to_string(count2))]))
+    ]),
+    map2(count_by_state(prs), (entry) => {
+      return state_count_badge(entry[0], entry[1], entry[2], entry[3]);
+    })
+  ])));
 }
 function empty_section_message() {
   return div(toList([
@@ -7895,6 +8235,42 @@ function header_cell(label2) {
       raw9("600")
     ]))
   ]), toList([text3(label2)]));
+}
+function tree_connectors(depth, is_last) {
+  if (depth === 0) {
+    return toList([]);
+  } else {
+    let left2 = "calc(" + size_4 + " + " + to_string((depth - 1) * 20) + "px)";
+    let _block;
+    if (is_last) {
+      _block = "50%";
+    } else {
+      _block = "0";
+    }
+    let vert_bottom = _block;
+    return toList([
+      span(toList([
+        styles(toList([
+          ["position", "absolute"],
+          ["left", left2],
+          ["top", "-1px"],
+          ["bottom", vert_bottom],
+          ["width", "1px"],
+          raw(gray_4)
+        ]))
+      ]), toList([])),
+      span(toList([
+        styles(toList([
+          ["position", "absolute"],
+          ["left", left2],
+          ["top", "50%"],
+          ["width", "14px"],
+          ["height", "1px"],
+          raw(gray_4)
+        ]))
+      ]), toList([]))
+    ]);
+  }
 }
 function review_badge(decision, draft) {
   let _block;
@@ -7929,6 +8305,35 @@ function review_badge(decision, draft) {
       raw5(fg)
     ]))
   ]), toList([text3(label2)]));
+}
+function feedback_badge(fc) {
+  return span(toList([
+    title(fc.author + ": " + to_string(fc.count) + " comment" + (() => {
+      let $ = fc.count;
+      if ($ === 1) {
+        return "";
+      } else {
+        return "s";
+      }
+    })()),
+    styles(toList([
+      inline_flex,
+      center,
+      raw10("0.25rem"),
+      raw14("0.15rem " + size_2),
+      raw4(radius_2),
+      raw8(font_size_0),
+      nowrap,
+      raw(orange_1),
+      raw5(orange_9)
+    ]))
+  ]), toList([
+    span(toList([
+      class$("material-symbols-outlined"),
+      styles(toList([raw8(font_size_0)]))
+    ]), toList([text3("chat_bubble")])),
+    text3(fc.author + " (" + to_string(fc.count) + ")")
+  ]));
 }
 function checks_badge(status, checks_url) {
   let _block;
@@ -7969,12 +8374,28 @@ function checks_badge(status, checks_url) {
     ]), toList([icon_el]));
   }
 }
-function pr_row(pull_request) {
+function pr_row(entry) {
+  let pull_request;
+  let depth;
+  let is_last;
+  let in_stack;
+  pull_request = entry.pr;
+  depth = entry.depth;
+  is_last = entry.is_last;
+  in_stack = entry.in_stack;
+  let _block;
+  if (in_stack) {
+    _block = raw("rgba(99, 102, 241, 0.04)");
+  } else {
+    _block = raw("transparent");
+  }
+  let bg = _block;
   return tr(toList([
     on_click(new SelectPr(pull_request.number)),
     styles(toList([
       pointer,
-      raw3("1px solid " + gray_2)
+      raw3("1px solid " + gray_2),
+      bg
     ]))
   ]), toList([
     td(toList([
@@ -7995,12 +8416,24 @@ function pr_row(pull_request) {
         class$("hover-underline")
       ]), toList([text3("#" + to_string(pull_request.number))]))
     ])),
-    td(toList([
-      styles(toList([
-        raw14(size_3 + " " + size_4),
-        raw9("500")
-      ]))
-    ]), toList([text3(pull_request.title)])),
+    (() => {
+      let _block$1;
+      if (depth === 0) {
+        _block$1 = size_4;
+      } else {
+        let d = depth;
+        _block$1 = "calc(" + size_4 + " + " + to_string(d * 20) + "px)";
+      }
+      let title_pad_left = _block$1;
+      return td(toList([
+        styles(toList([
+          raw14(size_3 + " " + size_4 + " " + size_3 + " " + title_pad_left),
+          raw9("500"),
+          ["position", "relative"],
+          ["overflow", "visible"]
+        ]))
+      ]), append(tree_connectors(depth, is_last), toList([text3(pull_request.title)])));
+    })(),
     td(toList([
       styles(toList([raw14(size_3 + " " + size_4)]))
     ]), toList([
@@ -8029,12 +8462,17 @@ function pr_row(pull_request) {
     td(toList([
       styles(toList([
         raw14(size_3 + " " + size_4),
-        ["min-width", "8rem"]
+        ["min-width", "8rem"],
+        flex,
+        center,
+        raw10(size_2),
+        ["flex-wrap", "wrap"]
       ]))
-    ]), toList([review_badge(pull_request.review_decision, pull_request.draft)]))
+    ]), prepend(review_badge(pull_request.review_decision, pull_request.draft), map2(pull_request.feedback, feedback_badge)))
   ]));
 }
 function pr_table(prs) {
+  let entries = build_and_flatten(prs);
   return table(toList([
     styles(toList([raw15("100%"), collapse]))
   ]), toList([
@@ -8049,13 +8487,13 @@ function pr_table(prs) {
         header_cell("Review")
       ]))
     ])),
-    tbody(toList([]), map2(prs, pr_row))
+    tbody(toList([]), map2(entries, pr_row))
   ]));
 }
 function pr_section(title2, prs) {
   let count2 = length(prs);
   return div(toList([styles(toList([raw12(size_7)]))]), toList([
-    section_header(title2, count2),
+    section_header(title2, count2, prs),
     (() => {
       if (count2 === 0) {
         return empty_section_message();
@@ -8068,10 +8506,22 @@ function pr_section(title2, prs) {
 function pr_sections(groups) {
   if (groups instanceof Some) {
     let g = groups[0];
+    let _block;
+    let $ = g.production_pr;
+    if ($ instanceof Some) {
+      let prod = $[0];
+      _block = prod.number;
+    } else {
+      _block = -1;
+    }
+    let prod_number = _block;
+    let all_open = filter(g.all_open, (p2) => {
+      return p2.number !== prod_number;
+    });
     return div(toList([]), toList([
       pr_section("Created by Me", g.created_by_me),
       pr_section("My Review Requested", g.review_requested),
-      pr_section("All Open PRs", g.all_open)
+      pr_section("All Open PRs", all_open)
     ]));
   } else {
     return div(toList([
@@ -8191,71 +8641,67 @@ var none7 = ["user-select", "none"];
 
 // build/dev/javascript/monks_of_style/monks/word_break.mjs
 var break_word = ["word-break", "break-word"];
-
-// build/dev/javascript/client/client/highlight_ffi.mjs
-function highlight_line(code2, language) {
-  const h = globalThis.hljs || typeof window !== "undefined" && window.hljs;
-  if (!h || !language || language === "") {
-    return escapeHtml(code2);
-  }
-  try {
-    const result = h.highlight(code2, { language, ignoreIllegals: true });
-    return result.value;
-  } catch (e) {
-    try {
-      const result = h.highlightAuto(code2);
-      return result.value;
-    } catch (e2) {
-      return escapeHtml(code2);
-    }
+// build/dev/javascript/smalto/smalto/grammar.mjs
+class InlineGrammar extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
   }
 }
-function escapeHtml(text4) {
-  return text4.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+class LanguageRef extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
 }
-function detect_language(file_path) {
-  const clean_path = file_path.replace(/\s*\(\+\d+ more\)$/, "");
-  const ext = clean_path.split(".").pop()?.toLowerCase() || "";
-  const map9 = {
-    js: "javascript",
-    jsx: "javascript",
-    ts: "typescript",
-    tsx: "typescript",
-    py: "python",
-    rb: "ruby",
-    rs: "rust",
-    go: "go",
-    java: "java",
-    kt: "kotlin",
-    swift: "swift",
-    gleam: "erlang",
-    ex: "elixir",
-    exs: "elixir",
-    erl: "erlang",
-    css: "css",
-    scss: "scss",
-    html: "html",
-    xml: "xml",
-    json: "json",
-    yaml: "yaml",
-    yml: "yaml",
-    md: "markdown",
-    sql: "sql",
-    sh: "bash",
-    bash: "bash",
-    zsh: "bash",
-    fish: "bash",
-    toml: "ini",
-    dockerfile: "dockerfile",
-    graphql: "graphql",
-    gql: "graphql",
-    c: "c",
-    cpp: "cpp",
-    h: "c",
-    hpp: "cpp",
-    cs: "csharp"
-  };
-  return map9[ext] || "";
+class Rule extends CustomType {
+  constructor(token2, pattern, greedy, inside) {
+    super();
+    this.token = token2;
+    this.pattern = pattern;
+    this.greedy = greedy;
+    this.inside = inside;
+  }
+}
+class Grammar extends CustomType {
+  constructor(name, extends$, rules) {
+    super();
+    this.name = name;
+    this.extends = extends$;
+    this.rules = rules;
+  }
+}
+function resolve2(grammar, lookup2) {
+  let $ = grammar.extends;
+  if ($ instanceof Some) {
+    let parent_name = $[0];
+    let parent = lookup2(parent_name);
+    let parent_rules = resolve2(parent, lookup2);
+    let child_tokens = map2(grammar.rules, (r) => {
+      return r.token;
+    });
+    let filtered_parent_rules = filter(parent_rules, (r) => {
+      return !contains(child_tokens, r.token);
+    });
+    return append(grammar.rules, filtered_parent_rules);
+  } else {
+    return grammar.rules;
+  }
+}
+function rule(token2, pattern) {
+  return new Rule(token2, pattern, false, new None);
+}
+function greedy_rule(token2, pattern) {
+  return new Rule(token2, pattern, true, new None);
+}
+function rule_with_inside(token2, pattern, inside) {
+  return new Rule(token2, pattern, false, new Some(new InlineGrammar(inside)));
+}
+function greedy_rule_with_inside(token2, pattern, inside) {
+  return new Rule(token2, pattern, true, new Some(new InlineGrammar(inside)));
+}
+function nested_rule(token2, pattern, language) {
+  return new Rule(token2, pattern, false, new Some(new LanguageRef(language)));
 }
 // build/dev/javascript/gleam_regexp/gleam_regexp_ffi.mjs
 function check(regex, string5) {
@@ -8335,6 +8781,2609 @@ function check2(regexp, string5) {
 function scan2(regexp, string5) {
   return scan(regexp, string5);
 }
+// build/dev/javascript/smalto/smalto/token.mjs
+class Keyword extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class String2 extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class Number2 extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class Comment extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class Function2 extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class Operator extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class Punctuation extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class Type extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class Module extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class Variable extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class Constant extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class Builtin extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class Tag extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class Attribute2 extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class Selector extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class Property2 extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class Regex extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class Whitespace extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class Other extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class Custom extends CustomType {
+  constructor(name, value2) {
+    super();
+    this.name = name;
+    this.value = value2;
+  }
+}
+
+// build/dev/javascript/smalto/regex_ffi.mjs
+var Nil2 = undefined;
+var encoder = new TextEncoder;
+var decoder = new TextDecoder;
+function stripInlineFlags(pattern) {
+  const match = pattern.match(/^\(\?([ims]+)\)/);
+  if (match) {
+    return [pattern.slice(match[0].length), match[1]];
+  }
+  return [pattern, ""];
+}
+function convertHexEscapes(pattern) {
+  return pattern.replace(/\\x\{/g, "\\u{");
+}
+function convertBackslashK(pattern) {
+  let inCharClass = false;
+  let i = 0;
+  let lastKPos = -1;
+  while (i < pattern.length) {
+    const ch = pattern[i];
+    if (ch === "\\") {
+      if (i + 1 < pattern.length) {
+        if (!inCharClass && pattern[i + 1] === "K") {
+          lastKPos = i;
+        }
+        i += 2;
+        continue;
+      }
+    }
+    if (ch === "[" && !inCharClass) {
+      inCharClass = true;
+    } else if (ch === "]" && inCharClass) {
+      inCharClass = false;
+    }
+    i += 1;
+  }
+  if (lastKPos === -1) {
+    return pattern;
+  }
+  const prefix = pattern.slice(0, lastKPos);
+  const rest = pattern.slice(lastKPos + 2);
+  return `(?<=${prefix})${rest}`;
+}
+function compile3(pattern) {
+  try {
+    const [stripped, inlineFlags] = stripInlineFlags(pattern);
+    const converted = convertBackslashK(convertHexEscapes(stripped));
+    const flags = `gu${inlineFlags}`;
+    const regex = new RegExp(converted, flags);
+    return Result$Ok(regex);
+  } catch {
+    return Result$Error(Nil2);
+  }
+}
+function byteOffsetToCharIndex(text4, byteOffset) {
+  const bytes = encoder.encode(text4);
+  const slice2 = bytes.slice(0, byteOffset);
+  return decoder.decode(slice2).length;
+}
+function charIndexToByteOffset(text4, charIndex) {
+  const prefix = text4.slice(0, charIndex);
+  return encoder.encode(prefix).length;
+}
+function find2(regex, text4, byteOffset) {
+  const charIndex = byteOffsetToCharIndex(text4, byteOffset);
+  const cloned = new RegExp(regex.source, regex.flags);
+  cloned.lastIndex = charIndex;
+  const match = cloned.exec(text4);
+  if (match === null) {
+    return Result$Error(Nil2);
+  }
+  const matchCharIndex = match.index;
+  const matchByteStart = charIndexToByteOffset(text4, matchCharIndex);
+  return Result$Ok([matchByteStart, match[0]]);
+}
+function byte_slice(text4, start5, length4) {
+  const bytes = encoder.encode(text4);
+  const sliced = bytes.slice(start5, start5 + length4);
+  return decoder.decode(sliced);
+}
+function byte_length(text4) {
+  return encoder.encode(text4).length;
+}
+
+// build/dev/javascript/smalto/smalto/internal/engine.mjs
+class CompiledRule extends CustomType {
+  constructor(token2, regex, greedy, inside) {
+    super();
+    this.token = token2;
+    this.regex = regex;
+    this.greedy = greedy;
+    this.inside = inside;
+  }
+}
+
+class TextNode extends CustomType {
+  constructor(text4, byte_start, byte_len) {
+    super();
+    this.text = text4;
+    this.byte_start = byte_start;
+    this.byte_len = byte_len;
+  }
+}
+
+class TokenNode extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+function map_token_name(name, value2) {
+  if (name === "keyword") {
+    return new Keyword(value2);
+  } else if (name === "string") {
+    return new String2(value2);
+  } else if (name === "number") {
+    return new Number2(value2);
+  } else if (name === "comment") {
+    return new Comment(value2);
+  } else if (name === "function") {
+    return new Function2(value2);
+  } else if (name === "operator") {
+    return new Operator(value2);
+  } else if (name === "punctuation") {
+    return new Punctuation(value2);
+  } else if (name === "type") {
+    return new Type(value2);
+  } else if (name === "module") {
+    return new Module(value2);
+  } else if (name === "variable") {
+    return new Variable(value2);
+  } else if (name === "constant") {
+    return new Constant(value2);
+  } else if (name === "builtin") {
+    return new Builtin(value2);
+  } else if (name === "tag") {
+    return new Tag(value2);
+  } else if (name === "attribute") {
+    return new Attribute2(value2);
+  } else if (name === "selector") {
+    return new Selector(value2);
+  } else if (name === "property") {
+    return new Property2(value2);
+  } else if (name === "regex") {
+    return new Regex(value2);
+  } else {
+    let unknown = name;
+    return new Custom(unknown, value2);
+  }
+}
+function compile_rules(rules) {
+  return filter_map(rules, (r) => {
+    let $ = compile3(r.pattern);
+    if ($ instanceof Ok) {
+      let compiled = $[0];
+      return new Ok(new CompiledRule(r.token, compiled, r.greedy, r.inside));
+    } else {
+      return new Error(undefined);
+    }
+  });
+}
+function walk_greedy_span(loop$nodes, loop$match_end) {
+  while (true) {
+    let nodes = loop$nodes;
+    let match_end = loop$match_end;
+    if (nodes instanceof Empty) {
+      return [true, toList([])];
+    } else {
+      let $ = nodes.head;
+      if ($ instanceof TextNode) {
+        let rest = nodes.tail;
+        let text4 = $.text;
+        let node_start = $.byte_start;
+        let node_len = $.byte_len;
+        let node_end = node_start + node_len;
+        let $1 = match_end <= node_end;
+        if ($1) {
+          let after_len = node_end - match_end;
+          let _block;
+          let $2 = after_len > 0;
+          if ($2) {
+            let after_text = byte_slice(text4, match_end - node_start, after_len);
+            _block = prepend(new TextNode(after_text, match_end, after_len), rest);
+          } else {
+            _block = rest;
+          }
+          let after_nodes = _block;
+          return [true, after_nodes];
+        } else {
+          loop$nodes = rest;
+          loop$match_end = match_end;
+        }
+      } else {
+        let rest = nodes.tail;
+        loop$nodes = rest;
+        loop$match_end = match_end;
+      }
+    }
+  }
+}
+function flatten_nodes(nodes) {
+  return flat_map(nodes, (node) => {
+    if (node instanceof TextNode) {
+      let text4 = node.text;
+      if (text4 === "") {
+        return toList([]);
+      } else {
+        return toList([new Other(text4)]);
+      }
+    } else {
+      let tokens = node[0];
+      return tokens;
+    }
+  });
+}
+function collapse_loop(loop$tokens, loop$acc) {
+  while (true) {
+    let tokens = loop$tokens;
+    let acc = loop$acc;
+    if (tokens instanceof Empty) {
+      return acc;
+    } else {
+      let tok = tokens.head;
+      let rest = tokens.tail;
+      if (acc instanceof Empty) {
+        loop$tokens = rest;
+        loop$acc = prepend(tok, acc);
+      } else if (tok instanceof Whitespace) {
+        let $ = acc.head;
+        if ($ instanceof Whitespace) {
+          let acc_rest = acc.tail;
+          let v = tok[0];
+          let prev = $[0];
+          loop$tokens = rest;
+          loop$acc = prepend(new Whitespace(prev + v), acc_rest);
+        } else {
+          loop$tokens = rest;
+          loop$acc = prepend(tok, acc);
+        }
+      } else if (tok instanceof Other) {
+        let $ = acc.head;
+        if ($ instanceof Other) {
+          let acc_rest = acc.tail;
+          let v = tok[0];
+          let prev = $[0];
+          loop$tokens = rest;
+          loop$acc = prepend(new Other(prev + v), acc_rest);
+        } else {
+          loop$tokens = rest;
+          loop$acc = prepend(tok, acc);
+        }
+      } else {
+        loop$tokens = rest;
+        loop$acc = prepend(tok, acc);
+      }
+    }
+  }
+}
+function collapse_adjacent(tokens) {
+  let _pipe = collapse_loop(tokens, toList([]));
+  return reverse(_pipe);
+}
+function resolve_inside(matched_text, token_name, inside, lookup2) {
+  if (inside instanceof Some) {
+    let $ = inside[0];
+    if ($ instanceof InlineGrammar) {
+      let rules = $[0];
+      return tokenize(matched_text, rules, lookup2);
+    } else {
+      let lang = $[0];
+      let lang_rules = lookup2(lang);
+      return tokenize(matched_text, lang_rules, lookup2);
+    }
+  } else {
+    return toList([map_token_name(token_name, matched_text)]);
+  }
+}
+function tokenize(source, rules, lookup2) {
+  let compiled = compile_rules(rules);
+  let source_len = byte_length(source);
+  let nodes = toList([new TextNode(source, 0, source_len)]);
+  let final_nodes = match_grammar(source, nodes, compiled, lookup2);
+  let _pipe = flatten_nodes(final_nodes);
+  return collapse_adjacent(_pipe);
+}
+function match_grammar(original, nodes, rules, lookup2) {
+  return fold2(rules, nodes, (current_nodes, rule2) => {
+    return apply_rule(original, current_nodes, rule2, lookup2);
+  });
+}
+function apply_rule(original, nodes, rule2, lookup2) {
+  return apply_rule_loop(original, nodes, rule2, lookup2, toList([]));
+}
+function apply_rule_loop(loop$original, loop$nodes, loop$rule, loop$lookup, loop$acc) {
+  while (true) {
+    let original = loop$original;
+    let nodes = loop$nodes;
+    let rule2 = loop$rule;
+    let lookup2 = loop$lookup;
+    let acc = loop$acc;
+    if (nodes instanceof Empty) {
+      return reverse(acc);
+    } else {
+      let $ = nodes.head;
+      if ($ instanceof TextNode) {
+        let rest = nodes.tail;
+        let text4 = $.text;
+        let start5 = $.byte_start;
+        let len = $.byte_len;
+        let $1 = rule2.greedy;
+        if ($1) {
+          return apply_greedy(original, text4, start5, len, rest, rule2, lookup2, acc);
+        } else {
+          return apply_non_greedy(original, text4, start5, len, rest, rule2, lookup2, acc);
+        }
+      } else {
+        let node = $;
+        let rest = nodes.tail;
+        loop$original = original;
+        loop$nodes = rest;
+        loop$rule = rule2;
+        loop$lookup = lookup2;
+        loop$acc = prepend(node, acc);
+      }
+    }
+  }
+}
+function apply_non_greedy(original, text4, start5, len, rest, rule2, lookup2, acc) {
+  let $ = find2(rule2.regex, text4, 0);
+  if ($ instanceof Ok) {
+    let rel_start = $[0][0];
+    let matched = $[0][1];
+    let match_byte_len = byte_length(matched);
+    if (match_byte_len === 0) {
+      return apply_rule_loop(original, rest, rule2, lookup2, prepend(new TextNode(text4, start5, len), acc));
+    } else {
+      let _block;
+      let $1 = rel_start > 0;
+      if ($1) {
+        let before_text = byte_slice(text4, 0, rel_start);
+        _block = prepend(new TextNode(before_text, start5, rel_start), acc);
+      } else {
+        _block = acc;
+      }
+      let acc$1 = _block;
+      let inner_tokens = resolve_inside(matched, rule2.token, rule2.inside, lookup2);
+      let acc$2 = prepend(new TokenNode(inner_tokens), acc$1);
+      let after_rel_start = rel_start + match_byte_len;
+      let after_len = len - after_rel_start;
+      let _block$1;
+      let $2 = after_len > 0;
+      if ($2) {
+        let after_text = byte_slice(text4, after_rel_start, after_len);
+        _block$1 = prepend(new TextNode(after_text, start5 + after_rel_start, after_len), rest);
+      } else {
+        _block$1 = rest;
+      }
+      let remaining = _block$1;
+      return apply_rule_loop(original, remaining, rule2, lookup2, acc$2);
+    }
+  } else {
+    return apply_rule_loop(original, rest, rule2, lookup2, prepend(new TextNode(text4, start5, len), acc));
+  }
+}
+function apply_greedy(original, text4, start5, len, rest, rule2, lookup2, acc) {
+  let $ = find2(rule2.regex, original, start5);
+  if ($ instanceof Ok) {
+    let match_start = $[0][0];
+    let matched = $[0][1];
+    let match_byte_len = byte_length(matched);
+    let match_end = match_start + match_byte_len;
+    let node_end = start5 + len;
+    let $1 = match_byte_len === 0;
+    if ($1) {
+      return apply_rule_loop(original, rest, rule2, lookup2, prepend(new TextNode(text4, start5, len), acc));
+    } else {
+      let $2 = match_start >= node_end;
+      if ($2) {
+        return apply_rule_loop(original, rest, rule2, lookup2, prepend(new TextNode(text4, start5, len), acc));
+      } else {
+        let _block;
+        let $3 = match_start > start5;
+        if ($3) {
+          let before_len = match_start - start5;
+          let before_text = byte_slice(original, start5, before_len);
+          _block = prepend(new TextNode(before_text, start5, before_len), acc);
+        } else {
+          _block = acc;
+        }
+        let new_acc = _block;
+        let $4 = match_end <= node_end;
+        if ($4) {
+          let inner_tokens = resolve_inside(matched, rule2.token, rule2.inside, lookup2);
+          let new_acc$1 = prepend(new TokenNode(inner_tokens), new_acc);
+          let after_len = node_end - match_end;
+          let _block$1;
+          let $5 = after_len > 0;
+          if ($5) {
+            let after_text = byte_slice(original, match_end, after_len);
+            _block$1 = prepend(new TextNode(after_text, match_end, after_len), rest);
+          } else {
+            _block$1 = rest;
+          }
+          let remaining = _block$1;
+          return apply_rule_loop(original, remaining, rule2, lookup2, new_acc$1);
+        } else {
+          let $5 = walk_greedy_span(rest, match_end);
+          let ok;
+          let after_nodes;
+          ok = $5[0];
+          after_nodes = $5[1];
+          if (ok) {
+            let inner_tokens = resolve_inside(matched, rule2.token, rule2.inside, lookup2);
+            let new_acc$1 = prepend(new TokenNode(inner_tokens), new_acc);
+            return apply_rule_loop(original, after_nodes, rule2, lookup2, new_acc$1);
+          } else {
+            return apply_rule_loop(original, rest, rule2, lookup2, prepend(new TextNode(text4, start5, len), acc));
+          }
+        }
+      }
+    }
+  } else {
+    return append(reverse(prepend(new TextNode(text4, start5, len), acc)), rest);
+  }
+}
+
+// build/dev/javascript/smalto/smalto/languages/bash.mjs
+function rules() {
+  return toList([
+    rule("important", "^#!\\s*\\/.*"),
+    rule("comment", '(?:^|[^"{\\\\$])\\K#.*'),
+    rule("function", "(?:\\bfunction\\s+)\\K[\\w-]+(?=(?:\\s*\\(?:\\s*\\))?\\s*\\{)"),
+    rule("function", "\\b[\\w-]+(?=\\s*\\(\\s*\\)\\s*\\{)"),
+    rule("variable", "(?:\\b(?:for|select)\\s+)\\K\\w+(?=\\s+in\\s)"),
+    rule_with_inside("variable", "(?:^|[\\s;|&]|[<>]\\()\\K\\w+(?:\\.\\w+)*(?=\\+?=)", toList([
+      rule("constant", "(?:^|[\\s;|&]|[<>]\\()\\K\\b(?:BASH|BASHOPTS|BASH_ALIASES|BASH_ARGC|BASH_ARGV|BASH_CMDS|BASH_COMPLETION_COMPAT_DIR|BASH_LINENO|BASH_REMATCH|BASH_SOURCE|BASH_VERSINFO|BASH_VERSION|COLORTERM|COLUMNS|COMP_WORDBREAKS|DBUS_SESSION_BUS_ADDRESS|DEFAULTS_PATH|DESKTOP_SESSION|DIRSTACK|DISPLAY|EUID|GDMSESSION|GDM_LANG|GNOME_KEYRING_CONTROL|GNOME_KEYRING_PID|GPG_AGENT_INFO|GROUPS|HISTCONTROL|HISTFILE|HISTFILESIZE|HISTSIZE|HOME|HOSTNAME|HOSTTYPE|IFS|INSTANCE|JOB|LANG|LANGUAGE|LC_ADDRESS|LC_ALL|LC_IDENTIFICATION|LC_MEASUREMENT|LC_MONETARY|LC_NAME|LC_NUMERIC|LC_PAPER|LC_TELEPHONE|LC_TIME|LESSCLOSE|LESSOPEN|LINES|LOGNAME|LS_COLORS|MACHTYPE|MAILCHECK|MANDATORY_PATH|NO_AT_BRIDGE|OLDPWD|OPTERR|OPTIND|ORBIT_SOCKETDIR|OSTYPE|PAPERSIZE|PATH|PIPESTATUS|PPID|PS1|PS2|PS3|PS4|PWD|RANDOM|REPLY|SECONDS|SELINUX_INIT|SESSION|SESSIONTYPE|SESSION_MANAGER|SHELL|SHELLOPTS|SHLVL|SSH_AUTH_SOCK|TERM|UID|UPSTART_EVENTS|UPSTART_INSTANCE|UPSTART_JOB|UPSTART_SESSION|USER|WINDOWID|XAUTHORITY|XDG_CONFIG_DIRS|XDG_CURRENT_DESKTOP|XDG_DATA_DIRS|XDG_GREETER_DATA_DIR|XDG_MENU_PREFIX|XDG_RUNTIME_DIR|XDG_SEAT|XDG_SEAT_PATH|XDG_SESSION_DESKTOP|XDG_SESSION_ID|XDG_SESSION_PATH|XDG_SESSION_TYPE|XDG_VTNR|XMODIFIERS)\\b")
+    ])),
+    rule("variable", "(?:^|\\s)\\K-{1,2}(?:\\w+:[+-]?)?\\w+(?:\\.\\w+)*(?=[=\\s]|$)"),
+    greedy_rule_with_inside("string", "(?:(?:^|[^<])<<-?\\s*)\\K(\\w+)\\s[\\s\\S]*?(?:\\r?\\n|\\r)\\2", toList([
+      rule_with_inside("punctuation", `(?:^(["']?)\\w+\\2)\\K[ \\t]+\\S.*`, toList([
+        rule("important", "^#!\\s*\\/.*"),
+        rule("comment", '(?:^|[^"{\\\\$])\\K#.*'),
+        rule("function", "(?:\\bfunction\\s+)\\K[\\w-]+(?=(?:\\s*\\(?:\\s*\\))?\\s*\\{)"),
+        rule("function", "\\b[\\w-]+(?=\\s*\\(\\s*\\)\\s*\\{)"),
+        rule("variable", "(?:\\b(?:for|select)\\s+)\\K\\w+(?=\\s+in\\s)"),
+        rule("variable", "(?:^|[\\s;|&]|[<>]\\()\\K\\w+(?:\\.\\w+)*(?=\\+?=)"),
+        rule("variable", "(?:^|\\s)\\K-{1,2}(?:\\w+:[+-]?)?\\w+(?:\\.\\w+)*(?=[=\\s]|$)"),
+        greedy_rule("string", "(?:(?:^|[^<])<<-?\\s*)\\K(\\w+)\\s[\\s\\S]*?(?:\\r?\\n|\\r)\\2"),
+        greedy_rule_with_inside("string", `(?:(?:^|[^<])<<-?\\s*)\\K(["'])(\\w+)\\2\\s[\\s\\S]*?(?:\\r?\\n|\\r)\\3`, toList([
+          rule("punctuation", `(?:^(["']?)\\w+\\2)\\K[ \\t]+\\S.*`)
+        ])),
+        greedy_rule("string", '(?:^|[^\\\\](?:\\\\\\\\)*)\\K"(?:\\\\[\\s\\S]|\\$\\([^)]+\\)|\\$(?!\\()|`[^`]+`|[^"\\\\`$])*"'),
+        greedy_rule("string", "(?:^|[^$\\\\])\\K'[^']*'"),
+        greedy_rule_with_inside("string", "\\$'(?:[^'\\\\]|\\\\[\\s\\S])*'", toList([
+          rule("entity", '\\\\(?:[abceEfnrtv\\\\"]|O?[0-7]{1,3}|U[0-9a-fA-F]{8}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{1,2})')
+        ])),
+        rule("constant", "\\$?\\b(?:BASH|BASHOPTS|BASH_ALIASES|BASH_ARGC|BASH_ARGV|BASH_CMDS|BASH_COMPLETION_COMPAT_DIR|BASH_LINENO|BASH_REMATCH|BASH_SOURCE|BASH_VERSINFO|BASH_VERSION|COLORTERM|COLUMNS|COMP_WORDBREAKS|DBUS_SESSION_BUS_ADDRESS|DEFAULTS_PATH|DESKTOP_SESSION|DIRSTACK|DISPLAY|EUID|GDMSESSION|GDM_LANG|GNOME_KEYRING_CONTROL|GNOME_KEYRING_PID|GPG_AGENT_INFO|GROUPS|HISTCONTROL|HISTFILE|HISTFILESIZE|HISTSIZE|HOME|HOSTNAME|HOSTTYPE|IFS|INSTANCE|JOB|LANG|LANGUAGE|LC_ADDRESS|LC_ALL|LC_IDENTIFICATION|LC_MEASUREMENT|LC_MONETARY|LC_NAME|LC_NUMERIC|LC_PAPER|LC_TELEPHONE|LC_TIME|LESSCLOSE|LESSOPEN|LINES|LOGNAME|LS_COLORS|MACHTYPE|MAILCHECK|MANDATORY_PATH|NO_AT_BRIDGE|OLDPWD|OPTERR|OPTIND|ORBIT_SOCKETDIR|OSTYPE|PAPERSIZE|PATH|PIPESTATUS|PPID|PS1|PS2|PS3|PS4|PWD|RANDOM|REPLY|SECONDS|SELINUX_INIT|SESSION|SESSIONTYPE|SESSION_MANAGER|SHELL|SHELLOPTS|SHLVL|SSH_AUTH_SOCK|TERM|UID|UPSTART_EVENTS|UPSTART_INSTANCE|UPSTART_JOB|UPSTART_SESSION|USER|WINDOWID|XAUTHORITY|XDG_CONFIG_DIRS|XDG_CURRENT_DESKTOP|XDG_DATA_DIRS|XDG_GREETER_DATA_DIR|XDG_MENU_PREFIX|XDG_RUNTIME_DIR|XDG_SEAT|XDG_SEAT_PATH|XDG_SESSION_DESKTOP|XDG_SESSION_ID|XDG_SESSION_PATH|XDG_SESSION_TYPE|XDG_VTNR|XMODIFIERS)\\b"),
+        greedy_rule_with_inside("variable", "\\$?\\(\\([\\s\\S]+?\\)\\)", toList([
+          rule("variable", "(?:^\\$\\(\\([\\s\\S]+)\\K\\)\\)"),
+          rule("variable", "^\\$\\(\\("),
+          rule("number", "\\b0x[\\dA-Fa-f]+\\b|(?:\\b\\d+(?:\\.\\d*)?|\\B\\.\\d+)(?:[Ee]-?\\d+)?"),
+          rule("operator", "--|\\+\\+|\\*\\*=?|<<=?|>>=?|&&|\\|\\||[=!+\\-*/%<>^&|]=?|[?~:]"),
+          rule("punctuation", "\\(\\(?|\\)\\)?|,|;")
+        ])),
+        greedy_rule_with_inside("variable", "\\$\\((?:\\([^)]+\\)|[^()])+\\)|`[^`]+`", toList([
+          rule("variable", "^\\$\\(|^`|\\)$|`$"),
+          rule("comment", '(?:^|[^"{\\\\$])\\K#.*'),
+          rule("function", "(?:\\bfunction\\s+)\\K[\\w-]+(?=(?:\\s*\\(?:\\s*\\))?\\s*\\{)"),
+          rule("function", "\\b[\\w-]+(?=\\s*\\(\\s*\\)\\s*\\{)"),
+          rule("variable", "(?:\\b(?:for|select)\\s+)\\K\\w+(?=\\s+in\\s)"),
+          rule("variable", "(?:^|[\\s;|&]|[<>]\\()\\K\\w+(?:\\.\\w+)*(?=\\+?=)"),
+          rule("variable", "(?:^|\\s)\\K-{1,2}(?:\\w+:[+-]?)?\\w+(?:\\.\\w+)*(?=[=\\s]|$)"),
+          greedy_rule("string", "(?:(?:^|[^<])<<-?\\s*)\\K(\\w+)\\s[\\s\\S]*?(?:\\r?\\n|\\r)\\2"),
+          greedy_rule("string", `(?:(?:^|[^<])<<-?\\s*)\\K(["'])(\\w+)\\2\\s[\\s\\S]*?(?:\\r?\\n|\\r)\\3`),
+          greedy_rule("string", '(?:^|[^\\\\](?:\\\\\\\\)*)\\K"(?:\\\\[\\s\\S]|\\$\\([^)]+\\)|\\$(?!\\()|`[^`]+`|[^"\\\\`$])*"'),
+          greedy_rule("string", "(?:^|[^$\\\\])\\K'[^']*'"),
+          greedy_rule("string", "\\$'(?:[^'\\\\]|\\\\[\\s\\S])*'"),
+          rule("constant", "\\$?\\b(?:BASH|BASHOPTS|BASH_ALIASES|BASH_ARGC|BASH_ARGV|BASH_CMDS|BASH_COMPLETION_COMPAT_DIR|BASH_LINENO|BASH_REMATCH|BASH_SOURCE|BASH_VERSINFO|BASH_VERSION|COLORTERM|COLUMNS|COMP_WORDBREAKS|DBUS_SESSION_BUS_ADDRESS|DEFAULTS_PATH|DESKTOP_SESSION|DIRSTACK|DISPLAY|EUID|GDMSESSION|GDM_LANG|GNOME_KEYRING_CONTROL|GNOME_KEYRING_PID|GPG_AGENT_INFO|GROUPS|HISTCONTROL|HISTFILE|HISTFILESIZE|HISTSIZE|HOME|HOSTNAME|HOSTTYPE|IFS|INSTANCE|JOB|LANG|LANGUAGE|LC_ADDRESS|LC_ALL|LC_IDENTIFICATION|LC_MEASUREMENT|LC_MONETARY|LC_NAME|LC_NUMERIC|LC_PAPER|LC_TELEPHONE|LC_TIME|LESSCLOSE|LESSOPEN|LINES|LOGNAME|LS_COLORS|MACHTYPE|MAILCHECK|MANDATORY_PATH|NO_AT_BRIDGE|OLDPWD|OPTERR|OPTIND|ORBIT_SOCKETDIR|OSTYPE|PAPERSIZE|PATH|PIPESTATUS|PPID|PS1|PS2|PS3|PS4|PWD|RANDOM|REPLY|SECONDS|SELINUX_INIT|SESSION|SESSIONTYPE|SESSION_MANAGER|SHELL|SHELLOPTS|SHLVL|SSH_AUTH_SOCK|TERM|UID|UPSTART_EVENTS|UPSTART_INSTANCE|UPSTART_JOB|UPSTART_SESSION|USER|WINDOWID|XAUTHORITY|XDG_CONFIG_DIRS|XDG_CURRENT_DESKTOP|XDG_DATA_DIRS|XDG_GREETER_DATA_DIR|XDG_MENU_PREFIX|XDG_RUNTIME_DIR|XDG_SEAT|XDG_SEAT_PATH|XDG_SESSION_DESKTOP|XDG_SESSION_ID|XDG_SESSION_PATH|XDG_SESSION_TYPE|XDG_VTNR|XMODIFIERS)\\b"),
+          rule("function", "(?:^|[\\s;|&]|[<>]\\()\\K(?:add|apropos|apt|apt-cache|apt-get|aptitude|aspell|automysqlbackup|awk|basename|bash|bc|bconsole|bg|bzip2|cal|cargo|cat|cfdisk|chgrp|chkconfig|chmod|chown|chroot|cksum|clear|cmp|column|comm|composer|cp|cron|crontab|csplit|curl|cut|date|dc|dd|ddrescue|debootstrap|df|diff|diff3|dig|dir|dircolors|dirname|dirs|dmesg|docker|docker-compose|du|egrep|eject|env|ethtool|expand|expect|expr|fdformat|fdisk|fg|fgrep|file|find|fmt|fold|format|free|fsck|ftp|fuser|gawk|git|gparted|grep|groupadd|groupdel|groupmod|groups|grub-mkconfig|gzip|halt|head|hg|history|host|hostname|htop|iconv|id|ifconfig|ifdown|ifup|import|install|ip|java|jobs|join|kill|killall|less|link|ln|locate|logname|logrotate|look|lpc|lpr|lprint|lprintd|lprintq|lprm|ls|lsof|lynx|make|man|mc|mdadm|mkconfig|mkdir|mke2fs|mkfifo|mkfs|mkisofs|mknod|mkswap|mmv|more|most|mount|mtools|mtr|mutt|mv|nano|nc|netstat|nice|nl|node|nohup|notify-send|npm|nslookup|op|open|parted|passwd|paste|pathchk|ping|pkill|pnpm|podman|podman-compose|popd|pr|printcap|printenv|ps|pushd|pv|quota|quotacheck|quotactl|ram|rar|rcp|reboot|remsync|rename|renice|rev|rm|rmdir|rpm|rsync|scp|screen|sdiff|sed|sendmail|seq|service|sftp|sh|shellcheck|shuf|shutdown|sleep|slocate|sort|split|ssh|stat|strace|su|sudo|sum|suspend|swapon|sync|sysctl|tac|tail|tar|tee|time|timeout|top|touch|tr|traceroute|tsort|tty|umount|uname|unexpand|uniq|units|unrar|unshar|unzip|update-grub|uptime|useradd|userdel|usermod|users|uudecode|uuencode|v|vcpkg|vdir|vi|vim|virsh|vmstat|wait|watch|wc|wget|whereis|which|who|whoami|write|xargs|xdg-open|yarn|yes|zenity|zip|zsh|zypper)(?=$|[)\\s;|&])"),
+          rule("keyword", "(?:^|[\\s;|&]|[<>]\\()\\K(?:case|do|done|elif|else|esac|fi|for|function|if|in|select|then|until|while)(?=$|[)\\s;|&])"),
+          rule("class-name", "(?:^|[\\s;|&]|[<>]\\()\\K(?:\\.|:|alias|bind|break|builtin|caller|cd|command|continue|declare|echo|enable|eval|exec|exit|export|getopts|hash|help|let|local|logout|mapfile|printf|pwd|read|readarray|readonly|return|set|shift|shopt|source|test|times|trap|type|typeset|ulimit|umask|unalias|unset)(?=$|[)\\s;|&])"),
+          rule("boolean", "(?:^|[\\s;|&]|[<>]\\()\\K(?:false|true)(?=$|[)\\s;|&])"),
+          rule("important", "\\B&\\d\\b"),
+          rule_with_inside("operator", "\\d?<>|>\\||\\+=|=[=~]?|!=?|<<[<-]?|[&\\d]?>>|\\d[<>]&?|[<>][&=]?|&[>&]?|\\|[&|]?", toList([rule("important", "^\\d")])),
+          rule("punctuation", "\\$?\\(\\(?|\\)\\)?|\\.\\.|[{}[\\];\\\\]"),
+          rule("number", "(?:^|\\s)\\K(?:[1-9]\\d*|0)(?:[.,]\\d+)?\\b")
+        ])),
+        greedy_rule_with_inside("variable", "\\$\\{[^}]+\\}", toList([
+          rule("operator", ":[-=?+]?|[!\\/]|##?|%%?|\\^\\^?|,,?"),
+          rule("punctuation", "[\\[\\]]"),
+          rule("constant", "(?<=\\{)\\b(?:BASH|BASHOPTS|BASH_ALIASES|BASH_ARGC|BASH_ARGV|BASH_CMDS|BASH_COMPLETION_COMPAT_DIR|BASH_LINENO|BASH_REMATCH|BASH_SOURCE|BASH_VERSINFO|BASH_VERSION|COLORTERM|COLUMNS|COMP_WORDBREAKS|DBUS_SESSION_BUS_ADDRESS|DEFAULTS_PATH|DESKTOP_SESSION|DIRSTACK|DISPLAY|EUID|GDMSESSION|GDM_LANG|GNOME_KEYRING_CONTROL|GNOME_KEYRING_PID|GPG_AGENT_INFO|GROUPS|HISTCONTROL|HISTFILE|HISTFILESIZE|HISTSIZE|HOME|HOSTNAME|HOSTTYPE|IFS|INSTANCE|JOB|LANG|LANGUAGE|LC_ADDRESS|LC_ALL|LC_IDENTIFICATION|LC_MEASUREMENT|LC_MONETARY|LC_NAME|LC_NUMERIC|LC_PAPER|LC_TELEPHONE|LC_TIME|LESSCLOSE|LESSOPEN|LINES|LOGNAME|LS_COLORS|MACHTYPE|MAILCHECK|MANDATORY_PATH|NO_AT_BRIDGE|OLDPWD|OPTERR|OPTIND|ORBIT_SOCKETDIR|OSTYPE|PAPERSIZE|PATH|PIPESTATUS|PPID|PS1|PS2|PS3|PS4|PWD|RANDOM|REPLY|SECONDS|SELINUX_INIT|SESSION|SESSIONTYPE|SESSION_MANAGER|SHELL|SHELLOPTS|SHLVL|SSH_AUTH_SOCK|TERM|UID|UPSTART_EVENTS|UPSTART_INSTANCE|UPSTART_JOB|UPSTART_SESSION|USER|WINDOWID|XAUTHORITY|XDG_CONFIG_DIRS|XDG_CURRENT_DESKTOP|XDG_DATA_DIRS|XDG_GREETER_DATA_DIR|XDG_MENU_PREFIX|XDG_RUNTIME_DIR|XDG_SEAT|XDG_SEAT_PATH|XDG_SESSION_DESKTOP|XDG_SESSION_ID|XDG_SESSION_PATH|XDG_SESSION_TYPE|XDG_VTNR|XMODIFIERS)\\b")
+        ])),
+        rule("variable", "\\$(?:\\w+|[#?*!@$])"),
+        rule("function", "(?:^|[\\s;|&]|[<>]\\()\\K(?:add|apropos|apt|apt-cache|apt-get|aptitude|aspell|automysqlbackup|awk|basename|bash|bc|bconsole|bg|bzip2|cal|cargo|cat|cfdisk|chgrp|chkconfig|chmod|chown|chroot|cksum|clear|cmp|column|comm|composer|cp|cron|crontab|csplit|curl|cut|date|dc|dd|ddrescue|debootstrap|df|diff|diff3|dig|dir|dircolors|dirname|dirs|dmesg|docker|docker-compose|du|egrep|eject|env|ethtool|expand|expect|expr|fdformat|fdisk|fg|fgrep|file|find|fmt|fold|format|free|fsck|ftp|fuser|gawk|git|gparted|grep|groupadd|groupdel|groupmod|groups|grub-mkconfig|gzip|halt|head|hg|history|host|hostname|htop|iconv|id|ifconfig|ifdown|ifup|import|install|ip|java|jobs|join|kill|killall|less|link|ln|locate|logname|logrotate|look|lpc|lpr|lprint|lprintd|lprintq|lprm|ls|lsof|lynx|make|man|mc|mdadm|mkconfig|mkdir|mke2fs|mkfifo|mkfs|mkisofs|mknod|mkswap|mmv|more|most|mount|mtools|mtr|mutt|mv|nano|nc|netstat|nice|nl|node|nohup|notify-send|npm|nslookup|op|open|parted|passwd|paste|pathchk|ping|pkill|pnpm|podman|podman-compose|popd|pr|printcap|printenv|ps|pushd|pv|quota|quotacheck|quotactl|ram|rar|rcp|reboot|remsync|rename|renice|rev|rm|rmdir|rpm|rsync|scp|screen|sdiff|sed|sendmail|seq|service|sftp|sh|shellcheck|shuf|shutdown|sleep|slocate|sort|split|ssh|stat|strace|su|sudo|sum|suspend|swapon|sync|sysctl|tac|tail|tar|tee|time|timeout|top|touch|tr|traceroute|tsort|tty|umount|uname|unexpand|uniq|units|unrar|unshar|unzip|update-grub|uptime|useradd|userdel|usermod|users|uudecode|uuencode|v|vcpkg|vdir|vi|vim|virsh|vmstat|wait|watch|wc|wget|whereis|which|who|whoami|write|xargs|xdg-open|yarn|yes|zenity|zip|zsh|zypper)(?=$|[)\\s;|&])"),
+        rule("keyword", "(?:^|[\\s;|&]|[<>]\\()\\K(?:case|do|done|elif|else|esac|fi|for|function|if|in|select|then|until|while)(?=$|[)\\s;|&])"),
+        rule("class-name", "(?:^|[\\s;|&]|[<>]\\()\\K(?:\\.|:|alias|bind|break|builtin|caller|cd|command|continue|declare|echo|enable|eval|exec|exit|export|getopts|hash|help|let|local|logout|mapfile|printf|pwd|read|readarray|readonly|return|set|shift|shopt|source|test|times|trap|type|typeset|ulimit|umask|unalias|unset)(?=$|[)\\s;|&])"),
+        rule("boolean", "(?:^|[\\s;|&]|[<>]\\()\\K(?:false|true)(?=$|[)\\s;|&])"),
+        rule("important", "\\B&\\d\\b"),
+        rule("operator", "\\d?<>|>\\||\\+=|=[=~]?|!=?|<<[<-]?|[&\\d]?>>|\\d[<>]&?|[<>][&=]?|&[>&]?|\\|[&|]?"),
+        rule("punctuation", "\\$?\\(\\(?|\\)\\)?|\\.\\.|[{}[\\];\\\\]"),
+        rule("number", "(?:^|\\s)\\K(?:[1-9]\\d*|0)(?:[.,]\\d+)?\\b")
+      ])),
+      rule("constant", "\\$\\b(?:BASH|BASHOPTS|BASH_ALIASES|BASH_ARGC|BASH_ARGV|BASH_CMDS|BASH_COMPLETION_COMPAT_DIR|BASH_LINENO|BASH_REMATCH|BASH_SOURCE|BASH_VERSINFO|BASH_VERSION|COLORTERM|COLUMNS|COMP_WORDBREAKS|DBUS_SESSION_BUS_ADDRESS|DEFAULTS_PATH|DESKTOP_SESSION|DIRSTACK|DISPLAY|EUID|GDMSESSION|GDM_LANG|GNOME_KEYRING_CONTROL|GNOME_KEYRING_PID|GPG_AGENT_INFO|GROUPS|HISTCONTROL|HISTFILE|HISTFILESIZE|HISTSIZE|HOME|HOSTNAME|HOSTTYPE|IFS|INSTANCE|JOB|LANG|LANGUAGE|LC_ADDRESS|LC_ALL|LC_IDENTIFICATION|LC_MEASUREMENT|LC_MONETARY|LC_NAME|LC_NUMERIC|LC_PAPER|LC_TELEPHONE|LC_TIME|LESSCLOSE|LESSOPEN|LINES|LOGNAME|LS_COLORS|MACHTYPE|MAILCHECK|MANDATORY_PATH|NO_AT_BRIDGE|OLDPWD|OPTERR|OPTIND|ORBIT_SOCKETDIR|OSTYPE|PAPERSIZE|PATH|PIPESTATUS|PPID|PS1|PS2|PS3|PS4|PWD|RANDOM|REPLY|SECONDS|SELINUX_INIT|SESSION|SESSIONTYPE|SESSION_MANAGER|SHELL|SHELLOPTS|SHLVL|SSH_AUTH_SOCK|TERM|UID|UPSTART_EVENTS|UPSTART_INSTANCE|UPSTART_JOB|UPSTART_SESSION|USER|WINDOWID|XAUTHORITY|XDG_CONFIG_DIRS|XDG_CURRENT_DESKTOP|XDG_DATA_DIRS|XDG_GREETER_DATA_DIR|XDG_MENU_PREFIX|XDG_RUNTIME_DIR|XDG_SEAT|XDG_SEAT_PATH|XDG_SESSION_DESKTOP|XDG_SESSION_ID|XDG_SESSION_PATH|XDG_SESSION_TYPE|XDG_VTNR|XMODIFIERS)\\b"),
+      greedy_rule("variable", "\\$?\\(\\([\\s\\S]+?\\)\\)"),
+      greedy_rule("variable", "\\$\\((?:\\([^)]+\\)|[^()])+\\)|`[^`]+`"),
+      greedy_rule("variable", "\\$\\{[^}]+\\}"),
+      rule("variable", "\\$(?:\\w+|[#?*!@$])"),
+      rule("entity", '\\\\(?:[abceEfnrtv\\\\"]|O?[0-7]{1,3}|U[0-9a-fA-F]{8}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{1,2})')
+    ])),
+    greedy_rule("string", `(?:(?:^|[^<])<<-?\\s*)\\K(["'])(\\w+)\\2\\s[\\s\\S]*?(?:\\r?\\n|\\r)\\3`),
+    greedy_rule("string", '(?:^|[^\\\\](?:\\\\\\\\)*)\\K"(?:\\\\[\\s\\S]|\\$\\([^)]+\\)|\\$(?!\\()|`[^`]+`|[^"\\\\`$])*"'),
+    greedy_rule("string", "(?:^|[^$\\\\])\\K'[^']*'"),
+    greedy_rule("string", "\\$'(?:[^'\\\\]|\\\\[\\s\\S])*'"),
+    rule("constant", "\\$?\\b(?:BASH|BASHOPTS|BASH_ALIASES|BASH_ARGC|BASH_ARGV|BASH_CMDS|BASH_COMPLETION_COMPAT_DIR|BASH_LINENO|BASH_REMATCH|BASH_SOURCE|BASH_VERSINFO|BASH_VERSION|COLORTERM|COLUMNS|COMP_WORDBREAKS|DBUS_SESSION_BUS_ADDRESS|DEFAULTS_PATH|DESKTOP_SESSION|DIRSTACK|DISPLAY|EUID|GDMSESSION|GDM_LANG|GNOME_KEYRING_CONTROL|GNOME_KEYRING_PID|GPG_AGENT_INFO|GROUPS|HISTCONTROL|HISTFILE|HISTFILESIZE|HISTSIZE|HOME|HOSTNAME|HOSTTYPE|IFS|INSTANCE|JOB|LANG|LANGUAGE|LC_ADDRESS|LC_ALL|LC_IDENTIFICATION|LC_MEASUREMENT|LC_MONETARY|LC_NAME|LC_NUMERIC|LC_PAPER|LC_TELEPHONE|LC_TIME|LESSCLOSE|LESSOPEN|LINES|LOGNAME|LS_COLORS|MACHTYPE|MAILCHECK|MANDATORY_PATH|NO_AT_BRIDGE|OLDPWD|OPTERR|OPTIND|ORBIT_SOCKETDIR|OSTYPE|PAPERSIZE|PATH|PIPESTATUS|PPID|PS1|PS2|PS3|PS4|PWD|RANDOM|REPLY|SECONDS|SELINUX_INIT|SESSION|SESSIONTYPE|SESSION_MANAGER|SHELL|SHELLOPTS|SHLVL|SSH_AUTH_SOCK|TERM|UID|UPSTART_EVENTS|UPSTART_INSTANCE|UPSTART_JOB|UPSTART_SESSION|USER|WINDOWID|XAUTHORITY|XDG_CONFIG_DIRS|XDG_CURRENT_DESKTOP|XDG_DATA_DIRS|XDG_GREETER_DATA_DIR|XDG_MENU_PREFIX|XDG_RUNTIME_DIR|XDG_SEAT|XDG_SEAT_PATH|XDG_SESSION_DESKTOP|XDG_SESSION_ID|XDG_SESSION_PATH|XDG_SESSION_TYPE|XDG_VTNR|XMODIFIERS)\\b"),
+    greedy_rule("variable", "\\$?\\(\\([\\s\\S]+?\\)\\)"),
+    greedy_rule("variable", "\\$\\((?:\\([^)]+\\)|[^()])+\\)|`[^`]+`"),
+    greedy_rule("variable", "\\$\\{[^}]+\\}"),
+    rule("variable", "\\$(?:\\w+|[#?*!@$])"),
+    rule("function", "(?:^|[\\s;|&]|[<>]\\()\\K(?:add|apropos|apt|apt-cache|apt-get|aptitude|aspell|automysqlbackup|awk|basename|bash|bc|bconsole|bg|bzip2|cal|cargo|cat|cfdisk|chgrp|chkconfig|chmod|chown|chroot|cksum|clear|cmp|column|comm|composer|cp|cron|crontab|csplit|curl|cut|date|dc|dd|ddrescue|debootstrap|df|diff|diff3|dig|dir|dircolors|dirname|dirs|dmesg|docker|docker-compose|du|egrep|eject|env|ethtool|expand|expect|expr|fdformat|fdisk|fg|fgrep|file|find|fmt|fold|format|free|fsck|ftp|fuser|gawk|git|gparted|grep|groupadd|groupdel|groupmod|groups|grub-mkconfig|gzip|halt|head|hg|history|host|hostname|htop|iconv|id|ifconfig|ifdown|ifup|import|install|ip|java|jobs|join|kill|killall|less|link|ln|locate|logname|logrotate|look|lpc|lpr|lprint|lprintd|lprintq|lprm|ls|lsof|lynx|make|man|mc|mdadm|mkconfig|mkdir|mke2fs|mkfifo|mkfs|mkisofs|mknod|mkswap|mmv|more|most|mount|mtools|mtr|mutt|mv|nano|nc|netstat|nice|nl|node|nohup|notify-send|npm|nslookup|op|open|parted|passwd|paste|pathchk|ping|pkill|pnpm|podman|podman-compose|popd|pr|printcap|printenv|ps|pushd|pv|quota|quotacheck|quotactl|ram|rar|rcp|reboot|remsync|rename|renice|rev|rm|rmdir|rpm|rsync|scp|screen|sdiff|sed|sendmail|seq|service|sftp|sh|shellcheck|shuf|shutdown|sleep|slocate|sort|split|ssh|stat|strace|su|sudo|sum|suspend|swapon|sync|sysctl|tac|tail|tar|tee|time|timeout|top|touch|tr|traceroute|tsort|tty|umount|uname|unexpand|uniq|units|unrar|unshar|unzip|update-grub|uptime|useradd|userdel|usermod|users|uudecode|uuencode|v|vcpkg|vdir|vi|vim|virsh|vmstat|wait|watch|wc|wget|whereis|which|who|whoami|write|xargs|xdg-open|yarn|yes|zenity|zip|zsh|zypper)(?=$|[)\\s;|&])"),
+    rule("keyword", "(?:^|[\\s;|&]|[<>]\\()\\K(?:case|do|done|elif|else|esac|fi|for|function|if|in|select|then|until|while)(?=$|[)\\s;|&])"),
+    rule("class-name", "(?:^|[\\s;|&]|[<>]\\()\\K(?:\\.|:|alias|bind|break|builtin|caller|cd|command|continue|declare|echo|enable|eval|exec|exit|export|getopts|hash|help|let|local|logout|mapfile|printf|pwd|read|readarray|readonly|return|set|shift|shopt|source|test|times|trap|type|typeset|ulimit|umask|unalias|unset)(?=$|[)\\s;|&])"),
+    rule("boolean", "(?:^|[\\s;|&]|[<>]\\()\\K(?:false|true)(?=$|[)\\s;|&])"),
+    rule("important", "\\B&\\d\\b"),
+    rule("operator", "\\d?<>|>\\||\\+=|=[=~]?|!=?|<<[<-]?|[&\\d]?>>|\\d[<>]&?|[<>][&=]?|&[>&]?|\\|[&|]?"),
+    rule("punctuation", "\\$?\\(\\(?|\\)\\)?|\\.\\.|[{}[\\];\\\\]"),
+    rule("number", "(?:^|\\s)\\K(?:[1-9]\\d*|0)(?:[.,]\\d+)?\\b")
+  ]);
+}
+function grammar() {
+  return new Grammar("bash", new None, rules());
+}
+
+// build/dev/javascript/smalto/smalto/languages/c.mjs
+function rules2() {
+  return toList([
+    greedy_rule("comment", "\\/\\/(?:[^\\r\\n\\\\]|\\\\(?:\\r\\n?|\\n|(?![\\r\\n])))*|\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+    greedy_rule("char", "'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n]){0,32}'"),
+    greedy_rule_with_inside("property", "(?im)(?:^[\\t ]*)\\K#\\s*[a-z](?:[^\\r\\n\\\\/]|\\/(?!\\*)|\\/\\*(?:[^*]|\\*(?!\\/))*\\*\\/|\\\\(?:\\r\\n|[\\s\\S]))*", toList([
+      rule("string", "^(?:#\\s*include\\s*)\\K<[^>]+>"),
+      greedy_rule("string", '"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"'),
+      greedy_rule("char", "'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n]){0,32}'"),
+      greedy_rule("comment", "\\/\\/(?:[^\\r\\n\\\\]|\\\\(?:\\r\\n?|\\n|(?![\\r\\n])))*|\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+      rule("macro-name", "(?i)(?:^#\\s*define\\s+)\\K\\w+\\b(?!\\()"),
+      rule("function", "(?i)(?:^#\\s*define\\s+)\\K\\w+\\b(?=\\()"),
+      rule("keyword", "^(?:#\\s*)\\K[a-z]+"),
+      rule("directive-hash", "^#"),
+      rule("punctuation", "##|\\\\(?=[\\r\\n])"),
+      rule_with_inside("expression", "\\S[\\s\\S]*", toList([
+        greedy_rule("comment", "\\/\\/(?:[^\\r\\n\\\\]|\\\\(?:\\r\\n?|\\n|(?![\\r\\n])))*|\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+        greedy_rule("char", "'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n]){0,32}'"),
+        greedy_rule("property", "(?im)(?:^[\\t ]*)\\K#\\s*[a-z](?:[^\\r\\n\\\\/]|\\/(?!\\*)|\\/\\*(?:[^*]|\\*(?!\\/))*\\*\\/|\\\\(?:\\r\\n|[\\s\\S]))*"),
+        greedy_rule("string", '"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"'),
+        rule("class-name", "(?:\\b(?:enum|struct)\\s+(?:__attribute__\\s*\\(\\([\\s\\S]*?\\)\\)\\s*)?)\\K\\w+|\\b[a-z]\\w*_t\\b"),
+        rule("keyword", "\\b(?:_Alignas|_Alignof|_Atomic|_Bool|_Complex|_Generic|_Imaginary|_Noreturn|_Static_assert|_Thread_local|__attribute__|asm|auto|break|case|char|const|continue|default|do|double|else|enum|extern|float|for|goto|if|inline|int|long|register|return|short|signed|sizeof|static|struct|switch|typedef|typeof|union|unsigned|void|volatile|while)\\b"),
+        rule("constant", "\\b(?:EOF|NULL|SEEK_CUR|SEEK_END|SEEK_SET|__DATE__|__FILE__|__LINE__|__TIMESTAMP__|__TIME__|__func__|stderr|stdin|stdout)\\b"),
+        rule("function", "(?i)\\b[a-z_]\\w*(?=\\s*\\()"),
+        rule("number", "(?i)(?:\\b0x(?:[\\da-f]+(?:\\.[\\da-f]*)?|\\.[\\da-f]+)(?:p[+-]?\\d+)?|(?:\\b\\d+(?:\\.\\d*)?|\\B\\.\\d+)(?:e[+-]?\\d+)?)[ful]{0,4}"),
+        rule("operator", ">>=?|<<=?|->|([-+&|:])\\1|[?:~]|[-+*/%&|^!=<>]=?"),
+        rule("punctuation", "[{}[\\];(),.:]")
+      ]))
+    ])),
+    greedy_rule("string", '"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"'),
+    rule("class-name", "(?:\\b(?:enum|struct)\\s+(?:__attribute__\\s*\\(\\([\\s\\S]*?\\)\\)\\s*)?)\\K\\w+|\\b[a-z]\\w*_t\\b"),
+    rule("keyword", "\\b(?:_Alignas|_Alignof|_Atomic|_Bool|_Complex|_Generic|_Imaginary|_Noreturn|_Static_assert|_Thread_local|__attribute__|asm|auto|break|case|char|const|continue|default|do|double|else|enum|extern|float|for|goto|if|inline|int|long|register|return|short|signed|sizeof|static|struct|switch|typedef|typeof|union|unsigned|void|volatile|while)\\b"),
+    rule("constant", "\\b(?:EOF|NULL|SEEK_CUR|SEEK_END|SEEK_SET|__DATE__|__FILE__|__LINE__|__TIMESTAMP__|__TIME__|__func__|stderr|stdin|stdout)\\b"),
+    rule("function", "(?i)\\b[a-z_]\\w*(?=\\s*\\()"),
+    rule("number", "(?i)(?:\\b0x(?:[\\da-f]+(?:\\.[\\da-f]*)?|\\.[\\da-f]+)(?:p[+-]?\\d+)?|(?:\\b\\d+(?:\\.\\d*)?|\\B\\.\\d+)(?:e[+-]?\\d+)?)[ful]{0,4}"),
+    rule("operator", ">>=?|<<=?|->|([-+&|:])\\1|[?:~]|[-+*/%&|^!=<>]=?"),
+    rule("punctuation", "[{}[\\];(),.:]")
+  ]);
+}
+function grammar2() {
+  return new Grammar("c", new Some("clike"), rules2());
+}
+
+// build/dev/javascript/smalto/smalto/languages/clike.mjs
+function rules3() {
+  return toList([
+    greedy_rule("comment", "(?:^|[^\\\\])\\K\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+    greedy_rule("comment", "(?:^|[^\\\\:])\\K\\/\\/.*"),
+    greedy_rule("string", `(["'])(?:\\\\(?:\\r\\n|[\\s\\S])|(?!\\1)[^\\\\\\r\\n])*\\1`),
+    rule_with_inside("class-name", "(?:\\b(?:class|extends|implements|instanceof|interface|new)\\s+)\\K[\\w.\\\\]+", toList([rule("punctuation", "[.\\\\]")])),
+    rule("keyword", "\\b(?:break|catch|continue|do|else|finally|for|function|if|in|instanceof|new|null|return|throw|try|while)\\b"),
+    rule("boolean", "\\b(?:false|true)\\b"),
+    rule("function", "\\b\\w+(?=\\()"),
+    rule("number", "(?i)\\b0x[\\da-f]+\\b|(?:\\b\\d+(?:\\.\\d*)?|\\B\\.\\d+)(?:e[+-]?\\d+)?"),
+    rule("operator", "[<>]=?|[!=]=?=?|--?|\\+\\+?|&&?|\\|\\|?|[?*/~^%]"),
+    rule("punctuation", "[{}[\\];(),.:]")
+  ]);
+}
+function grammar3() {
+  return new Grammar("clike", new None, rules3());
+}
+
+// build/dev/javascript/smalto/smalto/languages/cpp.mjs
+function rules4() {
+  return toList([
+    greedy_rule("comment", "\\/\\/(?:[^\\r\\n\\\\]|\\\\(?:\\r\\n?|\\n|(?![\\r\\n])))*|\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+    greedy_rule("char", "'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n]){0,32}'"),
+    greedy_rule_with_inside("property", "(?im)(?:^[\\t ]*)\\K#\\s*[a-z](?:[^\\r\\n\\\\/]|\\/(?!\\*)|\\/\\*(?:[^*]|\\*(?!\\/))*\\*\\/|\\\\(?:\\r\\n|[\\s\\S]))*", toList([
+      rule("string", "^(?:#\\s*include\\s*)\\K<[^>]+>"),
+      greedy_rule("string", '"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"'),
+      greedy_rule("char", "'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n]){0,32}'"),
+      greedy_rule("comment", "\\/\\/(?:[^\\r\\n\\\\]|\\\\(?:\\r\\n?|\\n|(?![\\r\\n])))*|\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+      rule("macro-name", "(?i)(?:^#\\s*define\\s+)\\K\\w+\\b(?!\\()"),
+      rule("function", "(?i)(?:^#\\s*define\\s+)\\K\\w+\\b(?=\\()"),
+      rule("keyword", "^(?:#\\s*)\\K[a-z]+"),
+      rule("directive-hash", "^#"),
+      rule("punctuation", "##|\\\\(?=[\\r\\n])"),
+      rule_with_inside("expression", "\\S[\\s\\S]*", toList([
+        greedy_rule("comment", "\\/\\/(?:[^\\r\\n\\\\]|\\\\(?:\\r\\n?|\\n|(?![\\r\\n])))*|\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+        greedy_rule("char", "'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n]){0,32}'"),
+        greedy_rule("property", "(?im)(?:^[\\t ]*)\\K#\\s*[a-z](?:[^\\r\\n\\\\/]|\\/(?!\\*)|\\/\\*(?:[^*]|\\*(?!\\/))*\\*\\/|\\\\(?:\\r\\n|[\\s\\S]))*"),
+        greedy_rule_with_inside("module", '(?:\\b(?:import|module)\\s+)\\K(?:"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"|<[^<>\\r\\n]*>|\\b(?!\\b(?:alignas|alignof|asm|auto|bool|break|case|catch|char|char16_t|char32_t|char8_t|class|co_await|co_return|co_yield|compl|concept|const|const_cast|consteval|constexpr|constinit|continue|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|final|float|for|friend|goto|if|import|inline|int|int16_t|int32_t|int64_t|int8_t|long|module|mutable|namespace|new|noexcept|nullptr|operator|override|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|try|typedef|typeid|typename|uint16_t|uint32_t|uint64_t|uint8_t|union|unsigned|using|virtual|void|volatile|wchar_t|while)\\b)\\w+(?:\\s*\\.\\s*\\w+)*\\b(?:\\s*:\\s*\\b(?!\\b(?:alignas|alignof|asm|auto|bool|break|case|catch|char|char16_t|char32_t|char8_t|class|co_await|co_return|co_yield|compl|concept|const|const_cast|consteval|constexpr|constinit|continue|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|final|float|for|friend|goto|if|import|inline|int|int16_t|int32_t|int64_t|int8_t|long|module|mutable|namespace|new|noexcept|nullptr|operator|override|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|try|typedef|typeid|typename|uint16_t|uint32_t|uint64_t|uint8_t|union|unsigned|using|virtual|void|volatile|wchar_t|while)\\b)\\w+(?:\\s*\\.\\s*\\w+)*\\b)?|:\\s*\\b(?!\\b(?:alignas|alignof|asm|auto|bool|break|case|catch|char|char16_t|char32_t|char8_t|class|co_await|co_return|co_yield|compl|concept|const|const_cast|consteval|constexpr|constinit|continue|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|final|float|for|friend|goto|if|import|inline|int|int16_t|int32_t|int64_t|int8_t|long|module|mutable|namespace|new|noexcept|nullptr|operator|override|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|try|typedef|typeid|typename|uint16_t|uint32_t|uint64_t|uint8_t|union|unsigned|using|virtual|void|volatile|wchar_t|while)\\b)\\w+(?:\\s*\\.\\s*\\w+)*\\b)', toList([
+          rule("string", '^[<"][\\s\\S]+'),
+          rule("operator", ":"),
+          rule("punctuation", "\\.")
+        ])),
+        greedy_rule("string", 'R"([^()\\\\ ]{0,16})\\([\\s\\S]*?\\)\\1"'),
+        greedy_rule("string", '"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"'),
+        greedy_rule_with_inside("base-clause", `(?:\\b(?:class|struct)\\s+\\w+\\s*:\\s*)\\K[^;{}"'\\s]+(?:\\s+[^;{}"'\\s]+)*(?=\\s*[;{])`, toList([
+          greedy_rule("comment", "\\/\\/(?:[^\\r\\n\\\\]|\\\\(?:\\r\\n?|\\n|(?![\\r\\n])))*|\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+          greedy_rule("char", "'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n]){0,32}'"),
+          greedy_rule_with_inside("property", "(?im)(?:^[\\t ]*)\\K#\\s*[a-z](?:[^\\r\\n\\\\/]|\\/(?!\\*)|\\/\\*(?:[^*]|\\*(?!\\/))*\\*\\/|\\\\(?:\\r\\n|[\\s\\S]))*", toList([
+            rule("string", "^(?:#\\s*include\\s*)\\K<[^>]+>"),
+            greedy_rule("string", '"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"'),
+            greedy_rule("char", "'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n]){0,32}'"),
+            greedy_rule("comment", "\\/\\/(?:[^\\r\\n\\\\]|\\\\(?:\\r\\n?|\\n|(?![\\r\\n])))*|\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+            rule("macro-name", "(?i)(?:^#\\s*define\\s+)\\K\\w+\\b(?!\\()"),
+            rule("function", "(?i)(?:^#\\s*define\\s+)\\K\\w+\\b(?=\\()"),
+            rule("keyword", "^(?:#\\s*)\\K[a-z]+"),
+            rule("directive-hash", "^#"),
+            rule("punctuation", "##|\\\\(?=[\\r\\n])"),
+            rule_with_inside("expression", "\\S[\\s\\S]*", toList([
+              greedy_rule("comment", "\\/\\/(?:[^\\r\\n\\\\]|\\\\(?:\\r\\n?|\\n|(?![\\r\\n])))*|\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+              greedy_rule("char", "'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n]){0,32}'"),
+              greedy_rule("property", "(?im)(?:^[\\t ]*)\\K#\\s*[a-z](?:[^\\r\\n\\\\/]|\\/(?!\\*)|\\/\\*(?:[^*]|\\*(?!\\/))*\\*\\/|\\\\(?:\\r\\n|[\\s\\S]))*"),
+              greedy_rule_with_inside("module", '(?:\\b(?:import|module)\\s+)\\K(?:"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"|<[^<>\\r\\n]*>|\\b(?!\\b(?:alignas|alignof|asm|auto|bool|break|case|catch|char|char16_t|char32_t|char8_t|class|co_await|co_return|co_yield|compl|concept|const|const_cast|consteval|constexpr|constinit|continue|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|final|float|for|friend|goto|if|import|inline|int|int16_t|int32_t|int64_t|int8_t|long|module|mutable|namespace|new|noexcept|nullptr|operator|override|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|try|typedef|typeid|typename|uint16_t|uint32_t|uint64_t|uint8_t|union|unsigned|using|virtual|void|volatile|wchar_t|while)\\b)\\w+(?:\\s*\\.\\s*\\w+)*\\b(?:\\s*:\\s*\\b(?!\\b(?:alignas|alignof|asm|auto|bool|break|case|catch|char|char16_t|char32_t|char8_t|class|co_await|co_return|co_yield|compl|concept|const|const_cast|consteval|constexpr|constinit|continue|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|final|float|for|friend|goto|if|import|inline|int|int16_t|int32_t|int64_t|int8_t|long|module|mutable|namespace|new|noexcept|nullptr|operator|override|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|try|typedef|typeid|typename|uint16_t|uint32_t|uint64_t|uint8_t|union|unsigned|using|virtual|void|volatile|wchar_t|while)\\b)\\w+(?:\\s*\\.\\s*\\w+)*\\b)?|:\\s*\\b(?!\\b(?:alignas|alignof|asm|auto|bool|break|case|catch|char|char16_t|char32_t|char8_t|class|co_await|co_return|co_yield|compl|concept|const|const_cast|consteval|constexpr|constinit|continue|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|final|float|for|friend|goto|if|import|inline|int|int16_t|int32_t|int64_t|int8_t|long|module|mutable|namespace|new|noexcept|nullptr|operator|override|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|try|typedef|typeid|typename|uint16_t|uint32_t|uint64_t|uint8_t|union|unsigned|using|virtual|void|volatile|wchar_t|while)\\b)\\w+(?:\\s*\\.\\s*\\w+)*\\b)', toList([
+                rule("string", '^[<"][\\s\\S]+'),
+                rule("operator", ":"),
+                rule("punctuation", "\\.")
+              ])),
+              greedy_rule("string", 'R"([^()\\\\ ]{0,16})\\([\\s\\S]*?\\)\\1"'),
+              greedy_rule("string", '"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"'),
+              rule("class-name", "(?:\\b(?:class|concept|enum|struct|typename)\\s+)\\K(?!\\b(?:alignas|alignof|asm|auto|bool|break|case|catch|char|char16_t|char32_t|char8_t|class|co_await|co_return|co_yield|compl|concept|const|const_cast|consteval|constexpr|constinit|continue|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|final|float|for|friend|goto|if|import|inline|int|int16_t|int32_t|int64_t|int8_t|long|module|mutable|namespace|new|noexcept|nullptr|operator|override|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|try|typedef|typeid|typename|uint16_t|uint32_t|uint64_t|uint8_t|union|unsigned|using|virtual|void|volatile|wchar_t|while)\\b)\\w+"),
+              rule("class-name", "\\b[A-Z]\\w*(?=\\s*::\\s*\\w+\\s*\\()"),
+              rule("class-name", "(?i)\\b[A-Z_]\\w*(?=\\s*::\\s*~\\w+\\s*\\()"),
+              rule("class-name", "\\b\\w+(?=\\s*<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>\\s*::\\s*\\w+\\s*\\()"),
+              rule_with_inside("generic-function", "(?i)\\b(?!operator\\b)[a-z_]\\w*\\s*<(?:[^<>]|<[^<>]*>)*>(?=\\s*\\()", toList([
+                rule("function", "^\\w+"),
+                rule("class-name", "<[\\s\\S]+")
+              ])),
+              rule("keyword", "\\b(?:alignas|alignof|asm|auto|bool|break|case|catch|char|char16_t|char32_t|char8_t|class|co_await|co_return|co_yield|compl|concept|const|const_cast|consteval|constexpr|constinit|continue|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|final|float|for|friend|goto|if|import|inline|int|int16_t|int32_t|int64_t|int8_t|long|module|mutable|namespace|new|noexcept|nullptr|operator|override|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|try|typedef|typeid|typename|uint16_t|uint32_t|uint64_t|uint8_t|union|unsigned|using|virtual|void|volatile|wchar_t|while)\\b"),
+              rule("constant", "\\b(?:EOF|NULL|SEEK_CUR|SEEK_END|SEEK_SET|__DATE__|__FILE__|__LINE__|__TIMESTAMP__|__TIME__|__func__|stderr|stdin|stdout)\\b"),
+              rule("function", "(?i)\\b[a-z_]\\w*(?=\\s*\\()"),
+              greedy_rule("number", "(?i)(?:\\b0b[01']+|\\b0x(?:[\\da-f']+(?:\\.[\\da-f']*)?|\\.[\\da-f']+)(?:p[+-]?[\\d']+)?|(?:\\b[\\d']+(?:\\.[\\d']*)?|\\B\\.[\\d']+)(?:e[+-]?[\\d']+)?)[ful]{0,4}"),
+              rule("punctuation", "::"),
+              rule("operator", ">>=?|<<=?|->|--|\\+\\+|&&|\\|\\||[?:~]|<=>|[-+*/%&|^!=<>]=?|\\b(?:and|and_eq|bitand|bitor|not|not_eq|or|or_eq|xor|xor_eq)\\b"),
+              rule("punctuation", "[{}[\\];(),.:]"),
+              rule("boolean", "\\b(?:false|true)\\b")
+            ]))
+          ])),
+          greedy_rule("module", '(?:\\b(?:import|module)\\s+)\\K(?:"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"|<[^<>\\r\\n]*>|\\b(?!\\b(?:alignas|alignof|asm|auto|bool|break|case|catch|char|char16_t|char32_t|char8_t|class|co_await|co_return|co_yield|compl|concept|const|const_cast|consteval|constexpr|constinit|continue|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|final|float|for|friend|goto|if|import|inline|int|int16_t|int32_t|int64_t|int8_t|long|module|mutable|namespace|new|noexcept|nullptr|operator|override|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|try|typedef|typeid|typename|uint16_t|uint32_t|uint64_t|uint8_t|union|unsigned|using|virtual|void|volatile|wchar_t|while)\\b)\\w+(?:\\s*\\.\\s*\\w+)*\\b(?:\\s*:\\s*\\b(?!\\b(?:alignas|alignof|asm|auto|bool|break|case|catch|char|char16_t|char32_t|char8_t|class|co_await|co_return|co_yield|compl|concept|const|const_cast|consteval|constexpr|constinit|continue|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|final|float|for|friend|goto|if|import|inline|int|int16_t|int32_t|int64_t|int8_t|long|module|mutable|namespace|new|noexcept|nullptr|operator|override|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|try|typedef|typeid|typename|uint16_t|uint32_t|uint64_t|uint8_t|union|unsigned|using|virtual|void|volatile|wchar_t|while)\\b)\\w+(?:\\s*\\.\\s*\\w+)*\\b)?|:\\s*\\b(?!\\b(?:alignas|alignof|asm|auto|bool|break|case|catch|char|char16_t|char32_t|char8_t|class|co_await|co_return|co_yield|compl|concept|const|const_cast|consteval|constexpr|constinit|continue|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|final|float|for|friend|goto|if|import|inline|int|int16_t|int32_t|int64_t|int8_t|long|module|mutable|namespace|new|noexcept|nullptr|operator|override|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|try|typedef|typeid|typename|uint16_t|uint32_t|uint64_t|uint8_t|union|unsigned|using|virtual|void|volatile|wchar_t|while)\\b)\\w+(?:\\s*\\.\\s*\\w+)*\\b)'),
+          greedy_rule("string", 'R"([^()\\\\ ]{0,16})\\([\\s\\S]*?\\)\\1"'),
+          greedy_rule("string", '"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"'),
+          rule("generic-function", "(?i)\\b(?!operator\\b)[a-z_]\\w*\\s*<(?:[^<>]|<[^<>]*>)*>(?=\\s*\\()"),
+          rule("keyword", "\\b(?:alignas|alignof|asm|auto|bool|break|case|catch|char|char16_t|char32_t|char8_t|class|co_await|co_return|co_yield|compl|concept|const|const_cast|consteval|constexpr|constinit|continue|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|final|float|for|friend|goto|if|import|inline|int|int16_t|int32_t|int64_t|int8_t|long|module|mutable|namespace|new|noexcept|nullptr|operator|override|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|try|typedef|typeid|typename|uint16_t|uint32_t|uint64_t|uint8_t|union|unsigned|using|virtual|void|volatile|wchar_t|while)\\b"),
+          rule("constant", "\\b(?:EOF|NULL|SEEK_CUR|SEEK_END|SEEK_SET|__DATE__|__FILE__|__LINE__|__TIMESTAMP__|__TIME__|__func__|stderr|stdin|stdout)\\b"),
+          rule("function", "(?i)\\b[a-z_]\\w*(?=\\s*\\()"),
+          greedy_rule("number", "(?i)(?:\\b0b[01']+|\\b0x(?:[\\da-f']+(?:\\.[\\da-f']*)?|\\.[\\da-f']+)(?:p[+-]?[\\d']+)?|(?:\\b[\\d']+(?:\\.[\\d']*)?|\\B\\.[\\d']+)(?:e[+-]?[\\d']+)?)[ful]{0,4}"),
+          rule("class-name", "(?i)\\b[a-z_]\\w*\\b(?!\\s*::)"),
+          rule("punctuation", "::"),
+          rule("operator", ">>=?|<<=?|->|--|\\+\\+|&&|\\|\\||[?:~]|<=>|[-+*/%&|^!=<>]=?|\\b(?:and|and_eq|bitand|bitor|not|not_eq|or|or_eq|xor|xor_eq)\\b"),
+          rule("punctuation", "[{}[\\];(),.:]"),
+          rule("boolean", "\\b(?:false|true)\\b")
+        ])),
+        rule("class-name", "(?:\\b(?:class|concept|enum|struct|typename)\\s+)\\K(?!\\b(?:alignas|alignof|asm|auto|bool|break|case|catch|char|char16_t|char32_t|char8_t|class|co_await|co_return|co_yield|compl|concept|const|const_cast|consteval|constexpr|constinit|continue|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|final|float|for|friend|goto|if|import|inline|int|int16_t|int32_t|int64_t|int8_t|long|module|mutable|namespace|new|noexcept|nullptr|operator|override|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|try|typedef|typeid|typename|uint16_t|uint32_t|uint64_t|uint8_t|union|unsigned|using|virtual|void|volatile|wchar_t|while)\\b)\\w+"),
+        rule("class-name", "\\b[A-Z]\\w*(?=\\s*::\\s*\\w+\\s*\\()"),
+        rule("class-name", "(?i)\\b[A-Z_]\\w*(?=\\s*::\\s*~\\w+\\s*\\()"),
+        rule("class-name", "\\b\\w+(?=\\s*<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>\\s*::\\s*\\w+\\s*\\()"),
+        rule_with_inside("generic-function", "(?i)\\b(?!operator\\b)[a-z_]\\w*\\s*<(?:[^<>]|<[^<>]*>)*>(?=\\s*\\()", toList([
+          rule("function", "^\\w+"),
+          rule("class-name", "<[\\s\\S]+")
+        ])),
+        rule("keyword", "\\b(?:alignas|alignof|asm|auto|bool|break|case|catch|char|char16_t|char32_t|char8_t|class|co_await|co_return|co_yield|compl|concept|const|const_cast|consteval|constexpr|constinit|continue|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|final|float|for|friend|goto|if|import|inline|int|int16_t|int32_t|int64_t|int8_t|long|module|mutable|namespace|new|noexcept|nullptr|operator|override|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|try|typedef|typeid|typename|uint16_t|uint32_t|uint64_t|uint8_t|union|unsigned|using|virtual|void|volatile|wchar_t|while)\\b"),
+        rule("constant", "\\b(?:EOF|NULL|SEEK_CUR|SEEK_END|SEEK_SET|__DATE__|__FILE__|__LINE__|__TIMESTAMP__|__TIME__|__func__|stderr|stdin|stdout)\\b"),
+        rule("function", "(?i)\\b[a-z_]\\w*(?=\\s*\\()"),
+        greedy_rule("number", "(?i)(?:\\b0b[01']+|\\b0x(?:[\\da-f']+(?:\\.[\\da-f']*)?|\\.[\\da-f']+)(?:p[+-]?[\\d']+)?|(?:\\b[\\d']+(?:\\.[\\d']*)?|\\B\\.[\\d']+)(?:e[+-]?[\\d']+)?)[ful]{0,4}"),
+        rule("punctuation", "::"),
+        rule("operator", ">>=?|<<=?|->|--|\\+\\+|&&|\\|\\||[?:~]|<=>|[-+*/%&|^!=<>]=?|\\b(?:and|and_eq|bitand|bitor|not|not_eq|or|or_eq|xor|xor_eq)\\b"),
+        rule("punctuation", "[{}[\\];(),.:]"),
+        rule("boolean", "\\b(?:false|true)\\b")
+      ]))
+    ])),
+    greedy_rule("module", '(?:\\b(?:import|module)\\s+)\\K(?:"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"|<[^<>\\r\\n]*>|\\b(?!\\b(?:alignas|alignof|asm|auto|bool|break|case|catch|char|char16_t|char32_t|char8_t|class|co_await|co_return|co_yield|compl|concept|const|const_cast|consteval|constexpr|constinit|continue|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|final|float|for|friend|goto|if|import|inline|int|int16_t|int32_t|int64_t|int8_t|long|module|mutable|namespace|new|noexcept|nullptr|operator|override|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|try|typedef|typeid|typename|uint16_t|uint32_t|uint64_t|uint8_t|union|unsigned|using|virtual|void|volatile|wchar_t|while)\\b)\\w+(?:\\s*\\.\\s*\\w+)*\\b(?:\\s*:\\s*\\b(?!\\b(?:alignas|alignof|asm|auto|bool|break|case|catch|char|char16_t|char32_t|char8_t|class|co_await|co_return|co_yield|compl|concept|const|const_cast|consteval|constexpr|constinit|continue|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|final|float|for|friend|goto|if|import|inline|int|int16_t|int32_t|int64_t|int8_t|long|module|mutable|namespace|new|noexcept|nullptr|operator|override|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|try|typedef|typeid|typename|uint16_t|uint32_t|uint64_t|uint8_t|union|unsigned|using|virtual|void|volatile|wchar_t|while)\\b)\\w+(?:\\s*\\.\\s*\\w+)*\\b)?|:\\s*\\b(?!\\b(?:alignas|alignof|asm|auto|bool|break|case|catch|char|char16_t|char32_t|char8_t|class|co_await|co_return|co_yield|compl|concept|const|const_cast|consteval|constexpr|constinit|continue|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|final|float|for|friend|goto|if|import|inline|int|int16_t|int32_t|int64_t|int8_t|long|module|mutable|namespace|new|noexcept|nullptr|operator|override|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|try|typedef|typeid|typename|uint16_t|uint32_t|uint64_t|uint8_t|union|unsigned|using|virtual|void|volatile|wchar_t|while)\\b)\\w+(?:\\s*\\.\\s*\\w+)*\\b)'),
+    greedy_rule("string", 'R"([^()\\\\ ]{0,16})\\([\\s\\S]*?\\)\\1"'),
+    greedy_rule("string", '"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"'),
+    greedy_rule("base-clause", `(?:\\b(?:class|struct)\\s+\\w+\\s*:\\s*)\\K[^;{}"'\\s]+(?:\\s+[^;{}"'\\s]+)*(?=\\s*[;{])`),
+    rule("class-name", "(?:\\b(?:class|concept|enum|struct|typename)\\s+)\\K(?!\\b(?:alignas|alignof|asm|auto|bool|break|case|catch|char|char16_t|char32_t|char8_t|class|co_await|co_return|co_yield|compl|concept|const|const_cast|consteval|constexpr|constinit|continue|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|final|float|for|friend|goto|if|import|inline|int|int16_t|int32_t|int64_t|int8_t|long|module|mutable|namespace|new|noexcept|nullptr|operator|override|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|try|typedef|typeid|typename|uint16_t|uint32_t|uint64_t|uint8_t|union|unsigned|using|virtual|void|volatile|wchar_t|while)\\b)\\w+"),
+    rule("class-name", "\\b[A-Z]\\w*(?=\\s*::\\s*\\w+\\s*\\()"),
+    rule("class-name", "(?i)\\b[A-Z_]\\w*(?=\\s*::\\s*~\\w+\\s*\\()"),
+    rule("class-name", "\\b\\w+(?=\\s*<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>\\s*::\\s*\\w+\\s*\\()"),
+    rule("generic-function", "(?i)\\b(?!operator\\b)[a-z_]\\w*\\s*<(?:[^<>]|<[^<>]*>)*>(?=\\s*\\()"),
+    rule("keyword", "\\b(?:alignas|alignof|asm|auto|bool|break|case|catch|char|char16_t|char32_t|char8_t|class|co_await|co_return|co_yield|compl|concept|const|const_cast|consteval|constexpr|constinit|continue|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|final|float|for|friend|goto|if|import|inline|int|int16_t|int32_t|int64_t|int8_t|long|module|mutable|namespace|new|noexcept|nullptr|operator|override|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|try|typedef|typeid|typename|uint16_t|uint32_t|uint64_t|uint8_t|union|unsigned|using|virtual|void|volatile|wchar_t|while)\\b"),
+    rule("constant", "\\b(?:EOF|NULL|SEEK_CUR|SEEK_END|SEEK_SET|__DATE__|__FILE__|__LINE__|__TIMESTAMP__|__TIME__|__func__|stderr|stdin|stdout)\\b"),
+    rule("function", "(?i)\\b[a-z_]\\w*(?=\\s*\\()"),
+    greedy_rule("number", "(?i)(?:\\b0b[01']+|\\b0x(?:[\\da-f']+(?:\\.[\\da-f']*)?|\\.[\\da-f']+)(?:p[+-]?[\\d']+)?|(?:\\b[\\d']+(?:\\.[\\d']*)?|\\B\\.[\\d']+)(?:e[+-]?[\\d']+)?)[ful]{0,4}"),
+    rule("punctuation", "::"),
+    rule("operator", ">>=?|<<=?|->|--|\\+\\+|&&|\\|\\||[?:~]|<=>|[-+*/%&|^!=<>]=?|\\b(?:and|and_eq|bitand|bitor|not|not_eq|or|or_eq|xor|xor_eq)\\b"),
+    rule("punctuation", "[{}[\\];(),.:]"),
+    rule("boolean", "\\b(?:false|true)\\b")
+  ]);
+}
+function grammar4() {
+  return new Grammar("cpp", new Some("c"), rules4());
+}
+
+// build/dev/javascript/smalto/smalto/languages/css.mjs
+function rules5() {
+  return toList([
+    rule("comment", "\\/\\*[\\s\\S]*?\\*\\/"),
+    nested_rule("atrule", `@[\\w-](?:[^;{\\s"']|\\s+(?!\\s)|(?:"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"|'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n])*'))*?(?:;|(?=\\s*\\{))`, "css"),
+    greedy_rule_with_inside("url", `(?i)\\burl\\((?:(?:"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"|'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n])*')|(?:[^\\\\\\r\\n()"']|\\\\[\\s\\S])*)\\)`, toList([
+      rule("function", "(?i)^url"),
+      rule("punctuation", "^\\(|\\)$"),
+      rule("url", `^(?:"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"|'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n])*')$`)
+    ])),
+    rule("selector", `(?:^|[{}\\s])\\K[^{}\\s](?:[^{};"'\\s]|\\s+(?![\\s{])|(?:"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"|'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n])*'))*(?=\\s*\\{)`),
+    greedy_rule("string", `(?:"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"|'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n])*')`),
+    rule("property", "(?i)(?:^|[^-\\w\\xA0-\\x{FFFF}])\\K(?!\\s)[-_a-z\\xA0-\\x{FFFF}](?:(?!\\s)[-\\w\\xA0-\\x{FFFF}])*(?=\\s*:)"),
+    rule("important", "(?i)!important\\b"),
+    rule("function", "(?i)(?:^|[^-a-z0-9])\\K[-a-z0-9]+(?=\\()"),
+    rule("punctuation", "[(){};:,]")
+  ]);
+}
+function grammar5() {
+  return new Grammar("css", new None, rules5());
+}
+
+// build/dev/javascript/smalto/smalto/languages/dart.mjs
+function rules6() {
+  return toList([
+    greedy_rule("comment", "(?:^|[^\\\\])\\K\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+    greedy_rule("comment", "(?:^|[^\\\\:])\\K\\/\\/.*"),
+    greedy_rule_with_inside("string-literal", `r?(?:("""|''')[\\s\\S]*?\\1|(["'])(?:\\\\.|(?!\\2)[^\\\\\\r\\n])*\\2(?!\\2))`, toList([
+      rule_with_inside("interpolation", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K\\$(?:\\w+|\\{(?:[^{}]|\\{[^{}]*\\})*\\})", toList([
+        rule("punctuation", "^\\$\\{?|\\}$"),
+        rule_with_inside("expression", "[\\s\\S]+", toList([
+          greedy_rule("comment", "(?:^|[^\\\\])\\K\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+          greedy_rule("comment", "(?:^|[^\\\\:])\\K\\/\\/.*"),
+          greedy_rule("string-literal", `r?(?:("""|''')[\\s\\S]*?\\1|(["'])(?:\\\\.|(?!\\2)[^\\\\\\r\\n])*\\2(?!\\2))`),
+          rule("function", "@\\w+"),
+          rule_with_inside("generics", "<(?:[\\w\\s,.&?]|<(?:[\\w\\s,.&?]|<(?:[\\w\\s,.&?]|<[\\w\\s,.&?]*>)*>)*>)*>", toList([
+            rule_with_inside("class-name", "(?:^|[^\\w.])\\K(?:[a-z]\\w*\\s*\\.\\s*)*(?:[A-Z]\\w*\\s*\\.\\s*)*[A-Z](?:[\\d_A-Z]*[a-z]\\w*)?\\b", toList([
+              rule_with_inside("namespace", "^[a-z]\\w*(?:\\s*\\.\\s*[a-z]\\w*)*(?:\\s*\\.)?", toList([rule("punctuation", "\\.")]))
+            ])),
+            rule("keyword", "\\b(?:async|sync|yield)\\*"),
+            rule("keyword", "\\b(?:abstract|assert|async|await|break|case|catch|class|const|continue|covariant|default|deferred|do|dynamic|else|enum|export|extends|extension|external|factory|final|finally|for|get|hide|if|implements|import|in|interface|library|mixin|new|null|on|operator|part|rethrow|return|set|show|static|super|switch|sync|this|throw|try|typedef|var|void|while|with|yield)\\b"),
+            rule("punctuation", "[<>(),.:]"),
+            rule("operator", "[?&|]")
+          ])),
+          rule("class-name", "(?:^|[^\\w.])\\K(?:[a-z]\\w*\\s*\\.\\s*)*(?:[A-Z]\\w*\\s*\\.\\s*)*[A-Z](?:[\\d_A-Z]*[a-z]\\w*)?\\b"),
+          rule("class-name", "(?:^|[^\\w.])\\K(?:[a-z]\\w*\\s*\\.\\s*)*(?:[A-Z]\\w*\\s*\\.\\s*)*[A-Z]\\w*(?=\\s+\\w+\\s*[;,=()])"),
+          rule("keyword", "\\b(?:async|sync|yield)\\*"),
+          rule("keyword", "\\b(?:abstract|assert|async|await|break|case|catch|class|const|continue|covariant|default|deferred|do|dynamic|else|enum|export|extends|extension|external|factory|final|finally|for|get|hide|if|implements|import|in|interface|library|mixin|new|null|on|operator|part|rethrow|return|set|show|static|super|switch|sync|this|throw|try|typedef|var|void|while|with|yield)\\b"),
+          rule("boolean", "\\b(?:false|true)\\b"),
+          rule("function", "\\b\\w+(?=\\()"),
+          rule("number", "(?i)\\b0x[\\da-f]+\\b|(?:\\b\\d+(?:\\.\\d*)?|\\B\\.\\d+)(?:e[+-]?\\d+)?"),
+          rule("operator", "\\bis!|\\b(?:as|is)\\b|\\+\\+|--|&&|\\|\\||<<=?|>>=?|~(?:\\/=?)?|[+\\-*\\/%&^|=!<>]=?|\\?"),
+          rule("punctuation", "[{}[\\];(),.:]")
+        ]))
+      ])),
+      rule("string", "[\\s\\S]+")
+    ])),
+    rule("function", "@\\w+"),
+    rule("generics", "<(?:[\\w\\s,.&?]|<(?:[\\w\\s,.&?]|<(?:[\\w\\s,.&?]|<[\\w\\s,.&?]*>)*>)*>)*>"),
+    rule("class-name", "(?:^|[^\\w.])\\K(?:[a-z]\\w*\\s*\\.\\s*)*(?:[A-Z]\\w*\\s*\\.\\s*)*[A-Z](?:[\\d_A-Z]*[a-z]\\w*)?\\b"),
+    rule("class-name", "(?:^|[^\\w.])\\K(?:[a-z]\\w*\\s*\\.\\s*)*(?:[A-Z]\\w*\\s*\\.\\s*)*[A-Z]\\w*(?=\\s+\\w+\\s*[;,=()])"),
+    rule("keyword", "\\b(?:async|sync|yield)\\*"),
+    rule("keyword", "\\b(?:abstract|assert|async|await|break|case|catch|class|const|continue|covariant|default|deferred|do|dynamic|else|enum|export|extends|extension|external|factory|final|finally|for|get|hide|if|implements|import|in|interface|library|mixin|new|null|on|operator|part|rethrow|return|set|show|static|super|switch|sync|this|throw|try|typedef|var|void|while|with|yield)\\b"),
+    rule("boolean", "\\b(?:false|true)\\b"),
+    rule("function", "\\b\\w+(?=\\()"),
+    rule("number", "(?i)\\b0x[\\da-f]+\\b|(?:\\b\\d+(?:\\.\\d*)?|\\B\\.\\d+)(?:e[+-]?\\d+)?"),
+    rule("operator", "\\bis!|\\b(?:as|is)\\b|\\+\\+|--|&&|\\|\\||<<=?|>>=?|~(?:\\/=?)?|[+\\-*\\/%&^|=!<>]=?|\\?"),
+    rule("punctuation", "[{}[\\];(),.:]")
+  ]);
+}
+function grammar6() {
+  return new Grammar("dart", new Some("clike"), rules6());
+}
+
+// build/dev/javascript/smalto/smalto/languages/dockerfile.mjs
+function rules7() {
+  return toList([
+    greedy_rule_with_inside("instruction", "(?im)(?:^[ \\t]*)\\K(?:ADD|ARG|CMD|COPY|ENTRYPOINT|ENV|EXPOSE|FROM|HEALTHCHECK|LABEL|MAINTAINER|ONBUILD|RUN|SHELL|STOPSIGNAL|USER|VOLUME|WORKDIR)(?=\\s)(?:\\\\.|[^\\r\\n\\\\])*(?:\\\\$(?:\\s|#.*$)*(?![\\s#])(?:\\\\.|[^\\r\\n\\\\])*)*", toList([
+      greedy_rule_with_inside("options", `(?i)(?:^(?:ONBUILD(?:[ \\t]+(?![ \\t])(?:\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n]))?|\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n])))?\\w+(?:[ \\t]+(?![ \\t])(?:\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n]))?|\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n])))\\K--[\\w-]+=(?:"(?:[^"\\\\\\r\\n]|\\\\(?:\\r\\n|[\\s\\S]))*"|'(?:[^'\\\\\\r\\n]|\\\\(?:\\r\\n|[\\s\\S]))*'|(?!["'])(?:[^\\s\\\\]|\\\\.)+)(?:(?:[ \\t]+(?![ \\t])(?:\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n]))?|\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n]))--[\\w-]+=(?:"(?:[^"\\\\\\r\\n]|\\\\(?:\\r\\n|[\\s\\S]))*"|'(?:[^'\\\\\\r\\n]|\\\\(?:\\r\\n|[\\s\\S]))*'|(?!["'])(?:[^\\s\\\\]|\\\\.)+))*`, toList([
+        rule("property", "(?:^|\\s)\\K--[\\w-]+"),
+        greedy_rule("string", `"(?:[^"\\\\\\r\\n]|\\\\(?:\\r\\n|[\\s\\S]))*"|'(?:[^'\\\\\\r\\n]|\\\\(?:\\r\\n|[\\s\\S]))*'`),
+        rule("string", `(?<==)(?!["'])(?:[^\\s\\\\]|\\\\.)+`),
+        rule("operator", "(?m)\\\\$"),
+        rule("punctuation", "=")
+      ])),
+      greedy_rule("keyword", `(?i)(?:^(?:ONBUILD(?:[ \\t]+(?![ \\t])(?:\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n]))?|\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n])))?HEALTHCHECK(?:[ \\t]+(?![ \\t])(?:\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n]))?|\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n]))(?:--[\\w-]+=(?:"(?:[^"\\\\\\r\\n]|\\\\(?:\\r\\n|[\\s\\S]))*"|'(?:[^'\\\\\\r\\n]|\\\\(?:\\r\\n|[\\s\\S]))*'|(?!["'])(?:[^\\s\\\\]|\\\\.)+)(?:[ \\t]+(?![ \\t])(?:\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n]))?|\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n])))*)\\K(?:CMD|NONE)\\b`),
+      greedy_rule("keyword", `(?i)(?:^(?:ONBUILD(?:[ \\t]+(?![ \\t])(?:\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n]))?|\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n])))?FROM(?:[ \\t]+(?![ \\t])(?:\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n]))?|\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n]))(?:--[\\w-]+=(?:"(?:[^"\\\\\\r\\n]|\\\\(?:\\r\\n|[\\s\\S]))*"|'(?:[^'\\\\\\r\\n]|\\\\(?:\\r\\n|[\\s\\S]))*'|(?!["'])(?:[^\\s\\\\]|\\\\.)+)(?:[ \\t]+(?![ \\t])(?:\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n]))?|\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n])))*(?!--)[^ \\t\\\\]+(?:[ \\t]+(?![ \\t])(?:\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n]))?|\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n])))\\KAS`),
+      greedy_rule("keyword", "(?i)(?:^ONBUILD(?:[ \\t]+(?![ \\t])(?:\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n]))?|\\\\[\\r\\n](?:\\s|\\\\[\\r\\n]|#.*(?!.))*(?![\\s#]|\\\\[\\r\\n])))\\K\\w+"),
+      greedy_rule("keyword", "^\\w+"),
+      greedy_rule("comment", "(?m)(?:^[ \\t]*)\\K#.*"),
+      greedy_rule("string", `"(?:[^"\\\\\\r\\n]|\\\\(?:\\r\\n|[\\s\\S]))*"|'(?:[^'\\\\\\r\\n]|\\\\(?:\\r\\n|[\\s\\S]))*'`),
+      rule("variable", `\\$(?:\\w+|\\{[^{}"'\\\\]*\\})`),
+      rule("operator", "(?m)\\\\$")
+    ])),
+    greedy_rule("comment", "(?m)(?:^[ \\t]*)\\K#.*")
+  ]);
+}
+function grammar7() {
+  return new Grammar("dockerfile", new None, rules7());
+}
+
+// build/dev/javascript/smalto/smalto/languages/elixir.mjs
+function rules8() {
+  return toList([
+    rule_with_inside("doc", `@(?:doc|moduledoc)\\s+(?:("""|''')[\\s\\S]*?\\1|("|')(?:\\\\(?:\\r\\n|[\\s\\S])|(?!\\2)[^\\\\\\r\\n])*\\2)`, toList([
+      rule("attribute", "^@\\w+"),
+      rule("string", `['"][\\s\\S]+`)
+    ])),
+    greedy_rule("comment", "#.*"),
+    greedy_rule("regex", `~[rR](?:("""|''')(?:\\\\[\\s\\S]|(?!\\1)[^\\\\])+\\1|([\\/|"'])(?:\\\\.|(?!\\2)[^\\\\\\r\\n])+\\2|\\((?:\\\\.|[^\\\\)\\r\\n])+\\)|\\[(?:\\\\.|[^\\\\\\]\\r\\n])+\\]|\\{(?:\\\\.|[^\\\\}\\r\\n])+\\}|<(?:\\\\.|[^\\\\>\\r\\n])+>)[uismxfr]*`),
+    greedy_rule_with_inside("string", `~[cCsSwW](?:("""|''')(?:\\\\[\\s\\S]|(?!\\1)[^\\\\])+\\1|([\\/|"'])(?:\\\\.|(?!\\2)[^\\\\\\r\\n])+\\2|\\((?:\\\\.|[^\\\\)\\r\\n])+\\)|\\[(?:\\\\.|[^\\\\\\]\\r\\n])+\\]|\\{(?:\\\\.|#\\{[^}]+\\}|#(?!\\{)|[^#\\\\}\\r\\n])+\\}|<(?:\\\\.|[^\\\\>\\r\\n])+>)[csa]?`, toList([nested_rule("interpolation", "#\\{[^}]+\\}", "elixir")])),
+    greedy_rule_with_inside("string", `("""|''')[\\s\\S]*?\\1`, toList([nested_rule("interpolation", "#\\{[^}]+\\}", "elixir")])),
+    greedy_rule_with_inside("string", `("|')(?:\\\\(?:\\r\\n|[\\s\\S])|(?!\\1)[^\\\\\\r\\n])*\\1`, toList([nested_rule("interpolation", "#\\{[^}]+\\}", "elixir")])),
+    rule("symbol", "(?:^|[^:])\\K:\\w+"),
+    rule("class-name", "\\b[A-Z]\\w*\\b"),
+    rule("attr-name", "\\b\\w+\\??:(?!:)"),
+    rule("variable", "(?:^|[^&])\\K&\\d+"),
+    rule("variable", "@\\w+"),
+    rule("function", "\\b[_a-zA-Z]\\w*[?!]?(?:(?=\\s*(?:\\.\\s*)?\\()|(?=\\/\\d))"),
+    rule("number", "(?i)\\b(?:0[box][a-f\\d_]+|\\d[\\d_]*)(?:\\.[\\d_]+)?(?:e[+-]?[\\d_]+)?\\b"),
+    rule("keyword", "\\b(?:after|alias|and|case|catch|cond|def(?:callback|delegate|exception|impl|macro|module|n|np|p|protocol|struct)?|do|else|end|fn|for|if|import|not|or|quote|raise|require|rescue|try|unless|unquote|use|when)\\b"),
+    rule("boolean", "\\b(?:false|nil|true)\\b"),
+    rule("operator", "\\bin\\b|&&?|\\|[|>]?|\\\\\\\\|::|\\.\\.\\.?|\\+\\+?|-[->]?|<[-=>]|>=|!==?|\\B!|=(?:==?|[>~])?|[*\\/^]"),
+    rule("operator", "(?<=[^<])<(?!<)"),
+    rule("operator", "(?<=[^>])>(?!>)"),
+    rule("punctuation", "<<|>>|[.,%\\[\\]{}()]")
+  ]);
+}
+function grammar8() {
+  return new Grammar("elixir", new None, rules8());
+}
+
+// build/dev/javascript/smalto/smalto/languages/erlang.mjs
+function rules9() {
+  return toList([
+    rule("comment", "%.+"),
+    greedy_rule("string", '"(?:\\\\.|[^\\\\"\\r\\n])*"'),
+    rule("function", "'(?:\\\\.|[^\\\\'\\r\\n])+'(?=\\()"),
+    rule("atom", "'(?:\\\\.|[^\\\\'\\r\\n])+'"),
+    rule("boolean", "\\b(?:false|true)\\b"),
+    rule("keyword", "\\b(?:after|begin|case|catch|end|fun|if|of|receive|try|when)\\b"),
+    rule("number", "\\$\\\\?."),
+    rule("number", "(?i)\\b\\d+#[a-z0-9]+"),
+    rule("number", "(?i)(?:\\b\\d+(?:\\.\\d*)?|\\B\\.\\d+)(?:e[+-]?\\d+)?"),
+    rule("function", "\\b[a-z][\\w@]*(?=\\()"),
+    rule("variable", "(?:^|[^@])\\K(?:\\b|\\?)[A-Z_][\\w@]*"),
+    rule("operator", "[=\\/<>:]=|=[:\\/]=|\\+\\+?|--?|[=*\\/!]|\\b(?:and|andalso|band|bnot|bor|bsl|bsr|bxor|div|not|or|orelse|rem|xor)\\b"),
+    rule("operator", "(?:^|[^<])\\K<(?!<)"),
+    rule("operator", "(?:^|[^>])\\K>(?!>)"),
+    rule("atom", "\\b[a-z][\\w@]*"),
+    rule("punctuation", "[()[\\]{}:;,.#|]|<<|>>")
+  ]);
+}
+function grammar9() {
+  return new Grammar("erlang", new None, rules9());
+}
+
+// build/dev/javascript/smalto/smalto/languages/gleam.mjs
+function rules10() {
+  return toList([
+    greedy_rule("comment", "\\/\\/\\/\\/.*"),
+    greedy_rule("comment", "\\/\\/\\/.*"),
+    greedy_rule("comment", "\\/\\/.*"),
+    greedy_rule("string", '"(?:\\\\[\\s\\S]|[^\\\\"\\r\\n])*"'),
+    rule("module", "(?:\\bimport\\s+)\\K[a-z][a-z_/\\d]*"),
+    rule("function", "(?:\\bfn\\s+)\\K[a-z_]\\w*"),
+    rule("keyword", "\\b(?:as|assert|auto|case|const|delegat|echo|else|external|fn|if|implement|import|let|macro|opaque|panic|pub|test|todo|type|use)\\b"),
+    rule("keyword", "\\b(?:bits|bytes|float|int|utf8|utf16|utf32|utf8_codepoint|utf16_codepoint|utf32_codepoint|signed|unsigned|big|little|native|size|unit)\\b(?=\\s*(?:[,>-]))"),
+    rule("number", "\\b0x[\\da-fA-F][\\da-fA-F_]*\\b|\\b0o[0-7][0-7_]*\\b|\\b0b[01][01_]*\\b|\\b\\d[\\d_]*\\.\\d[\\d_]*(?:e[+-]?\\d[\\d_]*)?\\b|\\b\\d[\\d_]*\\b"),
+    rule("module", "\\b[a-z_]\\w*(?=\\.[a-z_]\\w*\\s*\\()"),
+    rule("function", "\\b[a-z_]\\w*(?=\\s*\\()"),
+    rule("type", "\\b[A-Z]\\w*\\b"),
+    rule("attribute", "@[a-z_]\\w*"),
+    rule("variable", "\\b_\\w*\\b"),
+    rule("operator", "\\|>|<>|<<|>>|->|<-|\\.\\.|&&|\\|\\||[+\\-*/]=?|%|[<>]=?\\.?|[!=]=|="),
+    rule("punctuation", "[(){}\\[\\]:;,.#|]")
+  ]);
+}
+function grammar10() {
+  return new Grammar("gleam", new None, rules10());
+}
+
+// build/dev/javascript/smalto/smalto/languages/go.mjs
+function rules11() {
+  return toList([
+    greedy_rule("comment", "(?:^|[^\\\\])\\K\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+    greedy_rule("comment", "(?:^|[^\\\\:])\\K\\/\\/.*"),
+    greedy_rule("char", "'(?:\\\\.|[^'\\\\\\r\\n]){0,10}'"),
+    greedy_rule("string", '(?:^|[^\\\\])\\K"(?:\\\\.|[^"\\\\\\r\\n])*"|`[^`]*`'),
+    rule("keyword", "\\b(?:break|case|chan|const|continue|default|defer|else|fallthrough|for|func|go(?:to)?|if|import|interface|map|package|range|return|select|struct|switch|type|var)\\b"),
+    rule("boolean", "\\b(?:_|false|iota|nil|true)\\b"),
+    rule("function", "\\b\\w+(?=\\()"),
+    rule("number", "(?i)\\b0(?:b[01_]+|o[0-7_]+)i?\\b"),
+    rule("number", "(?i)\\b0x(?:[a-f\\d_]+(?:\\.[a-f\\d_]*)?|\\.[a-f\\d_]+)(?:p[+-]?\\d+(?:_\\d+)*)?i?(?!\\w)"),
+    rule("number", "(?i)(?:\\b\\d[\\d_]*(?:\\.[\\d_]*)?|\\B\\.\\d[\\d_]*)(?:e[+-]?[\\d_]+)?i?(?!\\w)"),
+    rule("operator", "[*\\/%^!=]=?|\\+[=+]?|-[=-]?|\\|[=|]?|&(?:=|&|\\^=?)?|>(?:>=?|=)?|<(?:<=?|=|-)?|:=|\\.\\.\\."),
+    rule("punctuation", "[{}[\\];(),.:]"),
+    rule("builtin", "\\b(?:append|bool|byte|cap|close|complex|complex(?:64|128)|copy|delete|error|float(?:32|64)|u?int(?:8|16|32|64)?|imag|len|make|new|panic|print(?:ln)?|real|recover|rune|string|uintptr)\\b")
+  ]);
+}
+function grammar11() {
+  return new Grammar("go", new Some("clike"), rules11());
+}
+
+// build/dev/javascript/smalto/smalto/languages/haskell.mjs
+function rules12() {
+  return toList([
+    rule("comment", "(?m)(?:^|[^-!#$%*+=?&@|~.:<>^\\\\\\/])\\K(?:--(?:(?=.)[^-!#$%*+=?&@|~.:<>^\\\\\\/].*|$)|\\{-[\\s\\S]*?-\\})"),
+    rule("string", `'(?:[^\\\\']|\\\\(?:[abfnrtv\\\\"'&]|\\^[A-Z@[\\]^_]|ACK|BEL|BS|CAN|CR|DC1|DC2|DC3|DC4|DEL|DLE|EM|ENQ|EOT|ESC|ETB|ETX|FF|FS|GS|HT|LF|NAK|NUL|RS|SI|SO|SOH|SP|STX|SUB|SYN|US|VT|\\d+|o[0-7]+|x[0-9a-fA-F]+))'`),
+    greedy_rule("string", '"(?:[^\\\\"]|\\\\(?:\\S|\\s+\\\\))*"'),
+    rule("keyword", "\\b(?:case|class|data|deriving|do|else|if|in|infixl|infixr|instance|let|module|newtype|of|primitive|then|type|where)\\b"),
+    rule_with_inside("import-statement", "(?m)(?:^[\\t ]*)\\Kimport\\s+(?:qualified\\s+)?(?:[A-Z][\\w']*)(?:\\.[A-Z][\\w']*)*(?:\\s+as\\s+(?:[A-Z][\\w']*)(?:\\.[A-Z][\\w']*)*)?(?:\\s+hiding\\b)?", toList([
+      rule("keyword", "\\b(?:as|hiding|import|qualified)\\b"),
+      rule("punctuation", "\\.")
+    ])),
+    rule("builtin", "\\b(?:abs|acos|acosh|all|and|any|appendFile|approxRational|asTypeOf|asin|asinh|atan|atan2|atanh|basicIORun|break|catch|ceiling|chr|compare|concat|concatMap|const|cos|cosh|curry|cycle|decodeFloat|denominator|digitToInt|div|divMod|drop|dropWhile|either|elem|encodeFloat|enumFrom|enumFromThen|enumFromThenTo|enumFromTo|error|even|exp|exponent|fail|filter|flip|floatDigits|floatRadix|floatRange|floor|fmap|foldl|foldl1|foldr|foldr1|fromDouble|fromEnum|fromInt|fromInteger|fromIntegral|fromRational|fst|gcd|getChar|getContents|getLine|group|head|id|inRange|index|init|intToDigit|interact|ioError|isAlpha|isAlphaNum|isAscii|isControl|isDenormalized|isDigit|isHexDigit|isIEEE|isInfinite|isLower|isNaN|isNegativeZero|isOctDigit|isPrint|isSpace|isUpper|iterate|last|lcm|length|lex|lexDigits|lexLitChar|lines|log|logBase|lookup|map|mapM|mapM_|max|maxBound|maximum|maybe|min|minBound|minimum|mod|negate|not|notElem|null|numerator|odd|or|ord|otherwise|pack|pi|pred|primExitWith|print|product|properFraction|putChar|putStr|putStrLn|quot|quotRem|range|rangeSize|read|readDec|readFile|readFloat|readHex|readIO|readInt|readList|readLitChar|readLn|readOct|readParen|readSigned|reads|readsPrec|realToFrac|recip|rem|repeat|replicate|return|reverse|round|scaleFloat|scanl|scanl1|scanr|scanr1|seq|sequence|sequence_|show|showChar|showInt|showList|showLitChar|showParen|showSigned|showString|shows|showsPrec|significand|signum|sin|sinh|snd|sort|span|splitAt|sqrt|subtract|succ|sum|tail|take|takeWhile|tan|tanh|threadToIOResult|toEnum|toInt|toInteger|toLower|toRational|toUpper|truncate|uncurry|undefined|unlines|until|unwords|unzip|unzip3|userError|words|writeFile|zip|zip3|zipWith|zipWith3)\\b"),
+    rule("number", "(?i)\\b(?:\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?|0o[0-7]+|0x[0-9a-f]+)\\b"),
+    greedy_rule("operator", "`(?:[A-Z][\\w']*\\.)*[_a-z][\\w']*`"),
+    rule("operator", "(?<=\\s)\\.(?=\\s)"),
+    rule("operator", "[-!#$%*+=?&@|~:<>^\\\\\\/][-!#$%*+=?&@|~.:<>^\\\\\\/]*|\\.[-!#$%*+=?&@|~.:<>^\\\\\\/]+"),
+    rule_with_inside("hvariable", "\\b(?:[A-Z][\\w']*\\.)*[_a-z][\\w']*", toList([rule("punctuation", "\\.")])),
+    rule_with_inside("constant", "\\b(?:[A-Z][\\w']*\\.)*[A-Z][\\w']*", toList([rule("punctuation", "\\.")])),
+    rule("punctuation", "[{}[\\];(),.:]")
+  ]);
+}
+function grammar12() {
+  return new Grammar("haskell", new None, rules12());
+}
+
+// build/dev/javascript/smalto/smalto/languages/html.mjs
+function rules13() {
+  return toList([
+    greedy_rule("comment", "<!--(?:(?!<!--)[\\s\\S])*?-->"),
+    greedy_rule("prolog", "<\\?[\\s\\S]+?\\?>"),
+    greedy_rule_with_inside("doctype", `(?i)<!DOCTYPE(?:[^>"'[\\]]|"[^"]*"|'[^']*')+(?:\\[(?:[^<"'\\]]|"[^"]*"|'[^']*'|<(?!!--)|<!--(?:[^-]|-(?!->))*-->)*\\]\\s*)?>`, toList([
+      greedy_rule_with_inside("internal-subset", "(?:^[^\\[]*\\[)\\K[\\s\\S]+(?=\\]>$)", toList([
+        greedy_rule("comment", "<!--(?:(?!<!--)[\\s\\S])*?-->"),
+        greedy_rule("prolog", "<\\?[\\s\\S]+?\\?>"),
+        greedy_rule("doctype", `(?i)<!DOCTYPE(?:[^>"'[\\]]|"[^"]*"|'[^']*')+(?:\\[(?:[^<"'\\]]|"[^"]*"|'[^']*'|<(?!!--)|<!--(?:[^-]|-(?!->))*-->)*\\]\\s*)?>`),
+        greedy_rule_with_inside("style", "(?i)(?:<style[^>]*>)\\K(?:<!\\[CDATA\\[(?:[^\\]]|\\](?!\\]>))*\\]\\]>|(?!<!\\[CDATA\\[)[\\s\\S])*?(?=<\\/style>)", toList([
+          rule_with_inside("included-cdata", "(?i)<!\\[CDATA\\[[\\s\\S]*?\\]\\]>", toList([
+            rule_with_inside("language-css", "(?i)(?<=^<!\\[CDATA\\[)[\\s\\S]+?(?=\\]\\]>$)", toList([
+              rule("comment", "\\/\\*[\\s\\S]*?\\*\\/"),
+              nested_rule("atrule", `@[\\w-](?:[^;{\\s"']|\\s+(?!\\s)|(?:"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"|'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n])*'))*?(?:;|(?=\\s*\\{))`, "css"),
+              greedy_rule_with_inside("url", `(?i)\\burl\\((?:(?:"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"|'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n])*')|(?:[^\\\\\\r\\n()"']|\\\\[\\s\\S])*)\\)`, toList([
+                rule("function", "(?i)^url"),
+                rule("punctuation", "^\\(|\\)$"),
+                rule("url", `^(?:"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"|'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n])*')$`)
+              ])),
+              rule("selector", `(?:^|[{}\\s])\\K[^{}\\s](?:[^{};"'\\s]|\\s+(?![\\s{])|(?:"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"|'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n])*'))*(?=\\s*\\{)`),
+              greedy_rule("string", `(?:"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"|'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n])*')`),
+              rule("property", "(?i)(?:^|[^-\\w\\xA0-\\x{FFFF}])\\K(?!\\s)[-_a-z\\xA0-\\x{FFFF}](?:(?!\\s)[-\\w\\xA0-\\x{FFFF}])*(?=\\s*:)"),
+              rule("important", "(?i)!important\\b"),
+              rule("function", "(?i)(?:^|[^-a-z0-9])\\K[-a-z0-9]+(?=\\()"),
+              rule("punctuation", "[(){};:,]")
+            ])),
+            rule("cdata", "(?i)^<!\\[CDATA\\[|\\]\\]>$")
+          ])),
+          rule("language-css", "[\\s\\S]+")
+        ])),
+        greedy_rule_with_inside("script", "(?i)(?:<script[^>]*>)\\K(?:<!\\[CDATA\\[(?:[^\\]]|\\](?!\\]>))*\\]\\]>|(?!<!\\[CDATA\\[)[\\s\\S])*?(?=<\\/script>)", toList([
+          rule_with_inside("included-cdata", "(?i)<!\\[CDATA\\[[\\s\\S]*?\\]\\]>", toList([
+            rule_with_inside("language-javascript", "(?i)(?<=^<!\\[CDATA\\[)[\\s\\S]+?(?=\\]\\]>$)", toList([
+              greedy_rule("comment", "(?:^|[^\\\\])\\K\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+              greedy_rule("comment", "(?:^|[^\\\\:])\\K\\/\\/.*"),
+              greedy_rule("comment", "^#!.*"),
+              greedy_rule_with_inside("template-string", "`(?:\\\\[\\s\\S]|\\$\\{(?:[^{}]|\\{(?:[^{}]|\\{[^}]*\\})*\\})+\\}|(?!\\$\\{)[^\\\\`])*`", toList([
+                rule("string", "^`|`$"),
+                nested_rule("interpolation", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K\\$\\{(?:[^{}]|\\{(?:[^{}]|\\{[^}]*\\})*\\})+\\}", "javascript"),
+                rule("string", "[\\s\\S]+")
+              ])),
+              greedy_rule("property", `(?m)(?:(?:^|[,{])[ \\t]*)\\K(["'])(?:\\\\(?:\\r\\n|[\\s\\S])|(?!\\2)[^\\\\\\r\\n])*\\2(?=\\s*:)`),
+              greedy_rule("string", `(["'])(?:\\\\(?:\\r\\n|[\\s\\S])|(?!\\1)[^\\\\\\r\\n])*\\1`),
+              rule_with_inside("class-name", "(?:\\b(?:class|extends|implements|instanceof|interface|new)\\s+)\\K[\\w.\\\\]+", toList([rule("punctuation", "[.\\\\]")])),
+              rule("class-name", "(?:^|[^$\\w\\xA0-\\x{FFFF}])\\K(?!\\s)[_$A-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*(?=\\.(?:constructor|prototype))"),
+              greedy_rule_with_inside("regex", `(?:(?:^|[^$\\w\\xA0-\\x{FFFF}."'\\])\\s]|\\b(?:return|yield))\\s*)\\K\\/(?:(?:\\[(?:[^\\]\\\\\\r\\n]|\\\\.)*\\]|\\\\.|[^/\\\\\\[\\r\\n])+\\/[dgimyus]{0,7}|(?:\\[(?:[^[\\]\\\\\\r\\n]|\\\\.|\\[(?:[^[\\]\\\\\\r\\n]|\\\\.|\\[(?:[^[\\]\\\\\\r\\n]|\\\\.)*\\])*\\])*\\]|\\\\.|[^/\\\\\\[\\r\\n])+\\/[dgimyus]{0,7}v[dgimyus]{0,7})(?=(?:\\s|\\/\\*(?:[^*]|\\*(?!\\/))*\\*\\/)*(?:$|[\\r\\n,.;:})\\]]|\\/\\/))`, toList([
+                rule("language-regex", "^(?<=\\/)[\\s\\S]+(?=\\/[a-z]*$)"),
+                rule("regex-delimiter", "^\\/|\\/$"),
+                rule("regex-flags", "^[a-z]+$")
+              ])),
+              rule("function", "#?(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*(?=\\s*[=:]\\s*(?:async\\s*)?(?:\\bfunction\\b|(?:\\((?:[^()]|\\([^()]*\\))*\\)|(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*)\\s*=>))"),
+              rule("parameter", "(?:function(?:\\s+(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*)?\\s*\\(\\s*)\\K(?!\\s)(?:[^()\\s]|\\s+(?![\\s)])|\\([^()]*\\))+(?=\\s*\\))"),
+              rule("parameter", "(?i)(?:^|[^$\\w\\xA0-\\x{FFFF}])\\K(?!\\s)[_$a-z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*(?=\\s*=>)"),
+              rule("parameter", "(?:\\(\\s*)\\K(?!\\s)(?:[^()\\s]|\\s+(?![\\s)])|\\([^()]*\\))+(?=\\s*\\)\\s*=>)"),
+              rule("parameter", "(?:(?:\\b|\\s|^)(?!(?:as|async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|finally|for|from|function|get|if|implements|import|in|instanceof|interface|let|new|null|of|package|private|protected|public|return|set|static|super|switch|this|throw|try|typeof|undefined|var|void|while|with|yield)(?![$\\w\\xA0-\\x{FFFF}]))(?:(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*\\s*)\\(\\s*|\\]\\s*\\(\\s*)\\K(?!\\s)(?:[^()\\s]|\\s+(?![\\s)])|\\([^()]*\\))+(?=\\s*\\)\\s*\\{)"),
+              rule("constant", "\\b[A-Z](?:[A-Z_]|\\dx?)*\\b"),
+              rule("keyword", "(?:(?:^|\\})\\s*)\\Kcatch\\b"),
+              rule("keyword", `(?:^|[^.]|\\.\\.\\.\\s*)\\K\\b(?:as|assert(?=\\s*\\{)|async(?=\\s*(?:function\\b|\\(|[$\\w\\xA0-\\x{FFFF}]|$))|await|break|case|class|const|continue|debugger|default|delete|do|else|enum|export|extends|finally(?=\\s*(?:\\{|$))|for|from(?=\\s*(?:['"]|$))|function|(?:get|set)(?=\\s*(?:[#\\[$\\w\\xA0-\\x{FFFF}]|$))|if|implements|import|in|instanceof|interface|let|new|null|of|package|private|protected|public|return|static|super|switch|this|throw|try|typeof|undefined|var|void|while|with|yield)\\b`),
+              rule("boolean", "\\b(?:false|true)\\b"),
+              rule("function", "#?(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*(?=\\s*(?:\\.\\s*(?:apply|bind|call)\\s*)?\\()"),
+              rule("number", "(?:^|[^\\w$])\\K(?:NaN|Infinity|0[bB][01]+(?:_[01]+)*n?|0[oO][0-7]+(?:_[0-7]+)*n?|0[xX][\\dA-Fa-f]+(?:_[\\dA-Fa-f]+)*n?|\\d+(?:_\\d+)*n|(?:\\d+(?:_\\d+)*(?:\\.(?:\\d+(?:_\\d+)*)?)?|\\.\\d+(?:_\\d+)*)(?:[Ee][+-]?\\d+(?:_\\d+)*)?)(?![\\w$])"),
+              rule("property", "(?m)(?:(?:^|[,{])[ \\t]*)\\K(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*(?=\\s*:)"),
+              rule("operator", "--|\\+\\+|\\*\\*=?|=>|&&=?|\\|\\|=?|[!=]==|<<=?|>>>?=?|[-+*/%&|^!=<>]=?|\\.{3}|\\?\\?=?|\\?\\.?|[~:]"),
+              rule("punctuation", "[{}[\\];(),.:]")
+            ])),
+            rule("cdata", "(?i)^<!\\[CDATA\\[|\\]\\]>$")
+          ])),
+          rule("language-javascript", "[\\s\\S]+")
+        ])),
+        greedy_rule("cdata", "(?i)<!\\[CDATA\\[[\\s\\S]*?\\]\\]>"),
+        greedy_rule_with_inside("tag", `<\\/?(?!\\d)[^\\s>\\/=$<%]+(?:\\s(?:\\s*[^\\s>\\/=]+(?:\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s'">=]+(?=[\\s>]))|(?=[\\s/>])))+)?\\s*\\/?>`, toList([
+          rule_with_inside("tag", "^<\\/?[^\\s>\\/]+", toList([
+            rule("punctuation", "^<\\/?"),
+            rule("namespace", "^[^\\s>\\/:]+:")
+          ])),
+          rule_with_inside("special-attr", `(?i)(?:^|["'\\s])\\K(?:style)\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s'">=]+(?=[\\s>]))`, toList([
+            rule("attr-name", "^[^\\s=]+"),
+            rule_with_inside("attr-value", "=[\\s\\S]+", toList([
+              rule("css", `(?:^=\\s*(["']|(?!["'])))\\K\\S[\\s\\S]*(?=\\2$)`),
+              rule("attr-equals", "^="),
+              rule("punctuation", `"|'`)
+            ]))
+          ])),
+          rule_with_inside("special-attr", `(?i)(?:^|["'\\s])\\K(?:on(?:abort|blur|change|click|composition(?:end|start|update)|dblclick|error|focus(?:in|out)?|key(?:down|up)|load|mouse(?:down|enter|leave|move|out|over|up)|reset|resize|scroll|select|slotchange|submit|unload|wheel))\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s'">=]+(?=[\\s>]))`, toList([
+            rule("attr-name", "^[^\\s=]+"),
+            rule_with_inside("attr-value", "=[\\s\\S]+", toList([
+              rule("javascript", `(?:^=\\s*(["']|(?!["'])))\\K\\S[\\s\\S]*(?=\\2$)`),
+              rule("attr-equals", "^="),
+              rule("punctuation", `"|'`)
+            ]))
+          ])),
+          rule_with_inside("attr-value", `=\\s*(?:"[^"]*"|'[^']*'|[^\\s'">=]+)`, toList([
+            rule("attr-equals", "^="),
+            rule("punctuation", `^(?:\\s*)\\K["']|["']$`),
+            rule("named-entity", "(?i)&[\\da-z]{1,8};"),
+            rule("entity", "(?i)&#x?[\\da-f]{1,8};")
+          ])),
+          rule("punctuation", "\\/?>"),
+          rule_with_inside("attr-name", "[^\\s>\\/]+", toList([rule("namespace", "^[^\\s>\\/:]+:")]))
+        ])),
+        rule("named-entity", "(?i)&[\\da-z]{1,8};"),
+        rule("entity", "(?i)&#x?[\\da-f]{1,8};")
+      ])),
+      greedy_rule("string", `"[^"]*"|'[^']*'`),
+      rule("punctuation", "^<!|>$|[[\\]]"),
+      rule("doctype-tag", "(?i)^DOCTYPE"),
+      rule("name", `[^\\s<>'"]+`)
+    ])),
+    greedy_rule("style", "(?i)(?:<style[^>]*>)\\K(?:<!\\[CDATA\\[(?:[^\\]]|\\](?!\\]>))*\\]\\]>|(?!<!\\[CDATA\\[)[\\s\\S])*?(?=<\\/style>)"),
+    greedy_rule("script", "(?i)(?:<script[^>]*>)\\K(?:<!\\[CDATA\\[(?:[^\\]]|\\](?!\\]>))*\\]\\]>|(?!<!\\[CDATA\\[)[\\s\\S])*?(?=<\\/script>)"),
+    greedy_rule("cdata", "(?i)<!\\[CDATA\\[[\\s\\S]*?\\]\\]>"),
+    greedy_rule("tag", `<\\/?(?!\\d)[^\\s>\\/=$<%]+(?:\\s(?:\\s*[^\\s>\\/=]+(?:\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s'">=]+(?=[\\s>]))|(?=[\\s/>])))+)?\\s*\\/?>`),
+    rule("named-entity", "(?i)&[\\da-z]{1,8};"),
+    rule("entity", "(?i)&#x?[\\da-f]{1,8};")
+  ]);
+}
+function grammar13() {
+  return new Grammar("html", new None, rules13());
+}
+
+// build/dev/javascript/smalto/smalto/languages/java.mjs
+function rules14() {
+  return toList([
+    greedy_rule("comment", "(?:^|[^\\\\])\\K\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+    greedy_rule("comment", "(?:^|[^\\\\:])\\K\\/\\/.*"),
+    greedy_rule("string", '"""[ \\t]*[\\r\\n](?:(?:"|"")?(?:\\\\.|[^"\\\\]))*"""'),
+    greedy_rule("char", "'(?:\\\\.|[^'\\\\\\r\\n]){1,6}'"),
+    greedy_rule("string", '(?:^|[^\\\\])\\K"(?:\\\\.|[^"\\\\\\r\\n])*"'),
+    rule("punctuation", "(?:^|[^.])\\K@\\w+(?:\\s*\\.\\s*\\w+)*"),
+    rule_with_inside("generics", "<(?:[\\w\\s,.?]|&(?!&)|<(?:[\\w\\s,.?]|&(?!&)|<(?:[\\w\\s,.?]|&(?!&)|<(?:[\\w\\s,.?]|&(?!&))*>)*>)*>)*>", toList([
+      rule_with_inside("class-name", "(?:^|[^\\w.])\\K(?:[a-z]\\w*\\s*\\.\\s*)*(?:[A-Z]\\w*\\s*\\.\\s*)*[A-Z](?:[\\d_A-Z]*[a-z]\\w*)?\\b", toList([
+        rule_with_inside("namespace", "^[a-z]\\w*(?:\\s*\\.\\s*[a-z]\\w*)*(?:\\s*\\.)?", toList([rule("punctuation", "\\.")])),
+        rule("punctuation", "\\.")
+      ])),
+      rule("keyword", "\\b(?:abstract|assert|boolean|break|byte|case|catch|char|class|const|continue|default|do|double|else|enum|exports|extends|final|finally|float|for|goto|if|implements|import|instanceof|int|interface|long|module|native|new|non-sealed|null|open|opens|package|permits|private|protected|provides|public|record(?!\\s*[(){}[\\]<>=%~.:,;?+\\-*/&|^])|requires|return|sealed|short|static|strictfp|super|switch|synchronized|this|throw|throws|to|transient|transitive|try|uses|var|void|volatile|while|with|yield)\\b"),
+      rule("punctuation", "[<>(),.:]"),
+      rule("operator", "[?&|]")
+    ])),
+    rule_with_inside("import", "(?:\\bimport\\s+)\\K(?:[a-z]\\w*\\s*\\.\\s*)*(?:[A-Z]\\w*\\s*\\.\\s*)*(?:[A-Z]\\w*|\\*)(?=\\s*;)", toList([
+      rule("namespace", "^[a-z]\\w*(?:\\s*\\.\\s*[a-z]\\w*)*(?:\\s*\\.)?"),
+      rule("punctuation", "\\."),
+      rule("operator", "\\*"),
+      rule("class-name", "\\w+")
+    ])),
+    rule_with_inside("static", "(?:\\bimport\\s+static\\s+)\\K(?:[a-z]\\w*\\s*\\.\\s*)*(?:[A-Z]\\w*\\s*\\.\\s*)*(?:\\w+|\\*)(?=\\s*;)", toList([
+      rule("namespace", "^[a-z]\\w*(?:\\s*\\.\\s*[a-z]\\w*)*(?:\\s*\\.)?"),
+      rule("static", "\\b\\w+$"),
+      rule("punctuation", "\\."),
+      rule("operator", "\\*"),
+      rule("class-name", "\\w+")
+    ])),
+    rule_with_inside("namespace", "(?:\\b(?:exports|import(?:\\s+static)?|module|open|opens|package|provides|requires|to|transitive|uses|with)\\s+)\\K(?!\\b(?:abstract|assert|boolean|break|byte|case|catch|char|class|const|continue|default|do|double|else|enum|exports|extends|final|finally|float|for|goto|if|implements|import|instanceof|int|interface|long|module|native|new|non-sealed|null|open|opens|package|permits|private|protected|provides|public|record(?!\\s*[(){}[\\]<>=%~.:,;?+\\-*/&|^])|requires|return|sealed|short|static|strictfp|super|switch|synchronized|this|throw|throws|to|transient|transitive|try|uses|var|void|volatile|while|with|yield)\\b)[a-z]\\w*(?:\\.[a-z]\\w*)*\\.?", toList([rule("punctuation", "\\.")])),
+    rule("class-name", "(?:^|[^\\w.])\\K(?:[a-z]\\w*\\s*\\.\\s*)*(?:[A-Z]\\w*\\s*\\.\\s*)*[A-Z](?:[\\d_A-Z]*[a-z]\\w*)?\\b"),
+    rule("class-name", "(?:^|[^\\w.])\\K(?:[a-z]\\w*\\s*\\.\\s*)*(?:[A-Z]\\w*\\s*\\.\\s*)*[A-Z]\\w*(?=\\s+\\w+\\s*[;,=()]|\\s*(?:\\[[\\s,]*\\]\\s*)?::\\s*new\\b)"),
+    rule("class-name", "(?:\\b(?:class|enum|extends|implements|instanceof|interface|new|record|throws)\\s+)\\K(?:[a-z]\\w*\\s*\\.\\s*)*(?:[A-Z]\\w*\\s*\\.\\s*)*[A-Z]\\w*\\b"),
+    rule("keyword", "\\b(?:abstract|assert|boolean|break|byte|case|catch|char|class|const|continue|default|do|double|else|enum|exports|extends|final|finally|float|for|goto|if|implements|import|instanceof|int|interface|long|module|native|new|non-sealed|null|open|opens|package|permits|private|protected|provides|public|record(?!\\s*[(){}[\\]<>=%~.:,;?+\\-*/&|^])|requires|return|sealed|short|static|strictfp|super|switch|synchronized|this|throw|throws|to|transient|transitive|try|uses|var|void|volatile|while|with|yield)\\b"),
+    rule("boolean", "\\b(?:false|true)\\b"),
+    rule("function", "\\b\\w+(?=\\()"),
+    rule("function", "(?:::\\s*)\\K[a-z_]\\w*"),
+    rule("number", "(?i)\\b0b[01][01_]*L?\\b|\\b0x(?:\\.[\\da-f_p+-]+|[\\da-f_]+(?:\\.[\\da-f_p+-]+)?)\\b|(?:\\b\\d[\\d_]*(?:\\.[\\d_]*)?|\\B\\.\\d[\\d_]*)(?:e[+-]?\\d[\\d_]*)?[dfl]?"),
+    rule("operator", "(?m)(?:^|[^.])\\K(?:<<=?|>>>?=?|->|--|\\+\\+|&&|\\|\\||::|[?:~]|[-+*/%&|^!=<>]=?)"),
+    rule("punctuation", "[{}[\\];(),.:]"),
+    rule("constant", "\\b[A-Z][A-Z_\\d]+\\b")
+  ]);
+}
+function grammar14() {
+  return new Grammar("java", new Some("clike"), rules14());
+}
+
+// build/dev/javascript/smalto/smalto/languages/javascript.mjs
+function rules15() {
+  return toList([
+    greedy_rule("comment", "(?:^|[^\\\\])\\K\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+    greedy_rule("comment", "(?:^|[^\\\\:])\\K\\/\\/.*"),
+    greedy_rule("comment", "^#!.*"),
+    greedy_rule_with_inside("template-string", "`(?:\\\\[\\s\\S]|\\$\\{(?:[^{}]|\\{(?:[^{}]|\\{[^}]*\\})*\\})+\\}|(?!\\$\\{)[^\\\\`])*`", toList([
+      rule("string", "^`|`$"),
+      nested_rule("interpolation", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K\\$\\{(?:[^{}]|\\{(?:[^{}]|\\{[^}]*\\})*\\})+\\}", "javascript"),
+      rule("string", "[\\s\\S]+")
+    ])),
+    greedy_rule("property", `(?m)(?:(?:^|[,{])[ \\t]*)\\K(["'])(?:\\\\(?:\\r\\n|[\\s\\S])|(?!\\2)[^\\\\\\r\\n])*\\2(?=\\s*:)`),
+    greedy_rule("string", `(["'])(?:\\\\(?:\\r\\n|[\\s\\S])|(?!\\1)[^\\\\\\r\\n])*\\1`),
+    rule_with_inside("class-name", "(?:\\b(?:class|extends|implements|instanceof|interface|new)\\s+)\\K[\\w.\\\\]+", toList([rule("punctuation", "[.\\\\]")])),
+    rule("class-name", "(?:^|[^$\\w\\xA0-\\x{FFFF}])\\K(?!\\s)[_$A-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*(?=\\.(?:constructor|prototype))"),
+    greedy_rule_with_inside("regex", `(?:(?:^|[^$\\w\\xA0-\\x{FFFF}."'\\])\\s]|\\b(?:return|yield))\\s*)\\K\\/(?:(?:\\[(?:[^\\]\\\\\\r\\n]|\\\\.)*\\]|\\\\.|[^/\\\\\\[\\r\\n])+\\/[dgimyus]{0,7}|(?:\\[(?:[^[\\]\\\\\\r\\n]|\\\\.|\\[(?:[^[\\]\\\\\\r\\n]|\\\\.|\\[(?:[^[\\]\\\\\\r\\n]|\\\\.)*\\])*\\])*\\]|\\\\.|[^/\\\\\\[\\r\\n])+\\/[dgimyus]{0,7}v[dgimyus]{0,7})(?=(?:\\s|\\/\\*(?:[^*]|\\*(?!\\/))*\\*\\/)*(?:$|[\\r\\n,.;:})\\]]|\\/\\/))`, toList([
+      rule("language-regex", "^(?<=\\/)[\\s\\S]+(?=\\/[a-z]*$)"),
+      rule("regex-delimiter", "^\\/|\\/$"),
+      rule("regex-flags", "^[a-z]+$")
+    ])),
+    rule("function", "#?(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*(?=\\s*[=:]\\s*(?:async\\s*)?(?:\\bfunction\\b|(?:\\((?:[^()]|\\([^()]*\\))*\\)|(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*)\\s*=>))"),
+    rule_with_inside("parameter", "(?:function(?:\\s+(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*)?\\s*\\(\\s*)\\K(?!\\s)(?:[^()\\s]|\\s+(?![\\s)])|\\([^()]*\\))+(?=\\s*\\))", toList([
+      greedy_rule("comment", "(?:^|[^\\\\])\\K\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+      greedy_rule("comment", "(?:^|[^\\\\:])\\K\\/\\/.*"),
+      greedy_rule("comment", "^#!.*"),
+      greedy_rule("template-string", "`(?:\\\\[\\s\\S]|\\$\\{(?:[^{}]|\\{(?:[^{}]|\\{[^}]*\\})*\\})+\\}|(?!\\$\\{)[^\\\\`])*`"),
+      greedy_rule("property", `(?m)(?:(?:^|[,{])[ \\t]*)\\K(["'])(?:\\\\(?:\\r\\n|[\\s\\S])|(?!\\2)[^\\\\\\r\\n])*\\2(?=\\s*:)`),
+      greedy_rule("string", `(["'])(?:\\\\(?:\\r\\n|[\\s\\S])|(?!\\1)[^\\\\\\r\\n])*\\1`),
+      rule("class-name", "(?:\\b(?:class|extends|implements|instanceof|interface|new)\\s+)\\K[\\w.\\\\]+"),
+      rule("class-name", "(?:^|[^$\\w\\xA0-\\x{FFFF}])\\K(?!\\s)[_$A-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*(?=\\.(?:constructor|prototype))"),
+      greedy_rule("regex", `(?:(?:^|[^$\\w\\xA0-\\x{FFFF}."'\\])\\s]|\\b(?:return|yield))\\s*)\\K\\/(?:(?:\\[(?:[^\\]\\\\\\r\\n]|\\\\.)*\\]|\\\\.|[^/\\\\\\[\\r\\n])+\\/[dgimyus]{0,7}|(?:\\[(?:[^[\\]\\\\\\r\\n]|\\\\.|\\[(?:[^[\\]\\\\\\r\\n]|\\\\.|\\[(?:[^[\\]\\\\\\r\\n]|\\\\.)*\\])*\\])*\\]|\\\\.|[^/\\\\\\[\\r\\n])+\\/[dgimyus]{0,7}v[dgimyus]{0,7})(?=(?:\\s|\\/\\*(?:[^*]|\\*(?!\\/))*\\*\\/)*(?:$|[\\r\\n,.;:})\\]]|\\/\\/))`),
+      rule("function", "#?(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*(?=\\s*[=:]\\s*(?:async\\s*)?(?:\\bfunction\\b|(?:\\((?:[^()]|\\([^()]*\\))*\\)|(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*)\\s*=>))"),
+      rule("parameter", "(?:function(?:\\s+(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*)?\\s*\\(\\s*)\\K(?!\\s)(?:[^()\\s]|\\s+(?![\\s)])|\\([^()]*\\))+(?=\\s*\\))"),
+      rule("parameter", "(?i)(?:^|[^$\\w\\xA0-\\x{FFFF}])\\K(?!\\s)[_$a-z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*(?=\\s*=>)"),
+      rule("parameter", "(?:\\(\\s*)\\K(?!\\s)(?:[^()\\s]|\\s+(?![\\s)])|\\([^()]*\\))+(?=\\s*\\)\\s*=>)"),
+      rule("parameter", "(?:(?:\\b|\\s|^)(?!(?:as|async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|finally|for|from|function|get|if|implements|import|in|instanceof|interface|let|new|null|of|package|private|protected|public|return|set|static|super|switch|this|throw|try|typeof|undefined|var|void|while|with|yield)(?![$\\w\\xA0-\\x{FFFF}]))(?:(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*\\s*)\\(\\s*|\\]\\s*\\(\\s*)\\K(?!\\s)(?:[^()\\s]|\\s+(?![\\s)])|\\([^()]*\\))+(?=\\s*\\)\\s*\\{)"),
+      rule("constant", "\\b[A-Z](?:[A-Z_]|\\dx?)*\\b"),
+      rule("keyword", "(?:(?:^|\\})\\s*)\\Kcatch\\b"),
+      rule("keyword", `(?:^|[^.]|\\.\\.\\.\\s*)\\K\\b(?:as|assert(?=\\s*\\{)|async(?=\\s*(?:function\\b|\\(|[$\\w\\xA0-\\x{FFFF}]|$))|await|break|case|class|const|continue|debugger|default|delete|do|else|enum|export|extends|finally(?=\\s*(?:\\{|$))|for|from(?=\\s*(?:['"]|$))|function|(?:get|set)(?=\\s*(?:[#\\[$\\w\\xA0-\\x{FFFF}]|$))|if|implements|import|in|instanceof|interface|let|new|null|of|package|private|protected|public|return|static|super|switch|this|throw|try|typeof|undefined|var|void|while|with|yield)\\b`),
+      rule("boolean", "\\b(?:false|true)\\b"),
+      rule("function", "#?(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*(?=\\s*(?:\\.\\s*(?:apply|bind|call)\\s*)?\\()"),
+      rule("number", "(?:^|[^\\w$])\\K(?:NaN|Infinity|0[bB][01]+(?:_[01]+)*n?|0[oO][0-7]+(?:_[0-7]+)*n?|0[xX][\\dA-Fa-f]+(?:_[\\dA-Fa-f]+)*n?|\\d+(?:_\\d+)*n|(?:\\d+(?:_\\d+)*(?:\\.(?:\\d+(?:_\\d+)*)?)?|\\.\\d+(?:_\\d+)*)(?:[Ee][+-]?\\d+(?:_\\d+)*)?)(?![\\w$])"),
+      rule("property", "(?m)(?:(?:^|[,{])[ \\t]*)\\K(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*(?=\\s*:)"),
+      rule("operator", "--|\\+\\+|\\*\\*=?|=>|&&=?|\\|\\|=?|[!=]==|<<=?|>>>?=?|[-+*/%&|^!=<>]=?|\\.{3}|\\?\\?=?|\\?\\.?|[~:]"),
+      rule("punctuation", "[{}[\\];(),.:]")
+    ])),
+    rule("parameter", "(?i)(?:^|[^$\\w\\xA0-\\x{FFFF}])\\K(?!\\s)[_$a-z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*(?=\\s*=>)"),
+    rule("parameter", "(?:\\(\\s*)\\K(?!\\s)(?:[^()\\s]|\\s+(?![\\s)])|\\([^()]*\\))+(?=\\s*\\)\\s*=>)"),
+    rule("parameter", "(?:(?:\\b|\\s|^)(?!(?:as|async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|finally|for|from|function|get|if|implements|import|in|instanceof|interface|let|new|null|of|package|private|protected|public|return|set|static|super|switch|this|throw|try|typeof|undefined|var|void|while|with|yield)(?![$\\w\\xA0-\\x{FFFF}]))(?:(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*\\s*)\\(\\s*|\\]\\s*\\(\\s*)\\K(?!\\s)(?:[^()\\s]|\\s+(?![\\s)])|\\([^()]*\\))+(?=\\s*\\)\\s*\\{)"),
+    rule("constant", "\\b[A-Z](?:[A-Z_]|\\dx?)*\\b"),
+    rule("keyword", "(?:(?:^|\\})\\s*)\\Kcatch\\b"),
+    rule("keyword", `(?:^|[^.]|\\.\\.\\.\\s*)\\K\\b(?:as|assert(?=\\s*\\{)|async(?=\\s*(?:function\\b|\\(|[$\\w\\xA0-\\x{FFFF}]|$))|await|break|case|class|const|continue|debugger|default|delete|do|else|enum|export|extends|finally(?=\\s*(?:\\{|$))|for|from(?=\\s*(?:['"]|$))|function|(?:get|set)(?=\\s*(?:[#\\[$\\w\\xA0-\\x{FFFF}]|$))|if|implements|import|in|instanceof|interface|let|new|null|of|package|private|protected|public|return|static|super|switch|this|throw|try|typeof|undefined|var|void|while|with|yield)\\b`),
+    rule("boolean", "\\b(?:false|true)\\b"),
+    rule("function", "#?(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*(?=\\s*(?:\\.\\s*(?:apply|bind|call)\\s*)?\\()"),
+    rule("number", "(?:^|[^\\w$])\\K(?:NaN|Infinity|0[bB][01]+(?:_[01]+)*n?|0[oO][0-7]+(?:_[0-7]+)*n?|0[xX][\\dA-Fa-f]+(?:_[\\dA-Fa-f]+)*n?|\\d+(?:_\\d+)*n|(?:\\d+(?:_\\d+)*(?:\\.(?:\\d+(?:_\\d+)*)?)?|\\.\\d+(?:_\\d+)*)(?:[Ee][+-]?\\d+(?:_\\d+)*)?)(?![\\w$])"),
+    rule("property", "(?m)(?:(?:^|[,{])[ \\t]*)\\K(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*(?=\\s*:)"),
+    rule("operator", "--|\\+\\+|\\*\\*=?|=>|&&=?|\\|\\|=?|[!=]==|<<=?|>>>?=?|[-+*/%&|^!=<>]=?|\\.{3}|\\?\\?=?|\\?\\.?|[~:]"),
+    rule("punctuation", "[{}[\\];(),.:]")
+  ]);
+}
+function grammar15() {
+  return new Grammar("javascript", new Some("clike"), rules15());
+}
+
+// build/dev/javascript/smalto/smalto/languages/json.mjs
+function rules16() {
+  return toList([
+    greedy_rule("property", '(?:^|[^\\\\])\\K"(?:\\\\.|[^\\\\"\\r\\n])*"(?=\\s*:)'),
+    greedy_rule("string", '(?:^|[^\\\\])\\K"(?:\\\\.|[^\\\\"\\r\\n])*"(?!\\s*:)'),
+    greedy_rule("comment", "\\/\\/.*|\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+    rule("number", "(?i)-?\\b\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?\\b"),
+    rule("punctuation", "[{}[\\],]"),
+    rule("operator", ":"),
+    rule("boolean", "\\b(?:false|true)\\b"),
+    rule("keyword", "\\bnull\\b")
+  ]);
+}
+function grammar16() {
+  return new Grammar("json", new None, rules16());
+}
+
+// build/dev/javascript/smalto/smalto/languages/kotlin.mjs
+function rules17() {
+  return toList([
+    greedy_rule("comment", "(?:^|[^\\\\])\\K\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+    greedy_rule("comment", "(?:^|[^\\\\:])\\K\\/\\/.*"),
+    rule_with_inside("multiline", '"""(?:[^$]|\\$(?:(?!\\{)|\\{[^{}]*\\}))*?"""', toList([
+      rule_with_inside("interpolation", "(?i)\\$(?:[a-z_]\\w*|\\{[^{}]*\\})", toList([
+        rule("punctuation", "^\\$\\{?|\\}$"),
+        rule_with_inside("expression", "[\\s\\S]+", toList([
+          greedy_rule("comment", "(?:^|[^\\\\])\\K\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+          greedy_rule("comment", "(?:^|[^\\\\:])\\K\\/\\/.*"),
+          rule("multiline", '"""(?:[^$]|\\$(?:(?!\\{)|\\{[^{}]*\\}))*?"""'),
+          rule_with_inside("singleline", '"(?:[^"\\\\\\r\\n$]|\\\\.|\\$(?:(?!\\{)|\\{[^{}]*\\}))*"', toList([
+            rule("interpolation", "(?i)(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K\\$(?:[a-z_]\\w*|\\{[^{}]*\\})"),
+            rule("string", "[\\s\\S]+")
+          ])),
+          greedy_rule("char", "'(?:[^'\\\\\\r\\n]|\\\\(?:.|u[a-fA-F0-9]{0,4}))'"),
+          rule("builtin", "\\B@(?:\\w+:)?(?:[A-Z]\\w*|\\[[^\\]]+\\])"),
+          rule("keyword", "(?:^|[^.])\\K\\b(?:abstract|actual|annotation|as|break|by|catch|class|companion|const|constructor|continue|crossinline|data|do|dynamic|else|enum|expect|external|final|finally|for|fun|get|if|import|in|infix|init|inline|inner|interface|internal|is|lateinit|noinline|null|object|open|operator|out|override|package|private|protected|public|reified|return|sealed|set|super|suspend|tailrec|this|throw|to|try|typealias|val|var|vararg|when|where|while)\\b"),
+          rule("boolean", "\\b(?:false|true)\\b"),
+          rule("symbol", "\\b\\w+@|@\\w+\\b"),
+          greedy_rule("function", "(?:`[^\\r\\n`]+`|\\b\\w+)(?=\\s*\\()"),
+          greedy_rule("function", "(?<=\\.)(?:`[^\\r\\n`]+`|\\w+)(?=\\s*\\{)"),
+          rule("number", "\\b(?:0[xX][\\da-fA-F]+(?:_[\\da-fA-F]+)*|0[bB][01]+(?:_[01]+)*|\\d+(?:_\\d+)*(?:\\.\\d+(?:_\\d+)*)?(?:[eE][+-]?\\d+(?:_\\d+)*)?[fFL]?)\\b"),
+          rule("operator", "\\+[+=]?|-[-=>]?|==?=?|!(?:!|==?)?|[\\/*%<>]=?|[?:]:?|\\.\\.|&&|\\|\\||\\b(?:and|inv|or|shl|shr|ushr|xor)\\b"),
+          rule("punctuation", "[{}[\\];(),.:]")
+        ]))
+      ])),
+      rule("string", "[\\s\\S]+")
+    ])),
+    rule("singleline", '"(?:[^"\\\\\\r\\n$]|\\\\.|\\$(?:(?!\\{)|\\{[^{}]*\\}))*"'),
+    greedy_rule("char", "'(?:[^'\\\\\\r\\n]|\\\\(?:.|u[a-fA-F0-9]{0,4}))'"),
+    rule("builtin", "\\B@(?:\\w+:)?(?:[A-Z]\\w*|\\[[^\\]]+\\])"),
+    rule("keyword", "(?:^|[^.])\\K\\b(?:abstract|actual|annotation|as|break|by|catch|class|companion|const|constructor|continue|crossinline|data|do|dynamic|else|enum|expect|external|final|finally|for|fun|get|if|import|in|infix|init|inline|inner|interface|internal|is|lateinit|noinline|null|object|open|operator|out|override|package|private|protected|public|reified|return|sealed|set|super|suspend|tailrec|this|throw|to|try|typealias|val|var|vararg|when|where|while)\\b"),
+    rule("boolean", "\\b(?:false|true)\\b"),
+    rule("symbol", "\\b\\w+@|@\\w+\\b"),
+    greedy_rule("function", "(?:`[^\\r\\n`]+`|\\b\\w+)(?=\\s*\\()"),
+    greedy_rule("function", "(?<=\\.)(?:`[^\\r\\n`]+`|\\w+)(?=\\s*\\{)"),
+    rule("number", "\\b(?:0[xX][\\da-fA-F]+(?:_[\\da-fA-F]+)*|0[bB][01]+(?:_[01]+)*|\\d+(?:_\\d+)*(?:\\.\\d+(?:_\\d+)*)?(?:[eE][+-]?\\d+(?:_\\d+)*)?[fFL]?)\\b"),
+    rule("operator", "\\+[+=]?|-[-=>]?|==?=?|!(?:!|==?)?|[\\/*%<>]=?|[?:]:?|\\.\\.|&&|\\|\\||\\b(?:and|inv|or|shl|shr|ushr|xor)\\b"),
+    rule("punctuation", "[{}[\\];(),.:]")
+  ]);
+}
+function grammar17() {
+  return new Grammar("kotlin", new Some("clike"), rules17());
+}
+
+// build/dev/javascript/smalto/smalto/languages/lua.mjs
+function rules18() {
+  return toList([
+    rule("comment", "(?m)^#!.+|--(?:\\[(=*)\\[[\\s\\S]*?\\]\\1\\]|.*)"),
+    greedy_rule("string", `(["'])(?:(?!\\1)[^\\\\\\r\\n]|\\\\z(?:\\r\\n|\\s)|\\\\(?:\\r\\n|[^z]))*\\1|\\[(=*)\\[[\\s\\S]*?\\]\\2\\]`),
+    rule("number", "(?i)\\b0x[a-f\\d]+(?:\\.[a-f\\d]*)?(?:p[+-]?\\d+)?\\b|\\b\\d+(?:\\.\\B|(?:\\.\\d*)?(?:e[+-]?\\d+)?\\b)|\\B\\.\\d+(?:e[+-]?\\d+)?\\b"),
+    rule("keyword", "\\b(?:and|break|do|else|elseif|end|false|for|function|goto|if|in|local|nil|not|or|repeat|return|then|true|until|while)\\b"),
+    rule("function", "(?!\\d)\\w+(?=\\s*(?:[({]))"),
+    rule("operator", "[-+*%^&|#]|\\/\\/?|<[<=]?|>[>=]?|[=~]=?"),
+    rule("operator", "(?:^|[^.])\\K\\.\\.(?!\\.)"),
+    rule("punctuation", "[\\[\\](){},;]|\\.+|:+")
+  ]);
+}
+function grammar18() {
+  return new Grammar("lua", new None, rules18());
+}
+
+// build/dev/javascript/smalto/smalto/languages/markdown.mjs
+function rules19() {
+  return toList([
+    greedy_rule("comment", "<!--(?:(?!<!--)[\\s\\S])*?-->"),
+    greedy_rule_with_inside("front-matter-block", "(?:^(?:\\s*[\\r\\n])?)\\K---(?!.)[\\s\\S]*?[\\r\\n]---(?!.)", toList([
+      rule("punctuation", "^---|---$"),
+      rule_with_inside("yaml", "\\S+(?:\\s+\\S+)*", toList([
+        rule("string", "(?:[\\-:]\\s*(?:\\s(?:!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?(?:[ \t]+[*&][^\\s[\\]{},]+)?|[*&][^\\s[\\]{},]+(?:[ \t]+!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?)?)[ \\t]+)?[|>])\\K[ \\t]*(?:((?:\\r?\\n|\\r)[ \\t]+)\\S[^\\r\\n]*(?:\\2[^\\r\\n]+)*)"),
+        rule("comment", "#.*"),
+        greedy_rule("atrule", `(?:(?:^|[:\\-,[{\\r\\n?])[ \\t]*(?:(?:!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?(?:[ 	]+[*&][^\\s[\\]{},]+)?|[*&][^\\s[\\]{},]+(?:[ 	]+!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?)?)[ \\t]+)?)\\K(?:(?:[^\\s\\x00-\\x08\\x0e-\\x1f!"#%&'*,\\-:>?@[\\]\`{|}\\x7f-\\x84\\x86-\\x9f]|[?:-][^\\s\\x00-\\x08\\x0e-\\x1f,[\\]{}\\x7f-\\x84\\x86-\\x9f])(?:[ \\t]*(?:(?![#:])[^\\s\\x00-\\x08\\x0e-\\x1f,[\\]{}\\x7f-\\x84\\x86-\\x9f]|:[^\\s\\x00-\\x08\\x0e-\\x1f,[\\]{}\\x7f-\\x84\\x86-\\x9f]))*|"(?:[^"\\\\\\r\\n]|\\\\.)*"|'(?:[^'\\\\\\r\\n]|\\\\.)*')(?=\\s*:\\s)`),
+        rule("important", "(?m)(?:^[ \\t]*)\\K%.+"),
+        rule("number", "(?m)(?:[:\\-,[{]\\s*(?:\\s(?:!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?(?:[ \t]+[*&][^\\s[\\]{},]+)?|[*&][^\\s[\\]{},]+(?:[ \t]+!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?)?)[ \\t]+)?)\\K(?:\\d{4}-\\d\\d?-\\d\\d?(?:[tT]|[ \\t]+)\\d\\d?:\\d{2}:\\d{2}(?:\\.\\d*)?(?:[ \\t]*(?:Z|[-+]\\d\\d?(?::\\d{2})?))?|\\d{4}-\\d{2}-\\d{2}|\\d\\d?:\\d{2}(?::\\d{2}(?:\\.\\d*)?)?)(?=[ \\t]*(?:$|,|\\]|\\}|(?:[\\r\\n]\\s*)?#))"),
+        rule("important", "(?im)(?:[:\\-,[{]\\s*(?:\\s(?:!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?(?:[ \t]+[*&][^\\s[\\]{},]+)?|[*&][^\\s[\\]{},]+(?:[ \t]+!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?)?)[ \\t]+)?)\\K(?:false|true)(?=[ \\t]*(?:$|,|\\]|\\}|(?:[\\r\\n]\\s*)?#))"),
+        rule("important", "(?im)(?:[:\\-,[{]\\s*(?:\\s(?:!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?(?:[ \t]+[*&][^\\s[\\]{},]+)?|[*&][^\\s[\\]{},]+(?:[ \t]+!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?)?)[ \\t]+)?)\\K(?:null|~)(?=[ \\t]*(?:$|,|\\]|\\}|(?:[\\r\\n]\\s*)?#))"),
+        greedy_rule("string", `(?m)(?:[:\\-,[{]\\s*(?:\\s(?:!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?(?:[ 	]+[*&][^\\s[\\]{},]+)?|[*&][^\\s[\\]{},]+(?:[ 	]+!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?)?)[ \\t]+)?)\\K(?:"(?:[^"\\\\\\r\\n]|\\\\.)*"|'(?:[^'\\\\\\r\\n]|\\\\.)*')(?=[ \\t]*(?:$|,|\\]|\\}|(?:[\\r\\n]\\s*)?#))`),
+        rule("number", "(?im)(?:[:\\-,[{]\\s*(?:\\s(?:!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?(?:[ \t]+[*&][^\\s[\\]{},]+)?|[*&][^\\s[\\]{},]+(?:[ \t]+!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?)?)[ \\t]+)?)\\K(?:[+-]?(?:0x[\\da-f]+|0o[0-7]+|(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:e[+-]?\\d+)?|\\.inf|\\.nan))(?=[ \\t]*(?:$|,|\\]|\\}|(?:[\\r\\n]\\s*)?#))"),
+        rule("tag", "!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?"),
+        rule("important", "[*&][^\\s[\\]{},]+"),
+        rule("punctuation", "---|[:[\\]{}\\-,|>?]|\\.\\.\\.")
+      ]))
+    ])),
+    rule("punctuation", "(?m)^>(?:[\\t ]*>)*"),
+    rule_with_inside("table", "(?m)^\\|?(?:\\\\.|``(?:[^`\\r\\n]|`(?!`))+``|`[^`\\r\\n]+`|[^\\\\|\\r\\n`])+(?:\\|(?:\\\\.|``(?:[^`\\r\\n]|`(?!`))+``|`[^`\\r\\n]+`|[^\\\\|\\r\\n`])+)+\\|?(?:(?:\\n|\\r\\n?)|(?![\\s\\S]))\\|?[ \\t]*:?-{3,}:?[ \\t]*(?:\\|[ \\t]*:?-{3,}:?[ \\t]*)+\\|?(?:\\n|\\r\\n?)(?:\\|?(?:\\\\.|``(?:[^`\\r\\n]|`(?!`))+``|`[^`\\r\\n]+`|[^\\\\|\\r\\n`])+(?:\\|(?:\\\\.|``(?:[^`\\r\\n]|`(?!`))+``|`[^`\\r\\n]+`|[^\\\\|\\r\\n`])+)+\\|?(?:(?:\\n|\\r\\n?)|(?![\\s\\S])))*", toList([
+      rule_with_inside("table-data-rows", "^(?:\\|?(?:\\\\.|``(?:[^`\\r\\n]|`(?!`))+``|`[^`\\r\\n]+`|[^\\\\|\\r\\n`])+(?:\\|(?:\\\\.|``(?:[^`\\r\\n]|`(?!`))+``|`[^`\\r\\n]+`|[^\\\\|\\r\\n`])+)+\\|?(?:(?:\\n|\\r\\n?)|(?![\\s\\S]))\\|?[ \\t]*:?-{3,}:?[ \\t]*(?:\\|[ \\t]*:?-{3,}:?[ \\t]*)+\\|?(?:\\n|\\r\\n?))\\K(?:\\|?(?:\\\\.|``(?:[^`\\r\\n]|`(?!`))+``|`[^`\\r\\n]+`|[^\\\\|\\r\\n`])+(?:\\|(?:\\\\.|``(?:[^`\\r\\n]|`(?!`))+``|`[^`\\r\\n]+`|[^\\\\|\\r\\n`])+)+\\|?(?:(?:\\n|\\r\\n?)|(?![\\s\\S])))*$", toList([
+        rule_with_inside("table-data", "(?:\\\\.|``(?:[^`\\r\\n]|`(?!`))+``|`[^`\\r\\n]+`|[^\\\\|\\r\\n`])+", toList([
+          greedy_rule("comment", "<!--(?:(?!<!--)[\\s\\S])*?-->"),
+          greedy_rule("front-matter-block", "(?:^(?:\\s*[\\r\\n])?)\\K---(?!.)[\\s\\S]*?[\\r\\n]---(?!.)"),
+          rule("punctuation", "(?m)^>(?:[\\t ]*>)*"),
+          rule("table", "(?m)^\\|?(?:\\\\.|``(?:[^`\\r\\n]|`(?!`))+``|`[^`\\r\\n]+`|[^\\\\|\\r\\n`])+(?:\\|(?:\\\\.|``(?:[^`\\r\\n]|`(?!`))+``|`[^`\\r\\n]+`|[^\\\\|\\r\\n`])+)+\\|?(?:(?:\\n|\\r\\n?)|(?![\\s\\S]))\\|?[ \\t]*:?-{3,}:?[ \\t]*(?:\\|[ \\t]*:?-{3,}:?[ \\t]*)+\\|?(?:\\n|\\r\\n?)(?:\\|?(?:\\\\.|``(?:[^`\\r\\n]|`(?!`))+``|`[^`\\r\\n]+`|[^\\\\|\\r\\n`])+(?:\\|(?:\\\\.|``(?:[^`\\r\\n]|`(?!`))+``|`[^`\\r\\n]+`|[^\\\\|\\r\\n`])+)+\\|?(?:(?:\\n|\\r\\n?)|(?![\\s\\S])))*"),
+          rule("keyword", "(?:(?:^|\\n)[ \\t]*\\n|(?:^|\\r\\n?)[ \\t]*\\r\\n?)\\K(?: {4}|\\t).+(?:(?:\\n|\\r\\n?)(?: {4}|\\t).+)*"),
+          greedy_rule_with_inside("code", "(?m)^```[\\s\\S]*?^```$", toList([
+            rule("code-block", "(?m)^(?:```.*(?:\\n|\\r\\n?))\\K[\\s\\S]+?(?=(?:\\n|\\r\\n?)^```$)"),
+            rule("code-language", "^(?<=```).+"),
+            rule("punctuation", "```")
+          ])),
+          rule_with_inside("important", "(?m)\\S.*(?:\\n|\\r\\n?)(?:==+|--+)(?=[ \\t]*$)", toList([rule("punctuation", "==+$|--+$")])),
+          rule_with_inside("important", "(?m)(?:^\\s*)\\K#.+", toList([rule("punctuation", "^#+|#+$")])),
+          rule("punctuation", "(?m)(?:^\\s*)\\K([*-])(?:[\\t ]*\\2){2,}(?=\\s*$)"),
+          rule("punctuation", "(?m)(?:^\\s*)\\K(?:[*+-]|\\d+\\.)(?=[\\t ].)"),
+          rule_with_inside("url", `!?\\[[^\\]]+\\]:[\\t ]+(?:\\S+|<(?:\\\\.|[^>\\\\])+>)(?:[\\t ]+(?:"(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*'|\\((?:\\\\.|[^)\\\\])*\\)))?`, toList([
+            rule("variable", "^(?:!?\\[)\\K[^\\]]+"),
+            rule("string", `(?:"(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*'|\\((?:\\\\.|[^)\\\\])*\\))$`),
+            rule("punctuation", "^[\\[\\]!:]|[<>]")
+          ])),
+          greedy_rule_with_inside("bold", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K(?:\\b__(?:(?!_)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n]))|_(?:(?!_)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+_)+__\\b|\\*\\*(?:(?!\\*)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n]))|\\*(?:(?!\\*)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\*)+\\*\\*)", toList([
+            rule_with_inside("content", "(?<=^..)[\\s\\S]+(?=..$)", toList([
+              greedy_rule_with_inside("url", '(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K(?:!?\\[(?:(?!\\])(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\](?:\\([^\\s)]+(?:[\\t ]+"(?:\\\\.|[^"\\\\])*")?\\)|[ \\t]?\\[(?:(?!\\])(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\]))', toList([
+                rule("operator", "^!"),
+                rule_with_inside("content", "(?<=^\\[)[^\\]]+(?=\\])", toList([
+                  greedy_rule("bold", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K(?:\\b__(?:(?!_)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n]))|_(?:(?!_)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+_)+__\\b|\\*\\*(?:(?!\\*)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n]))|\\*(?:(?!\\*)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\*)+\\*\\*)"),
+                  greedy_rule_with_inside("italic", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K(?:\\b_(?:(?!_)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n]))|__(?:(?!_)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+__)+_\\b|\\*(?:(?!\\*)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n]))|\\*\\*(?:(?!\\*)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\*\\*)+\\*)", toList([
+                    rule_with_inside("content", "(?<=^.)[\\s\\S]+(?=.$)", toList([
+                      greedy_rule("url", '(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K(?:!?\\[(?:(?!\\])(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\](?:\\([^\\s)]+(?:[\\t ]+"(?:\\\\.|[^"\\\\])*")?\\)|[ \\t]?\\[(?:(?!\\])(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\]))'),
+                      greedy_rule("bold", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K(?:\\b__(?:(?!_)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n]))|_(?:(?!_)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+_)+__\\b|\\*\\*(?:(?!\\*)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n]))|\\*(?:(?!\\*)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\*)+\\*\\*)"),
+                      greedy_rule_with_inside("strike", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K(?:(~~?)(?:(?!~)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\2)", toList([
+                        rule_with_inside("content", "(?:^~~?)\\K[\\s\\S]+(?=\\1$)", toList([
+                          greedy_rule("url", '(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K(?:!?\\[(?:(?!\\])(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\](?:\\([^\\s)]+(?:[\\t ]+"(?:\\\\.|[^"\\\\])*")?\\)|[ \\t]?\\[(?:(?!\\])(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\]))'),
+                          greedy_rule("bold", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K(?:\\b__(?:(?!_)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n]))|_(?:(?!_)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+_)+__\\b|\\*\\*(?:(?!\\*)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n]))|\\*(?:(?!\\*)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\*)+\\*\\*)"),
+                          greedy_rule("italic", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K(?:\\b_(?:(?!_)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n]))|__(?:(?!_)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+__)+_\\b|\\*(?:(?!\\*)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n]))|\\*\\*(?:(?!\\*)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\*\\*)+\\*)"),
+                          greedy_rule("code", "(?:^|[^\\\\`])\\K(?:``[^`\\r\\n]+(?:`[^`\\r\\n]+)*``(?!`)|`[^`\\r\\n]+`(?!`))")
+                        ])),
+                        rule("punctuation", "~~?")
+                      ])),
+                      greedy_rule("code", "(?:^|[^\\\\`])\\K(?:``[^`\\r\\n]+(?:`[^`\\r\\n]+)*``(?!`)|`[^`\\r\\n]+`(?!`))")
+                    ])),
+                    rule("punctuation", "[*_]")
+                  ])),
+                  greedy_rule("strike", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K(?:(~~?)(?:(?!~)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\2)"),
+                  greedy_rule("code", "(?:^|[^\\\\`])\\K(?:``[^`\\r\\n]+(?:`[^`\\r\\n]+)*``(?!`)|`[^`\\r\\n]+`(?!`))")
+                ])),
+                rule("variable", "(?:^\\][ \\t]?\\[)\\K[^\\]]+(?=\\]$)"),
+                rule("url", "(?<=^\\]\\()[^\\s)]+"),
+                rule("string", '(?:^[ \\t]+)\\K"(?:\\\\.|[^"\\\\])*"(?=\\)$)')
+              ])),
+              greedy_rule("italic", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K(?:\\b_(?:(?!_)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n]))|__(?:(?!_)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+__)+_\\b|\\*(?:(?!\\*)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n]))|\\*\\*(?:(?!\\*)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\*\\*)+\\*)"),
+              greedy_rule("strike", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K(?:(~~?)(?:(?!~)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\2)"),
+              greedy_rule("code", "(?:^|[^\\\\`])\\K(?:``[^`\\r\\n]+(?:`[^`\\r\\n]+)*``(?!`)|`[^`\\r\\n]+`(?!`))")
+            ])),
+            rule("punctuation", "\\*\\*|__")
+          ])),
+          greedy_rule("italic", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K(?:\\b_(?:(?!_)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n]))|__(?:(?!_)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+__)+_\\b|\\*(?:(?!\\*)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n]))|\\*\\*(?:(?!\\*)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\*\\*)+\\*)"),
+          greedy_rule("strike", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K(?:(~~?)(?:(?!~)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\2)"),
+          greedy_rule("code", "(?:^|[^\\\\`])\\K(?:``[^`\\r\\n]+(?:`[^`\\r\\n]+)*``(?!`)|`[^`\\r\\n]+`(?!`))"),
+          greedy_rule("url", '(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K(?:!?\\[(?:(?!\\])(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\](?:\\([^\\s)]+(?:[\\t ]+"(?:\\\\.|[^"\\\\])*")?\\)|[ \\t]?\\[(?:(?!\\])(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\]))'),
+          greedy_rule("prolog", "<\\?[\\s\\S]+?\\?>"),
+          greedy_rule_with_inside("doctype", `(?i)<!DOCTYPE(?:[^>"'[\\]]|"[^"]*"|'[^']*')+(?:\\[(?:[^<"'\\]]|"[^"]*"|'[^']*'|<(?!!--)|<!--(?:[^-]|-(?!->))*-->)*\\]\\s*)?>`, toList([
+            greedy_rule("internal-subset", "(?:^[^\\[]*\\[)\\K[\\s\\S]+(?=\\]>$)"),
+            greedy_rule("string", `"[^"]*"|'[^']*'`),
+            rule("punctuation", "^<!|>$|[[\\]]"),
+            rule("doctype-tag", "(?i)^DOCTYPE"),
+            rule("name", `[^\\s<>'"]+`)
+          ])),
+          greedy_rule_with_inside("style", "(?i)(?:<style[^>]*>)\\K(?:<!\\[CDATA\\[(?:[^\\]]|\\](?!\\]>))*\\]\\]>|(?!<!\\[CDATA\\[)[\\s\\S])*?(?=<\\/style>)", toList([
+            rule_with_inside("included-cdata", "(?i)<!\\[CDATA\\[[\\s\\S]*?\\]\\]>", toList([
+              rule_with_inside("language-css", "(?i)(?<=^<!\\[CDATA\\[)[\\s\\S]+?(?=\\]\\]>$)", toList([
+                rule("comment", "\\/\\*[\\s\\S]*?\\*\\/"),
+                rule("atrule", `@[\\w-](?:[^;{\\s"']|\\s+(?!\\s)|(?:"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"|'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n])*'))*?(?:;|(?=\\s*\\{))`),
+                greedy_rule_with_inside("url", `(?i)\\burl\\((?:(?:"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"|'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n])*')|(?:[^\\\\\\r\\n()"']|\\\\[\\s\\S])*)\\)`, toList([
+                  rule("function", "(?i)^url"),
+                  rule("punctuation", "^\\(|\\)$"),
+                  rule("url", `^(?:"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"|'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n])*')$`)
+                ])),
+                rule("selector", `(?:^|[{}\\s])\\K[^{}\\s](?:[^{};"'\\s]|\\s+(?![\\s{])|(?:"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"|'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n])*'))*(?=\\s*\\{)`),
+                greedy_rule("string", `(?:"(?:\\\\(?:\\r\\n|[\\s\\S])|[^"\\\\\\r\\n])*"|'(?:\\\\(?:\\r\\n|[\\s\\S])|[^'\\\\\\r\\n])*')`),
+                rule("property", "(?i)(?:^|[^-\\w\\xA0-])\\K(?!\\s)[-_a-z\\xA0-](?:(?!\\s)[-\\w\\xA0-])*(?=\\s*:)"),
+                rule("important", "(?i)!important\\b"),
+                rule("function", "(?i)(?:^|[^-a-z0-9])\\K[-a-z0-9]+(?=\\()"),
+                rule("punctuation", "[(){};:,]")
+              ])),
+              rule("cdata", "(?i)^<!\\[CDATA\\[|\\]\\]>$")
+            ])),
+            rule("language-css", "[\\s\\S]+")
+          ])),
+          greedy_rule_with_inside("script", "(?i)(?:<script[^>]*>)\\K(?:<!\\[CDATA\\[(?:[^\\]]|\\](?!\\]>))*\\]\\]>|(?!<!\\[CDATA\\[)[\\s\\S])*?(?=<\\/script>)", toList([
+            rule_with_inside("included-cdata", "(?i)<!\\[CDATA\\[[\\s\\S]*?\\]\\]>", toList([
+              rule_with_inside("language-javascript", "(?i)(?<=^<!\\[CDATA\\[)[\\s\\S]+?(?=\\]\\]>$)", toList([
+                greedy_rule("comment", "(?:^|[^\\\\])\\K\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+                greedy_rule("comment", "(?:^|[^\\\\:])\\K\\/\\/.*"),
+                greedy_rule("comment", "^#!.*"),
+                greedy_rule_with_inside("template-string", "`(?:\\\\[\\s\\S]|\\$\\{(?:[^{}]|\\{(?:[^{}]|\\{[^}]*\\})*\\})+\\}|(?!\\$\\{)[^\\\\`])*`", toList([
+                  rule("string", "^`|`$"),
+                  rule("interpolation", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K\\$\\{(?:[^{}]|\\{(?:[^{}]|\\{[^}]*\\})*\\})+\\}"),
+                  rule("string", "[\\s\\S]+")
+                ])),
+                greedy_rule("property", `(?m)(?:(?:^|[,{])[ \\t]*)\\K(["'])(?:\\\\(?:\\r\\n|[\\s\\S])|(?!\\2)[^\\\\\\r\\n])*\\2(?=\\s*:)`),
+                greedy_rule("string", `(["'])(?:\\\\(?:\\r\\n|[\\s\\S])|(?!\\1)[^\\\\\\r\\n])*\\1`),
+                rule_with_inside("class-name", "(?:\\b(?:class|extends|implements|instanceof|interface|new)\\s+)\\K[\\w.\\\\]+", toList([rule("punctuation", "[.\\\\]")])),
+                rule("class-name", "(?:^|[^$\\w\\xA0-])\\K(?!\\s)[_$A-Z\\xA0-](?:(?!\\s)[$\\w\\xA0-])*(?=\\.(?:constructor|prototype))"),
+                greedy_rule_with_inside("regex", `(?:(?:^|[^$\\w\\xA0-."'\\])\\s]|\\b(?:return|yield))\\s*)\\K\\/(?:(?:\\[(?:[^\\]\\\\\\r\\n]|\\\\.)*\\]|\\\\.|[^/\\\\\\[\\r\\n])+\\/[dgimyus]{0,7}|(?:\\[(?:[^[\\]\\\\\\r\\n]|\\\\.|\\[(?:[^[\\]\\\\\\r\\n]|\\\\.|\\[(?:[^[\\]\\\\\\r\\n]|\\\\.)*\\])*\\])*\\]|\\\\.|[^/\\\\\\[\\r\\n])+\\/[dgimyus]{0,7}v[dgimyus]{0,7})(?=(?:\\s|\\/\\*(?:[^*]|\\*(?!\\/))*\\*\\/)*(?:$|[\\r\\n,.;:})\\]]|\\/\\/))`, toList([
+                  rule("language-regex", "^(?<=\\/)[\\s\\S]+(?=\\/[a-z]*$)"),
+                  rule("regex-delimiter", "^\\/|\\/$"),
+                  rule("regex-flags", "^[a-z]+$")
+                ])),
+                rule("function", "#?(?!\\s)[_$a-zA-Z\\xA0-](?:(?!\\s)[$\\w\\xA0-])*(?=\\s*[=:]\\s*(?:async\\s*)?(?:\\bfunction\\b|(?:\\((?:[^()]|\\([^()]*\\))*\\)|(?!\\s)[_$a-zA-Z\\xA0-](?:(?!\\s)[$\\w\\xA0-])*)\\s*=>))"),
+                rule("parameter", "(?:function(?:\\s+(?!\\s)[_$a-zA-Z\\xA0-](?:(?!\\s)[$\\w\\xA0-])*)?\\s*\\(\\s*)\\K(?!\\s)(?:[^()\\s]|\\s+(?![\\s)])|\\([^()]*\\))+(?=\\s*\\))"),
+                rule("parameter", "(?i)(?:^|[^$\\w\\xA0-])\\K(?!\\s)[_$a-z\\xA0-](?:(?!\\s)[$\\w\\xA0-])*(?=\\s*=>)"),
+                rule("parameter", "(?:\\(\\s*)\\K(?!\\s)(?:[^()\\s]|\\s+(?![\\s)])|\\([^()]*\\))+(?=\\s*\\)\\s*=>)"),
+                rule("parameter", "(?:(?:\\b|\\s|^)(?!(?:as|async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|finally|for|from|function|get|if|implements|import|in|instanceof|interface|let|new|null|of|package|private|protected|public|return|set|static|super|switch|this|throw|try|typeof|undefined|var|void|while|with|yield)(?![$\\w\\xA0-]))(?:(?!\\s)[_$a-zA-Z\\xA0-](?:(?!\\s)[$\\w\\xA0-])*\\s*)\\(\\s*|\\]\\s*\\(\\s*)\\K(?!\\s)(?:[^()\\s]|\\s+(?![\\s)])|\\([^()]*\\))+(?=\\s*\\)\\s*\\{)"),
+                rule("constant", "\\b[A-Z](?:[A-Z_]|\\dx?)*\\b"),
+                rule("keyword", "(?:(?:^|\\})\\s*)\\Kcatch\\b"),
+                rule("keyword", `(?:^|[^.]|\\.\\.\\.\\s*)\\K\\b(?:as|assert(?=\\s*\\{)|async(?=\\s*(?:function\\b|\\(|[$\\w\\xA0-]|$))|await|break|case|class|const|continue|debugger|default|delete|do|else|enum|export|extends|finally(?=\\s*(?:\\{|$))|for|from(?=\\s*(?:['"]|$))|function|(?:get|set)(?=\\s*(?:[#\\[$\\w\\xA0-]|$))|if|implements|import|in|instanceof|interface|let|new|null|of|package|private|protected|public|return|static|super|switch|this|throw|try|typeof|undefined|var|void|while|with|yield)\\b`),
+                rule("boolean", "\\b(?:false|true)\\b"),
+                rule("function", "#?(?!\\s)[_$a-zA-Z\\xA0-](?:(?!\\s)[$\\w\\xA0-])*(?=\\s*(?:\\.\\s*(?:apply|bind|call)\\s*)?\\()"),
+                rule("number", "(?:^|[^\\w$])\\K(?:NaN|Infinity|0[bB][01]+(?:_[01]+)*n?|0[oO][0-7]+(?:_[0-7]+)*n?|0[xX][\\dA-Fa-f]+(?:_[\\dA-Fa-f]+)*n?|\\d+(?:_\\d+)*n|(?:\\d+(?:_\\d+)*(?:\\.(?:\\d+(?:_\\d+)*)?)?|\\.\\d+(?:_\\d+)*)(?:[Ee][+-]?\\d+(?:_\\d+)*)?)(?![\\w$])"),
+                rule("property", "(?m)(?:(?:^|[,{])[ \\t]*)\\K(?!\\s)[_$a-zA-Z\\xA0-](?:(?!\\s)[$\\w\\xA0-])*(?=\\s*:)"),
+                rule("operator", "--|\\+\\+|\\*\\*=?|=>|&&=?|\\|\\|=?|[!=]==|<<=?|>>>?=?|[-+*/%&|^!=<>]=?|\\.{3}|\\?\\?=?|\\?\\.?|[~:]"),
+                rule("punctuation", "[{}[\\];(),.:]")
+              ])),
+              rule("cdata", "(?i)^<!\\[CDATA\\[|\\]\\]>$")
+            ])),
+            rule("language-javascript", "[\\s\\S]+")
+          ])),
+          greedy_rule("cdata", "(?i)<!\\[CDATA\\[[\\s\\S]*?\\]\\]>"),
+          greedy_rule_with_inside("tag", `<\\/?(?!\\d)[^\\s>\\/=$<%]+(?:\\s(?:\\s*[^\\s>\\/=]+(?:\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s'">=]+(?=[\\s>]))|(?=[\\s/>])))+)?\\s*\\/?>`, toList([
+            rule_with_inside("tag", "^<\\/?[^\\s>\\/]+", toList([
+              rule("punctuation", "^<\\/?"),
+              rule("namespace", "^[^\\s>\\/:]+:")
+            ])),
+            rule_with_inside("special-attr", `(?i)(?:^|["'\\s])\\K(?:style)\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s'">=]+(?=[\\s>]))`, toList([
+              rule("attr-name", "^[^\\s=]+"),
+              rule_with_inside("attr-value", "=[\\s\\S]+", toList([
+                rule("css", `(?:^=\\s*(["']|(?!["'])))\\K\\S[\\s\\S]*(?=\\2$)`),
+                rule("attr-equals", "^="),
+                rule("punctuation", `"|'`)
+              ]))
+            ])),
+            rule_with_inside("special-attr", `(?i)(?:^|["'\\s])\\K(?:on(?:abort|blur|change|click|composition(?:end|start|update)|dblclick|error|focus(?:in|out)?|key(?:down|up)|load|mouse(?:down|enter|leave|move|out|over|up)|reset|resize|scroll|select|slotchange|submit|unload|wheel))\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s'">=]+(?=[\\s>]))`, toList([
+              rule("attr-name", "^[^\\s=]+"),
+              rule_with_inside("attr-value", "=[\\s\\S]+", toList([
+                rule("javascript", `(?:^=\\s*(["']|(?!["'])))\\K\\S[\\s\\S]*(?=\\2$)`),
+                rule("attr-equals", "^="),
+                rule("punctuation", `"|'`)
+              ]))
+            ])),
+            rule_with_inside("attr-value", `=\\s*(?:"[^"]*"|'[^']*'|[^\\s'">=]+)`, toList([
+              rule("attr-equals", "^="),
+              rule("punctuation", `^(?:\\s*)\\K["']|["']$`),
+              rule("named-entity", "(?i)&[\\da-z]{1,8};"),
+              rule("entity", "(?i)&#x?[\\da-f]{1,8};")
+            ])),
+            rule("punctuation", "\\/?>"),
+            rule_with_inside("attr-name", "[^\\s>\\/]+", toList([rule("namespace", "^[^\\s>\\/:]+:")]))
+          ])),
+          rule("named-entity", "(?i)&[\\da-z]{1,8};"),
+          rule("entity", "(?i)&#x?[\\da-f]{1,8};")
+        ])),
+        rule("punctuation", "\\|")
+      ])),
+      rule_with_inside("table-line", "^(?:\\|?(?:\\\\.|``(?:[^`\\r\\n]|`(?!`))+``|`[^`\\r\\n]+`|[^\\\\|\\r\\n`])+(?:\\|(?:\\\\.|``(?:[^`\\r\\n]|`(?!`))+``|`[^`\\r\\n]+`|[^\\\\|\\r\\n`])+)+\\|?(?:(?:\\n|\\r\\n?)|(?![\\s\\S])))\\K\\|?[ \\t]*:?-{3,}:?[ \\t]*(?:\\|[ \\t]*:?-{3,}:?[ \\t]*)+\\|?(?:\\n|\\r\\n?)$", toList([rule("punctuation", "\\||:?-{3,}:?")])),
+      rule_with_inside("table-header-row", "^\\|?(?:\\\\.|``(?:[^`\\r\\n]|`(?!`))+``|`[^`\\r\\n]+`|[^\\\\|\\r\\n`])+(?:\\|(?:\\\\.|``(?:[^`\\r\\n]|`(?!`))+``|`[^`\\r\\n]+`|[^\\\\|\\r\\n`])+)+\\|?(?:(?:\\n|\\r\\n?)|(?![\\s\\S]))$", toList([
+        rule("important", "(?:\\\\.|``(?:[^`\\r\\n]|`(?!`))+``|`[^`\\r\\n]+`|[^\\\\|\\r\\n`])+"),
+        rule("punctuation", "\\|")
+      ]))
+    ])),
+    rule("keyword", "(?:(?:^|\\n)[ \\t]*\\n|(?:^|\\r\\n?)[ \\t]*\\r\\n?)\\K(?: {4}|\\t).+(?:(?:\\n|\\r\\n?)(?: {4}|\\t).+)*"),
+    greedy_rule("code", "(?m)^```[\\s\\S]*?^```$"),
+    rule("important", "(?m)\\S.*(?:\\n|\\r\\n?)(?:==+|--+)(?=[ \\t]*$)"),
+    rule("important", "(?m)(?:^\\s*)\\K#.+"),
+    rule("punctuation", "(?m)(?:^\\s*)\\K([*-])(?:[\\t ]*\\2){2,}(?=\\s*$)"),
+    rule("punctuation", "(?m)(?:^\\s*)\\K(?:[*+-]|\\d+\\.)(?=[\\t ].)"),
+    rule("url", `!?\\[[^\\]]+\\]:[\\t ]+(?:\\S+|<(?:\\\\.|[^>\\\\])+>)(?:[\\t ]+(?:"(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*'|\\((?:\\\\.|[^)\\\\])*\\)))?`),
+    greedy_rule("bold", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K(?:\\b__(?:(?!_)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n]))|_(?:(?!_)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+_)+__\\b|\\*\\*(?:(?!\\*)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n]))|\\*(?:(?!\\*)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\*)+\\*\\*)"),
+    greedy_rule("italic", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K(?:\\b_(?:(?!_)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n]))|__(?:(?!_)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+__)+_\\b|\\*(?:(?!\\*)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n]))|\\*\\*(?:(?!\\*)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\*\\*)+\\*)"),
+    greedy_rule("strike", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K(?:(~~?)(?:(?!~)(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\2)"),
+    greedy_rule("code", "(?:^|[^\\\\`])\\K(?:``[^`\\r\\n]+(?:`[^`\\r\\n]+)*``(?!`)|`[^`\\r\\n]+`(?!`))"),
+    greedy_rule("url", '(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K(?:!?\\[(?:(?!\\])(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\](?:\\([^\\s)]+(?:[\\t ]+"(?:\\\\.|[^"\\\\])*")?\\)|[ \\t]?\\[(?:(?!\\])(?:\\\\.|[^\\\\\\n\\r]|(?:\\n|\\r\\n?)(?![\\r\\n])))+\\]))'),
+    greedy_rule("prolog", "<\\?[\\s\\S]+?\\?>"),
+    greedy_rule("doctype", `(?i)<!DOCTYPE(?:[^>"'[\\]]|"[^"]*"|'[^']*')+(?:\\[(?:[^<"'\\]]|"[^"]*"|'[^']*'|<(?!!--)|<!--(?:[^-]|-(?!->))*-->)*\\]\\s*)?>`),
+    greedy_rule("style", "(?i)(?:<style[^>]*>)\\K(?:<!\\[CDATA\\[(?:[^\\]]|\\](?!\\]>))*\\]\\]>|(?!<!\\[CDATA\\[)[\\s\\S])*?(?=<\\/style>)"),
+    greedy_rule("script", "(?i)(?:<script[^>]*>)\\K(?:<!\\[CDATA\\[(?:[^\\]]|\\](?!\\]>))*\\]\\]>|(?!<!\\[CDATA\\[)[\\s\\S])*?(?=<\\/script>)"),
+    greedy_rule("cdata", "(?i)<!\\[CDATA\\[[\\s\\S]*?\\]\\]>"),
+    greedy_rule("tag", `<\\/?(?!\\d)[^\\s>\\/=$<%]+(?:\\s(?:\\s*[^\\s>\\/=]+(?:\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s'">=]+(?=[\\s>]))|(?=[\\s/>])))+)?\\s*\\/?>`),
+    rule("named-entity", "(?i)&[\\da-z]{1,8};"),
+    rule("entity", "(?i)&#x?[\\da-f]{1,8};")
+  ]);
+}
+function grammar19() {
+  return new Grammar("markdown", new None, rules19());
+}
+
+// build/dev/javascript/smalto/smalto/languages/php.mjs
+function rules20() {
+  return toList([
+    rule("important", "(?i)\\?>$|^<\\?(?:php(?=\\s)|=)?"),
+    rule("comment", "\\/\\*[\\s\\S]*?\\*\\/|\\/\\/.*|#(?!\\[).*"),
+    greedy_rule_with_inside("nowdoc-string", "<<<'([^']+)'[\\r\\n](?:.*[\\r\\n])*?\\1;", toList([
+      rule_with_inside("symbol", "(?i)^<<<'[^']+'|[a-z_]\\w*;$", toList([rule("punctuation", "^<<<'?|[';]$")]))
+    ])),
+    greedy_rule_with_inside("heredoc-string", '(?i)<<<(?:"([^"]+)"[\\r\\n](?:.*[\\r\\n])*?\\1;|([a-z_]\\w*)[\\r\\n](?:.*[\\r\\n])*?\\2;)', toList([
+      rule_with_inside("symbol", '(?i)^<<<(?:"[^"]+"|[a-z_]\\w*)|[a-z_]\\w*;$', toList([rule("punctuation", '^<<<"?|[";]$')])),
+      rule_with_inside("interpolation", "\\{\\$(?:\\{(?:\\{[^{}]+\\}|[^{}]+)\\}|[^{}])+\\}|(?:^|[^\\\\{])\\K\\$+(?:\\w+(?:\\[[^\\r\\n\\[\\]]+\\]|->\\w+)?)", toList([
+        rule("important", "(?i)\\?>$|^<\\?(?:php(?=\\s)|=)?"),
+        rule("comment", "\\/\\*[\\s\\S]*?\\*\\/|\\/\\/.*|#(?!\\[).*"),
+        greedy_rule("nowdoc-string", "<<<'([^']+)'[\\r\\n](?:.*[\\r\\n])*?\\1;"),
+        greedy_rule("heredoc-string", '(?i)<<<(?:"([^"]+)"[\\r\\n](?:.*[\\r\\n])*?\\1;|([a-z_]\\w*)[\\r\\n](?:.*[\\r\\n])*?\\2;)'),
+        greedy_rule("backtick-quoted-string", "`(?:\\\\[\\s\\S]|[^\\\\`])*`"),
+        greedy_rule("single-quoted-string", "'(?:\\\\[\\s\\S]|[^\\\\'])*'"),
+        greedy_rule_with_inside("double-quoted-string", '"(?:\\\\[\\s\\S]|[^\\\\"])*"', toList([
+          rule("interpolation", "\\{\\$(?:\\{(?:\\{[^{}]+\\}|[^{}]+)\\}|[^{}])+\\}|(?:^|[^\\\\{])\\K\\$+(?:\\w+(?:\\[[^\\r\\n\\[\\]]+\\]|->\\w+)?)")
+        ])),
+        greedy_rule_with_inside("attribute", `(?im)#\\[(?:[^"'\\/#]|\\/(?![*/])|\\/\\/.*$|#(?!\\[).*$|\\/\\*(?:[^*]|\\*(?!\\/))*\\*\\/|"(?:\\\\[\\s\\S]|[^\\\\"])*"|'(?:\\\\[\\s\\S]|[^\\\\'])*')+\\](?=\\s*[a-z$#])`, toList([
+          rule_with_inside("attribute-content", "^(?<=#\\[)[\\s\\S]+(?=\\]$)", toList([
+            rule("comment", "\\/\\*[\\s\\S]*?\\*\\/|\\/\\/.*|#(?!\\[).*"),
+            greedy_rule("nowdoc-string", "<<<'([^']+)'[\\r\\n](?:.*[\\r\\n])*?\\1;"),
+            greedy_rule("heredoc-string", '(?i)<<<(?:"([^"]+)"[\\r\\n](?:.*[\\r\\n])*?\\1;|([a-z_]\\w*)[\\r\\n](?:.*[\\r\\n])*?\\2;)'),
+            greedy_rule("backtick-quoted-string", "`(?:\\\\[\\s\\S]|[^\\\\`])*`"),
+            greedy_rule("single-quoted-string", "'(?:\\\\[\\s\\S]|[^\\\\'])*'"),
+            greedy_rule("double-quoted-string", '"(?:\\\\[\\s\\S]|[^\\\\"])*"'),
+            greedy_rule("class-name", "(?i)(?:[^:]|^)\\K\\b[a-z_]\\w*(?!\\\\)\\b"),
+            greedy_rule_with_inside("class-name", "(?i)(?:[^:]|^)\\K(?:\\\\?\\b[a-z_]\\w*)+", toList([rule("punctuation", "\\\\")])),
+            rule("boolean", "(?i)\\b(?:false|true)\\b"),
+            greedy_rule("constant", "(?i)(?:::\\s*)\\K\\b[a-z_]\\w*\\b(?!\\s*\\()"),
+            greedy_rule("constant", "(?i)(?:\\b(?:case|const)\\s+)\\K\\b[a-z_]\\w*(?=\\s*[;=])"),
+            rule("constant", "(?i)\\b(?:null)\\b"),
+            rule("constant", "\\b[A-Z_][A-Z0-9_]*\\b(?!\\s*\\()"),
+            rule("number", "(?i)\\b0b[01]+(?:_[01]+)*\\b|\\b0o[0-7]+(?:_[0-7]+)*\\b|\\b0x[\\da-f]+(?:_[\\da-f]+)*\\b|(?:\\b\\d+(?:_\\d+)*\\.?(?:\\d+(?:_\\d+)*)?|\\B\\.\\d+)(?:e[+-]?\\d+)?"),
+            rule("operator", "<?=>|\\?\\?=?|\\.{3}|\\??->|[!=]=?=?|::|\\*\\*=?|--|\\+\\+|&&|\\|\\||<<|>>|[?~]|[/^|%*&<>.+-]=?"),
+            rule("punctuation", "[{}\\[\\](),:;]")
+          ])),
+          rule("punctuation", "^#\\[|\\]$")
+        ])),
+        rule("variable", "\\$+(?:\\w+\\b|(?=\\{))"),
+        rule_with_inside("package", "(?i)(?:namespace\\s+|use\\s+(?:function\\s+)?)\\K(?:\\\\?\\b[a-z_]\\w*)+\\b(?!\\\\)", toList([rule("punctuation", "\\\\")])),
+        rule("class-name", "(?i)(?:\\b(?:class|enum|interface|trait)\\s+)\\K\\b[a-z_]\\w*(?!\\\\)\\b"),
+        rule("function", "(?i)(?:\\bfunction\\s+)\\K[a-z_]\\w*(?=\\s*\\()"),
+        greedy_rule("type-casting", "(?i)(?:\\(\\s*)\\K\\b(?:array|bool|boolean|float|int|integer|object|string)\\b(?=\\s*\\))"),
+        greedy_rule("type-hint", "(?i)(?:[(,?]\\s*)\\K\\b(?:array(?!\\s*\\()|bool|callable|(?:false|null)(?=\\s*\\|)|float|int|iterable|mixed|object|self|static|string)\\b(?=\\s*\\$)"),
+        greedy_rule("return-type", "(?i)(?:\\)\\s*:\\s*(?:\\?\\s*)?)\\K\\b(?:array(?!\\s*\\()|bool|callable|(?:false|null)(?=\\s*\\|)|float|int|iterable|mixed|never|object|self|static|string|void)\\b"),
+        greedy_rule("type-declaration", "(?i)\\b(?:array(?!\\s*\\()|bool|float|int|iterable|mixed|object|string|void)\\b"),
+        greedy_rule("type-declaration", "(?i)(?:\\|\\s*)\\K(?:false|null)\\b|\\b(?:false|null)(?=\\s*\\|)"),
+        greedy_rule("static-context", "(?i)\\b(?:parent|self|static)(?=\\s*::)"),
+        rule("keyword", "(?i)(?:\\byield\\s+)\\Kfrom\\b"),
+        rule("keyword", "(?i)\\bclass\\b"),
+        rule("keyword", "(?i)(?:(?:^|[^\\s>:]|(?:^|[^-])>|(?:^|[^:]):)\\s*)\\K\\b(?:abstract|and|array|as|break|callable|case|catch|clone|const|continue|declare|default|die|do|echo|else|elseif|empty|enddeclare|endfor|endforeach|endif|endswitch|endwhile|enum|eval|exit|extends|final|finally|fn|for|foreach|function|global|goto|if|implements|include|include_once|instanceof|insteadof|interface|isset|list|match|namespace|never|new|or|parent|print|private|protected|public|readonly|require|require_once|return|self|static|switch|throw|trait|try|unset|use|var|while|xor|yield|__halt_compiler)\\b"),
+        rule("argument-name", "(?i)(?:[(,]\\s*)\\K\\b[a-z_]\\w*(?=\\s*:(?!:))"),
+        greedy_rule("class-name", "(?i)(?:\\b(?:extends|implements|instanceof|new(?!\\s+self|\\s+static))\\s+|\\bcatch\\s*\\()\\K\\b[a-z_]\\w*(?!\\\\)\\b"),
+        greedy_rule("class-name", "(?i)(?:\\|\\s*)\\K\\b[a-z_]\\w*(?!\\\\)\\b"),
+        greedy_rule("class-name", "(?i)\\b[a-z_]\\w*(?!\\\\)\\b(?=\\s*\\|)"),
+        greedy_rule_with_inside("class-name-fully-qualified", "(?i)(?:\\|\\s*)\\K(?:\\\\?\\b[a-z_]\\w*)+\\b", toList([rule("punctuation", "\\\\")])),
+        greedy_rule_with_inside("class-name-fully-qualified", "(?i)(?:\\\\?\\b[a-z_]\\w*)+\\b(?=\\s*\\|)", toList([rule("punctuation", "\\\\")])),
+        greedy_rule_with_inside("class-name-fully-qualified", "(?i)(?:\\b(?:extends|implements|instanceof|new(?!\\s+self\\b|\\s+static\\b))\\s+|\\bcatch\\s*\\()\\K(?:\\\\?\\b[a-z_]\\w*)+\\b(?!\\\\)", toList([rule("punctuation", "\\\\")])),
+        greedy_rule("type-declaration", "(?i)\\b[a-z_]\\w*(?=\\s*\\$)"),
+        greedy_rule_with_inside("class-name-fully-qualified", "(?i)(?:\\\\?\\b[a-z_]\\w*)+(?=\\s*\\$)", toList([rule("punctuation", "\\\\")])),
+        greedy_rule("static-context", "(?i)\\b[a-z_]\\w*(?=\\s*::)"),
+        greedy_rule_with_inside("class-name-fully-qualified", "(?i)(?:\\\\?\\b[a-z_]\\w*)+(?=\\s*::)", toList([rule("punctuation", "\\\\")])),
+        greedy_rule("type-hint", "(?i)(?:[(,?]\\s*)\\K[a-z_]\\w*(?=\\s*\\$)"),
+        greedy_rule_with_inside("class-name-fully-qualified", "(?i)(?:[(,?]\\s*)\\K(?:\\\\?\\b[a-z_]\\w*)+(?=\\s*\\$)", toList([rule("punctuation", "\\\\")])),
+        greedy_rule("return-type", "(?i)(?:\\)\\s*:\\s*(?:\\?\\s*)?)\\K\\b[a-z_]\\w*(?!\\\\)\\b"),
+        greedy_rule_with_inside("class-name-fully-qualified", "(?i)(?:\\)\\s*:\\s*(?:\\?\\s*)?)\\K(?:\\\\?\\b[a-z_]\\w*)+\\b(?!\\\\)", toList([rule("punctuation", "\\\\")])),
+        rule("boolean", "(?i)\\b(?:false|true)\\b"),
+        greedy_rule("constant", "(?i)(?:::\\s*)\\K\\b[a-z_]\\w*\\b(?!\\s*\\()"),
+        greedy_rule("constant", "(?i)(?:\\b(?:case|const)\\s+)\\K\\b[a-z_]\\w*(?=\\s*[;=])"),
+        rule("constant", "(?i)\\b(?:null)\\b"),
+        rule("constant", "\\b[A-Z_][A-Z0-9_]*\\b(?!\\s*\\()"),
+        rule_with_inside("function", "(?i)(?:^|[^\\\\\\w])\\K\\\\?[a-z_](?:[\\w\\\\]*\\w)?(?=\\s*\\()", toList([rule("punctuation", "\\\\")])),
+        rule("property", "(?:->\\s*)\\K\\w+"),
+        rule("number", "(?i)\\b0b[01]+(?:_[01]+)*\\b|\\b0o[0-7]+(?:_[0-7]+)*\\b|\\b0x[\\da-f]+(?:_[\\da-f]+)*\\b|(?:\\b\\d+(?:_\\d+)*\\.?(?:\\d+(?:_\\d+)*)?|\\B\\.\\d+)(?:e[+-]?\\d+)?"),
+        rule("operator", "<?=>|\\?\\?=?|\\.{3}|\\??->|[!=]=?=?|::|\\*\\*=?|--|\\+\\+|&&|\\|\\||<<|>>|[?~]|[/^|%*&<>.+-]=?"),
+        rule("punctuation", "[{}\\[\\](),:;]")
+      ]))
+    ])),
+    greedy_rule("backtick-quoted-string", "`(?:\\\\[\\s\\S]|[^\\\\`])*`"),
+    greedy_rule("single-quoted-string", "'(?:\\\\[\\s\\S]|[^\\\\'])*'"),
+    greedy_rule("double-quoted-string", '"(?:\\\\[\\s\\S]|[^\\\\"])*"'),
+    greedy_rule("attribute", `(?im)#\\[(?:[^"'\\/#]|\\/(?![*/])|\\/\\/.*$|#(?!\\[).*$|\\/\\*(?:[^*]|\\*(?!\\/))*\\*\\/|"(?:\\\\[\\s\\S]|[^\\\\"])*"|'(?:\\\\[\\s\\S]|[^\\\\'])*')+\\](?=\\s*[a-z$#])`),
+    rule("variable", "\\$+(?:\\w+\\b|(?=\\{))"),
+    rule("package", "(?i)(?:namespace\\s+|use\\s+(?:function\\s+)?)\\K(?:\\\\?\\b[a-z_]\\w*)+\\b(?!\\\\)"),
+    rule("class-name", "(?i)(?:\\b(?:class|enum|interface|trait)\\s+)\\K\\b[a-z_]\\w*(?!\\\\)\\b"),
+    rule("function", "(?i)(?:\\bfunction\\s+)\\K[a-z_]\\w*(?=\\s*\\()"),
+    greedy_rule("type-casting", "(?i)(?:\\(\\s*)\\K\\b(?:array|bool|boolean|float|int|integer|object|string)\\b(?=\\s*\\))"),
+    greedy_rule("type-hint", "(?i)(?:[(,?]\\s*)\\K\\b(?:array(?!\\s*\\()|bool|callable|(?:false|null)(?=\\s*\\|)|float|int|iterable|mixed|object|self|static|string)\\b(?=\\s*\\$)"),
+    greedy_rule("return-type", "(?i)(?:\\)\\s*:\\s*(?:\\?\\s*)?)\\K\\b(?:array(?!\\s*\\()|bool|callable|(?:false|null)(?=\\s*\\|)|float|int|iterable|mixed|never|object|self|static|string|void)\\b"),
+    greedy_rule("type-declaration", "(?i)\\b(?:array(?!\\s*\\()|bool|float|int|iterable|mixed|object|string|void)\\b"),
+    greedy_rule("type-declaration", "(?i)(?:\\|\\s*)\\K(?:false|null)\\b|\\b(?:false|null)(?=\\s*\\|)"),
+    greedy_rule("static-context", "(?i)\\b(?:parent|self|static)(?=\\s*::)"),
+    rule("keyword", "(?i)(?:\\byield\\s+)\\Kfrom\\b"),
+    rule("keyword", "(?i)\\bclass\\b"),
+    rule("keyword", "(?i)(?:(?:^|[^\\s>:]|(?:^|[^-])>|(?:^|[^:]):)\\s*)\\K\\b(?:abstract|and|array|as|break|callable|case|catch|clone|const|continue|declare|default|die|do|echo|else|elseif|empty|enddeclare|endfor|endforeach|endif|endswitch|endwhile|enum|eval|exit|extends|final|finally|fn|for|foreach|function|global|goto|if|implements|include|include_once|instanceof|insteadof|interface|isset|list|match|namespace|never|new|or|parent|print|private|protected|public|readonly|require|require_once|return|self|static|switch|throw|trait|try|unset|use|var|while|xor|yield|__halt_compiler)\\b"),
+    rule("argument-name", "(?i)(?:[(,]\\s*)\\K\\b[a-z_]\\w*(?=\\s*:(?!:))"),
+    greedy_rule("class-name", "(?i)(?:\\b(?:extends|implements|instanceof|new(?!\\s+self|\\s+static))\\s+|\\bcatch\\s*\\()\\K\\b[a-z_]\\w*(?!\\\\)\\b"),
+    greedy_rule("class-name", "(?i)(?:\\|\\s*)\\K\\b[a-z_]\\w*(?!\\\\)\\b"),
+    greedy_rule("class-name", "(?i)\\b[a-z_]\\w*(?!\\\\)\\b(?=\\s*\\|)"),
+    greedy_rule("class-name-fully-qualified", "(?i)(?:\\|\\s*)\\K(?:\\\\?\\b[a-z_]\\w*)+\\b"),
+    greedy_rule("class-name-fully-qualified", "(?i)(?:\\\\?\\b[a-z_]\\w*)+\\b(?=\\s*\\|)"),
+    greedy_rule("class-name-fully-qualified", "(?i)(?:\\b(?:extends|implements|instanceof|new(?!\\s+self\\b|\\s+static\\b))\\s+|\\bcatch\\s*\\()\\K(?:\\\\?\\b[a-z_]\\w*)+\\b(?!\\\\)"),
+    greedy_rule("type-declaration", "(?i)\\b[a-z_]\\w*(?=\\s*\\$)"),
+    greedy_rule("class-name-fully-qualified", "(?i)(?:\\\\?\\b[a-z_]\\w*)+(?=\\s*\\$)"),
+    greedy_rule("static-context", "(?i)\\b[a-z_]\\w*(?=\\s*::)"),
+    greedy_rule("class-name-fully-qualified", "(?i)(?:\\\\?\\b[a-z_]\\w*)+(?=\\s*::)"),
+    greedy_rule("type-hint", "(?i)(?:[(,?]\\s*)\\K[a-z_]\\w*(?=\\s*\\$)"),
+    greedy_rule("class-name-fully-qualified", "(?i)(?:[(,?]\\s*)\\K(?:\\\\?\\b[a-z_]\\w*)+(?=\\s*\\$)"),
+    greedy_rule("return-type", "(?i)(?:\\)\\s*:\\s*(?:\\?\\s*)?)\\K\\b[a-z_]\\w*(?!\\\\)\\b"),
+    greedy_rule("class-name-fully-qualified", "(?i)(?:\\)\\s*:\\s*(?:\\?\\s*)?)\\K(?:\\\\?\\b[a-z_]\\w*)+\\b(?!\\\\)"),
+    rule("boolean", "(?i)\\b(?:false|true)\\b"),
+    greedy_rule("constant", "(?i)(?:::\\s*)\\K\\b[a-z_]\\w*\\b(?!\\s*\\()"),
+    greedy_rule("constant", "(?i)(?:\\b(?:case|const)\\s+)\\K\\b[a-z_]\\w*(?=\\s*[;=])"),
+    rule("constant", "(?i)\\b(?:null)\\b"),
+    rule("constant", "\\b[A-Z_][A-Z0-9_]*\\b(?!\\s*\\()"),
+    rule("function", "(?i)(?:^|[^\\\\\\w])\\K\\\\?[a-z_](?:[\\w\\\\]*\\w)?(?=\\s*\\()"),
+    rule("property", "(?:->\\s*)\\K\\w+"),
+    rule("number", "(?i)\\b0b[01]+(?:_[01]+)*\\b|\\b0o[0-7]+(?:_[0-7]+)*\\b|\\b0x[\\da-f]+(?:_[\\da-f]+)*\\b|(?:\\b\\d+(?:_\\d+)*\\.?(?:\\d+(?:_\\d+)*)?|\\B\\.\\d+)(?:e[+-]?\\d+)?"),
+    rule("operator", "<?=>|\\?\\?=?|\\.{3}|\\??->|[!=]=?=?|::|\\*\\*=?|--|\\+\\+|&&|\\|\\||<<|>>|[?~]|[/^|%*&<>.+-]=?"),
+    rule("punctuation", "[{}\\[\\](),:;]")
+  ]);
+}
+function grammar20() {
+  return new Grammar("php", new Some("clike"), rules20());
+}
+
+// build/dev/javascript/smalto/smalto/languages/python.mjs
+function rules21() {
+  return toList([
+    greedy_rule("comment", "(?:^|[^\\\\])\\K#.*"),
+    greedy_rule_with_inside("string-interpolation", `(?i)(?:f|fr|rf)(?:("""|''')[\\s\\S]*?\\1|("|')(?:\\\\.|(?!\\2)[^\\\\\\r\\n])*\\2)`, toList([
+      nested_rule("interpolation", "(?:(?:^|[^{])(?:\\{\\{)*)\\K\\{(?!\\{)(?:[^{}]|\\{(?!\\{)(?:[^{}]|\\{(?!\\{)(?:[^{}])+\\})+\\})+\\}", "python"),
+      rule("string", "[\\s\\S]+")
+    ])),
+    greedy_rule("string", `(?i)(?:[rub]|br|rb)?("""|''')[\\s\\S]*?\\1`),
+    greedy_rule("string", `(?i)(?:[rub]|br|rb)?("|')(?:\\\\.|(?!\\1)[^\\\\\\r\\n])*\\1`),
+    rule("function", "(?:(?:^|\\s)def[ \\t]+)\\K[a-zA-Z_]\\w*(?=\\s*\\()"),
+    rule("class-name", "(?i)(?:\\bclass\\s+)\\K\\w+"),
+    rule_with_inside("annotation", "(?m)(?:^[\\t ]*)\\K@\\w+(?:\\.\\w+)*", toList([rule("punctuation", "\\.")])),
+    rule("keyword", "\\b(?:_(?=\\s*:)|and|as|assert|async|await|break|case|class|continue|def|del|elif|else|except|exec|finally|for|from|global|if|import|in|is|lambda|match|nonlocal|not|or|pass|print|raise|return|try|while|with|yield)\\b"),
+    rule("builtin", "\\b(?:__import__|abs|all|any|apply|ascii|basestring|bin|bool|buffer|bytearray|bytes|callable|chr|classmethod|cmp|coerce|compile|complex|delattr|dict|dir|divmod|enumerate|eval|execfile|file|filter|float|format|frozenset|getattr|globals|hasattr|hash|help|hex|id|input|int|intern|isinstance|issubclass|iter|len|list|locals|long|map|max|memoryview|min|next|object|oct|open|ord|pow|property|range|raw_input|reduce|reload|repr|reversed|round|set|setattr|slice|sorted|staticmethod|str|sum|super|tuple|type|unichr|unicode|vars|xrange|zip)\\b"),
+    rule("boolean", "\\b(?:False|None|True)\\b"),
+    rule("number", "(?i)\\b0(?:b(?:_?[01])+|o(?:_?[0-7])+|x(?:_?[a-f0-9])+)\\b|(?:\\b\\d+(?:_\\d+)*(?:\\.(?:\\d+(?:_\\d+)*)?)?|\\B\\.\\d+(?:_\\d+)*)(?:e[+-]?\\d+(?:_\\d+)*)?j?(?!\\w)"),
+    rule("operator", "[-+%=]=?|!=|:=|\\*\\*?=?|\\/\\/?=?|<[<=>]?|>[=>]?|[&|^~]"),
+    rule("punctuation", "[{}[\\];(),.:]")
+  ]);
+}
+function grammar21() {
+  return new Grammar("python", new None, rules21());
+}
+
+// build/dev/javascript/smalto/smalto/languages/ruby.mjs
+function rules22() {
+  return toList([
+    greedy_rule("comment", "(?m)#.*|^=begin\\s[\\s\\S]*?^=end"),
+    greedy_rule_with_inside("string-literal", "%[qQiIwWs]?(?:([^a-zA-Z0-9\\s{(\\[<=])(?:(?!\\1)[^\\\\]|\\\\[\\s\\S])*\\1|\\((?:[^()\\\\]|\\\\[\\s\\S]|\\((?:[^()\\\\]|\\\\[\\s\\S])*\\))*\\)|\\{(?:[^{}\\\\]|\\\\[\\s\\S]|\\{(?:[^{}\\\\]|\\\\[\\s\\S])*\\})*\\}|\\[(?:[^\\[\\]\\\\]|\\\\[\\s\\S]|\\[(?:[^\\[\\]\\\\]|\\\\[\\s\\S])*\\])*\\]|<(?:[^<>\\\\]|\\\\[\\s\\S]|<(?:[^<>\\\\]|\\\\[\\s\\S])*>)*>)", toList([
+      rule_with_inside("interpolation", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K#\\{(?:[^{}]|\\{[^{}]*\\})*\\}", toList([
+        rule_with_inside("content", "^(?<=#\\{)[\\s\\S]+(?=\\}$)", toList([
+          greedy_rule("comment", "(?m)#.*|^=begin\\s[\\s\\S]*?^=end"),
+          greedy_rule("string-literal", "%[qQiIwWs]?(?:([^a-zA-Z0-9\\s{(\\[<=])(?:(?!\\1)[^\\\\]|\\\\[\\s\\S])*\\1|\\((?:[^()\\\\]|\\\\[\\s\\S]|\\((?:[^()\\\\]|\\\\[\\s\\S])*\\))*\\)|\\{(?:[^{}\\\\]|\\\\[\\s\\S]|\\{(?:[^{}\\\\]|\\\\[\\s\\S])*\\})*\\}|\\[(?:[^\\[\\]\\\\]|\\\\[\\s\\S]|\\[(?:[^\\[\\]\\\\]|\\\\[\\s\\S])*\\])*\\]|<(?:[^<>\\\\]|\\\\[\\s\\S]|<(?:[^<>\\\\]|\\\\[\\s\\S])*>)*>)"),
+          greedy_rule_with_inside("string-literal", `("|')(?:#\\{[^}]+\\}|#(?!\\{)|\\\\(?:\\r\\n|[\\s\\S])|(?!\\1)[^\\\\#\\r\\n])*\\1`, toList([
+            rule("interpolation", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K#\\{(?:[^{}]|\\{[^{}]*\\})*\\}"),
+            rule("string", "[\\s\\S]+")
+          ])),
+          greedy_rule_with_inside("heredoc-string", "(?i)<<[-~]?([a-z_]\\w*)[\\r\\n](?:.*[\\r\\n])*?[\\t ]*\\1", toList([
+            rule_with_inside("delimiter", "(?i)^<<[-~]?[a-z_]\\w*|\\b[a-z_]\\w*$", toList([
+              rule("symbol", "\\b\\w+"),
+              rule("punctuation", "^<<[-~]?")
+            ])),
+            rule("interpolation", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K#\\{(?:[^{}]|\\{[^{}]*\\})*\\}"),
+            rule("string", "[\\s\\S]+")
+          ])),
+          greedy_rule_with_inside("heredoc-string", "(?i)<<[-~]?'([a-z_]\\w*)'[\\r\\n](?:.*[\\r\\n])*?[\\t ]*\\1", toList([
+            rule_with_inside("delimiter", "(?i)^<<[-~]?'[a-z_]\\w*'|\\b[a-z_]\\w*$", toList([
+              rule("symbol", "\\b\\w+"),
+              rule("punctuation", "^<<[-~]?'|'$")
+            ])),
+            rule("string", "[\\s\\S]+")
+          ])),
+          greedy_rule_with_inside("command-literal", "%x(?:([^a-zA-Z0-9\\s{(\\[<=])(?:(?!\\1)[^\\\\]|\\\\[\\s\\S])*\\1|\\((?:[^()\\\\]|\\\\[\\s\\S]|\\((?:[^()\\\\]|\\\\[\\s\\S])*\\))*\\)|\\{(?:[^{}\\\\]|\\\\[\\s\\S]|\\{(?:[^{}\\\\]|\\\\[\\s\\S])*\\})*\\}|\\[(?:[^\\[\\]\\\\]|\\\\[\\s\\S]|\\[(?:[^\\[\\]\\\\]|\\\\[\\s\\S])*\\])*\\]|<(?:[^<>\\\\]|\\\\[\\s\\S]|<(?:[^<>\\\\]|\\\\[\\s\\S])*>)*>)", toList([
+            rule("interpolation", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K#\\{(?:[^{}]|\\{[^{}]*\\})*\\}"),
+            rule("string", "[\\s\\S]+")
+          ])),
+          greedy_rule_with_inside("command-literal", "`(?:#\\{[^}]+\\}|#(?!\\{)|\\\\(?:\\r\\n|[\\s\\S])|[^\\\\`#\\r\\n])*`", toList([
+            rule("interpolation", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K#\\{(?:[^{}]|\\{[^{}]*\\})*\\}"),
+            rule("string", "[\\s\\S]+")
+          ])),
+          rule_with_inside("class-name", "(?:\\b(?:class|module)\\s+|\\bcatch\\s+\\()\\K[\\w.\\\\]+|\\b[A-Z_]\\w*(?=\\s*\\.\\s*new\\b)", toList([rule("punctuation", "[.\\\\]")])),
+          greedy_rule_with_inside("regex-literal", "%r(?:([^a-zA-Z0-9\\s{(\\[<=])(?:(?!\\1)[^\\\\]|\\\\[\\s\\S])*\\1|\\((?:[^()\\\\]|\\\\[\\s\\S]|\\((?:[^()\\\\]|\\\\[\\s\\S])*\\))*\\)|\\{(?:[^{}\\\\]|\\\\[\\s\\S]|\\{(?:[^{}\\\\]|\\\\[\\s\\S])*\\})*\\}|\\[(?:[^\\[\\]\\\\]|\\\\[\\s\\S]|\\[(?:[^\\[\\]\\\\]|\\\\[\\s\\S])*\\])*\\]|<(?:[^<>\\\\]|\\\\[\\s\\S]|<(?:[^<>\\\\]|\\\\[\\s\\S])*>)*>)[egimnosux]{0,6}", toList([
+            rule("interpolation", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K#\\{(?:[^{}]|\\{[^{}]*\\})*\\}"),
+            rule("regex", "[\\s\\S]+")
+          ])),
+          greedy_rule_with_inside("regex-literal", "(?:^|[^/])\\K\\/(?!\\/)(?:\\[[^\\r\\n\\]]+\\]|\\\\.|[^[/\\\\\\r\\n])+\\/[egimnosux]{0,6}(?=\\s*(?:$|[\\r\\n,.;})#]))", toList([
+            rule("interpolation", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K#\\{(?:[^{}]|\\{[^{}]*\\})*\\}"),
+            rule("regex", "[\\s\\S]+")
+          ])),
+          rule("variable", "[@$]+[a-zA-Z_]\\w*(?:[?!]|\\b)"),
+          greedy_rule("symbol", '(?:^|[^:])\\K:(?:"(?:\\\\.|[^"\\\\\\r\\n])*"|(?:\\b[a-zA-Z_]\\w*|[^\\s\\0-\\x7F]+)[?!]?|\\$.)'),
+          greedy_rule("symbol", '(?:[\\r\\n{(,][ \\t]*)\\K(?:"(?:\\\\.|[^"\\\\\\r\\n])*"|(?:\\b[a-zA-Z_]\\w*|[^\\s\\0-\\x7F]+)[?!]?|\\$.)(?=:(?!:))'),
+          rule_with_inside("method-definition", "(?:\\bdef\\s+)\\K\\w+(?:\\s*\\.\\s*\\w+)?", toList([
+            rule("function", "\\b\\w+$"),
+            rule("keyword", "^self\\b"),
+            rule("class-name", "^\\w+"),
+            rule("punctuation", "\\.")
+          ])),
+          rule("keyword", "\\b(?:BEGIN|END|alias|and|begin|break|case|class|def|define_method|defined|do|each|else|elsif|end|ensure|extend|for|if|in|include|module|new|next|nil|not|or|prepend|private|protected|public|raise|redo|require|rescue|retry|return|self|super|then|throw|undef|unless|until|when|while|yield)\\b"),
+          rule("boolean", "\\b(?:false|true)\\b"),
+          rule("builtin", "\\b(?:Array|Bignum|Binding|Class|Continuation|Dir|Exception|FalseClass|File|Fixnum|Float|Hash|IO|Integer|MatchData|Method|Module|NilClass|Numeric|Object|Proc|Range|Regexp|Stat|String|Struct|Symbol|TMS|Thread|ThreadGroup|Time|TrueClass)\\b"),
+          rule("constant", "\\b[A-Z][A-Z0-9_]*(?:[?!]|\\b)"),
+          rule("number", "(?i)\\b0x[\\da-f]+\\b|(?:\\b\\d+(?:\\.\\d*)?|\\B\\.\\d+)(?:e[+-]?\\d+)?"),
+          rule("punctuation", "::"),
+          rule("operator", "\\.{2,3}|&\\.|===|<?=>|[!=]?~|(?:&&|\\|\\||<<|>>|\\*\\*|[+\\-*/%<>!^&|=])=?|[?:]"),
+          rule("punctuation", "[(){}[\\].,;]")
+        ])),
+        rule("punctuation", "^#\\{|\\}$")
+      ])),
+      rule("string", "[\\s\\S]+")
+    ])),
+    greedy_rule("string-literal", `("|')(?:#\\{[^}]+\\}|#(?!\\{)|\\\\(?:\\r\\n|[\\s\\S])|(?!\\1)[^\\\\#\\r\\n])*\\1`),
+    greedy_rule("heredoc-string", "(?i)<<[-~]?([a-z_]\\w*)[\\r\\n](?:.*[\\r\\n])*?[\\t ]*\\1"),
+    greedy_rule("heredoc-string", "(?i)<<[-~]?'([a-z_]\\w*)'[\\r\\n](?:.*[\\r\\n])*?[\\t ]*\\1"),
+    greedy_rule("command-literal", "%x(?:([^a-zA-Z0-9\\s{(\\[<=])(?:(?!\\1)[^\\\\]|\\\\[\\s\\S])*\\1|\\((?:[^()\\\\]|\\\\[\\s\\S]|\\((?:[^()\\\\]|\\\\[\\s\\S])*\\))*\\)|\\{(?:[^{}\\\\]|\\\\[\\s\\S]|\\{(?:[^{}\\\\]|\\\\[\\s\\S])*\\})*\\}|\\[(?:[^\\[\\]\\\\]|\\\\[\\s\\S]|\\[(?:[^\\[\\]\\\\]|\\\\[\\s\\S])*\\])*\\]|<(?:[^<>\\\\]|\\\\[\\s\\S]|<(?:[^<>\\\\]|\\\\[\\s\\S])*>)*>)"),
+    greedy_rule("command-literal", "`(?:#\\{[^}]+\\}|#(?!\\{)|\\\\(?:\\r\\n|[\\s\\S])|[^\\\\`#\\r\\n])*`"),
+    rule("class-name", "(?:\\b(?:class|module)\\s+|\\bcatch\\s+\\()\\K[\\w.\\\\]+|\\b[A-Z_]\\w*(?=\\s*\\.\\s*new\\b)"),
+    greedy_rule("regex-literal", "%r(?:([^a-zA-Z0-9\\s{(\\[<=])(?:(?!\\1)[^\\\\]|\\\\[\\s\\S])*\\1|\\((?:[^()\\\\]|\\\\[\\s\\S]|\\((?:[^()\\\\]|\\\\[\\s\\S])*\\))*\\)|\\{(?:[^{}\\\\]|\\\\[\\s\\S]|\\{(?:[^{}\\\\]|\\\\[\\s\\S])*\\})*\\}|\\[(?:[^\\[\\]\\\\]|\\\\[\\s\\S]|\\[(?:[^\\[\\]\\\\]|\\\\[\\s\\S])*\\])*\\]|<(?:[^<>\\\\]|\\\\[\\s\\S]|<(?:[^<>\\\\]|\\\\[\\s\\S])*>)*>)[egimnosux]{0,6}"),
+    greedy_rule("regex-literal", "(?:^|[^/])\\K\\/(?!\\/)(?:\\[[^\\r\\n\\]]+\\]|\\\\.|[^[/\\\\\\r\\n])+\\/[egimnosux]{0,6}(?=\\s*(?:$|[\\r\\n,.;})#]))"),
+    rule("variable", "[@$]+[a-zA-Z_]\\w*(?:[?!]|\\b)"),
+    greedy_rule("symbol", '(?:^|[^:])\\K:(?:"(?:\\\\.|[^"\\\\\\r\\n])*"|(?:\\b[a-zA-Z_]\\w*|[^\\s\\0-\\x7F]+)[?!]?|\\$.)'),
+    greedy_rule("symbol", '(?:[\\r\\n{(,][ \\t]*)\\K(?:"(?:\\\\.|[^"\\\\\\r\\n])*"|(?:\\b[a-zA-Z_]\\w*|[^\\s\\0-\\x7F]+)[?!]?|\\$.)(?=:(?!:))'),
+    rule("method-definition", "(?:\\bdef\\s+)\\K\\w+(?:\\s*\\.\\s*\\w+)?"),
+    rule("keyword", "\\b(?:BEGIN|END|alias|and|begin|break|case|class|def|define_method|defined|do|each|else|elsif|end|ensure|extend|for|if|in|include|module|new|next|nil|not|or|prepend|private|protected|public|raise|redo|require|rescue|retry|return|self|super|then|throw|undef|unless|until|when|while|yield)\\b"),
+    rule("boolean", "\\b(?:false|true)\\b"),
+    rule("builtin", "\\b(?:Array|Bignum|Binding|Class|Continuation|Dir|Exception|FalseClass|File|Fixnum|Float|Hash|IO|Integer|MatchData|Method|Module|NilClass|Numeric|Object|Proc|Range|Regexp|Stat|String|Struct|Symbol|TMS|Thread|ThreadGroup|Time|TrueClass)\\b"),
+    rule("constant", "\\b[A-Z][A-Z0-9_]*(?:[?!]|\\b)"),
+    rule("number", "(?i)\\b0x[\\da-f]+\\b|(?:\\b\\d+(?:\\.\\d*)?|\\B\\.\\d+)(?:e[+-]?\\d+)?"),
+    rule("punctuation", "::"),
+    rule("operator", "\\.{2,3}|&\\.|===|<?=>|[!=]?~|(?:&&|\\|\\||<<|>>|\\*\\*|[+\\-*/%<>!^&|=])=?|[?:]"),
+    rule("punctuation", "[(){}[\\].,;]")
+  ]);
+}
+function grammar22() {
+  return new Grammar("ruby", new Some("clike"), rules22());
+}
+
+// build/dev/javascript/smalto/smalto/languages/rust.mjs
+function rules23() {
+  return toList([
+    greedy_rule("comment", "(?:^|[^\\\\])\\K\\/\\*(?:[^*/]|\\*(?!\\/)|\\/(?!\\*)|\\/\\*(?:[^*/]|\\*(?!\\/)|\\/(?!\\*)|\\/\\*(?:[^*/]|\\*(?!\\/)|\\/(?!\\*)|\\/\\*(?:[^*/]|\\*(?!\\/)|\\/(?!\\*)|[^\\s\\S])*\\*\\/)*\\*\\/)*\\*\\/)*\\*\\/"),
+    greedy_rule("comment", "(?:^|[^\\\\:])\\K\\/\\/.*"),
+    greedy_rule("string", 'b?"(?:\\\\[\\s\\S]|[^\\\\"])*"|b?r(#*)"(?:[^"]|"(?!\\1))*"\\1'),
+    greedy_rule("char", "b?'(?:\\\\(?:x[0-7][\\da-fA-F]|u\\{(?:[\\da-fA-F]_*){1,6}\\}|.)|[^\\\\\\r\\n\\t'])'"),
+    greedy_rule_with_inside("attr-name", '#!?\\[(?:[^\\[\\]"]|"(?:\\\\[\\s\\S]|[^\\\\"])*")*\\]', toList([
+      greedy_rule("string", 'b?"(?:\\\\[\\s\\S]|[^\\\\"])*"|b?r(#*)"(?:[^"]|"(?!\\1))*"\\1')
+    ])),
+    nested_rule("closure-params", "(?:[=(,:]\\s*|\\bmove\\s*)\\K\\|[^|]*\\||\\|[^|]*\\|(?=\\s*(?:\\{|->))", "rust"),
+    rule("symbol", "'\\w+"),
+    rule("punctuation", "(?:\\$\\w+:)\\K[a-z]+"),
+    rule("variable", "\\$\\w+"),
+    rule("function", "(?:\\bfn\\s+)\\K\\w+"),
+    rule("class-name", "(?:\\b(?:enum|struct|trait|type|union)\\s+)\\K\\w+"),
+    rule("namespace", "(?:\\b(?:crate|mod)\\s+)\\K[a-z][a-z_\\d]*"),
+    rule_with_inside("namespace", "(?:\\b(?:crate|self|super)\\s*)\\K::\\s*[a-z][a-z_\\d]*\\b(?:\\s*::(?:\\s*[a-z][a-z_\\d]*\\s*::)*)?", toList([rule("punctuation", "::")])),
+    rule("keyword", "\\b(?:Self|abstract|as|async|await|become|box|break|const|continue|crate|do|dyn|else|enum|extern|final|fn|for|if|impl|in|let|loop|macro|match|mod|move|mut|override|priv|pub|ref|return|self|static|struct|super|trait|try|type|typeof|union|unsafe|unsized|use|virtual|where|while|yield)\\b"),
+    rule("keyword", "\\b(?:bool|char|f(?:32|64)|[ui](?:8|16|32|64|128|size)|str)\\b"),
+    rule("function", "\\b[a-z_]\\w*(?=\\s*(?:::\\s*<|\\())"),
+    rule("property", "\\b\\w+!"),
+    rule("constant", "\\b[A-Z_][A-Z_\\d]+\\b"),
+    rule("class-name", "\\b[A-Z]\\w*\\b"),
+    rule_with_inside("namespace", "(?:\\b[a-z][a-z_\\d]*\\s*::\\s*)*\\b[a-z][a-z_\\d]*\\s*::(?!\\s*<)", toList([rule("punctuation", "::")])),
+    rule("number", "\\b(?:0x[\\dA-Fa-f](?:_?[\\dA-Fa-f])*|0o[0-7](?:_?[0-7])*|0b[01](?:_?[01])*|(?:(?:\\d(?:_?\\d)*)?\\.)?\\d(?:_?\\d)*(?:[Ee][+-]?\\d+)?)(?:_?(?:f32|f64|[iu](?:8|16|32|64|size)?))?\\b"),
+    rule("boolean", "\\b(?:false|true)\\b"),
+    rule("punctuation", "->|\\.\\.=|\\.{1,3}|::|[{}[\\];(),:]"),
+    rule("operator", "[-+*\\/%!^]=?|=[=>]?|&[&=]?|\\|[|=]?|<<?=?|>>?=?|[@?]")
+  ]);
+}
+function grammar23() {
+  return new Grammar("rust", new None, rules23());
+}
+
+// build/dev/javascript/smalto/smalto/languages/scala.mjs
+function rules24() {
+  return toList([
+    greedy_rule("comment", "(?:^|[^\\\\])\\K\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+    greedy_rule("comment", "(?:^|[^\\\\:])\\K\\/\\/.*"),
+    greedy_rule_with_inside("string-interpolation", '(?i)\\b[a-z]\\w*(?:"""(?:[^$]|\\$(?:[^{]|\\{(?:[^{}]|\\{[^{}]*\\})*\\}))*?"""|"(?:[^$"\\r\\n]|\\$(?:[^{]|\\{(?:[^{}]|\\{[^{}]*\\})*\\}))*")', toList([
+      greedy_rule("function", "^\\w+"),
+      greedy_rule("symbol", '\\\\\\$"|\\$[$"]'),
+      greedy_rule_with_inside("interpolation", "\\$(?:\\w+|\\{(?:[^{}]|\\{[^{}]*\\})*\\})", toList([
+        rule("punctuation", "^\\$\\{?|\\}$"),
+        rule_with_inside("expression", "[\\s\\S]+", toList([
+          greedy_rule("comment", "(?:^|[^\\\\])\\K\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+          greedy_rule("comment", "(?:^|[^\\\\:])\\K\\/\\/.*"),
+          greedy_rule("string-interpolation", '(?i)\\b[a-z]\\w*(?:"""(?:[^$]|\\$(?:[^{]|\\{(?:[^{}]|\\{[^{}]*\\})*\\}))*?"""|"(?:[^$"\\r\\n]|\\$(?:[^{]|\\{(?:[^{}]|\\{[^{}]*\\})*\\}))*")'),
+          greedy_rule("string", '"""[\\s\\S]*?"""'),
+          greedy_rule("char", "'(?:\\\\.|[^'\\\\\\r\\n]){1,6}'"),
+          greedy_rule("string", `("|')(?:\\\\.|(?!\\1)[^\\\\\\r\\n])*\\1`),
+          rule("punctuation", "(?:^|[^.])\\K@\\w+(?:\\s*\\.\\s*\\w+)*"),
+          rule_with_inside("generics", "<(?:[\\w\\s,.?]|&(?!&)|<(?:[\\w\\s,.?]|&(?!&)|<(?:[\\w\\s,.?]|&(?!&)|<(?:[\\w\\s,.?]|&(?!&))*>)*>)*>)*>", toList([
+            rule_with_inside("class-name", "(?:^|[^\\w.])\\K(?:[a-z]\\w*\\s*\\.\\s*)*(?:[A-Z]\\w*\\s*\\.\\s*)*[A-Z](?:[\\d_A-Z]*[a-z]\\w*)?\\b", toList([
+              rule_with_inside("namespace", "^[a-z]\\w*(?:\\s*\\.\\s*[a-z]\\w*)*(?:\\s*\\.)?", toList([rule("punctuation", "\\.")])),
+              rule("punctuation", "\\.")
+            ])),
+            rule("keyword", "\\b(?:abstract|assert|boolean|break|byte|case|catch|char|class|const|continue|default|do|double|else|enum|exports|extends|final|finally|float|for|goto|if|implements|import|instanceof|int|interface|long|module|native|new|non-sealed|null|open|opens|package|permits|private|protected|provides|public|record(?!\\s*[(){}[\\]<>=%~.:,;?+\\-*/&|^])|requires|return|sealed|short|static|strictfp|super|switch|synchronized|this|throw|throws|to|transient|transitive|try|uses|var|void|volatile|while|with|yield)\\b"),
+            rule("punctuation", "[<>(),.:]"),
+            rule("operator", "[?&|]")
+          ])),
+          rule_with_inside("import", "(?:\\bimport\\s+)\\K(?:[a-z]\\w*\\s*\\.\\s*)*(?:[A-Z]\\w*\\s*\\.\\s*)*(?:[A-Z]\\w*|\\*)(?=\\s*;)", toList([
+            rule("namespace", "^[a-z]\\w*(?:\\s*\\.\\s*[a-z]\\w*)*(?:\\s*\\.)?"),
+            rule("punctuation", "\\."),
+            rule("operator", "\\*"),
+            rule("class-name", "\\w+")
+          ])),
+          rule_with_inside("static", "(?:\\bimport\\s+static\\s+)\\K(?:[a-z]\\w*\\s*\\.\\s*)*(?:[A-Z]\\w*\\s*\\.\\s*)*(?:\\w+|\\*)(?=\\s*;)", toList([
+            rule("namespace", "^[a-z]\\w*(?:\\s*\\.\\s*[a-z]\\w*)*(?:\\s*\\.)?"),
+            rule("static", "\\b\\w+$"),
+            rule("punctuation", "\\."),
+            rule("operator", "\\*"),
+            rule("class-name", "\\w+")
+          ])),
+          rule_with_inside("namespace", "(?:\\b(?:exports|import(?:\\s+static)?|module|open|opens|package|provides|requires|to|transitive|uses|with)\\s+)\\K(?!\\b(?:abstract|assert|boolean|break|byte|case|catch|char|class|const|continue|default|do|double|else|enum|exports|extends|final|finally|float|for|goto|if|implements|import|instanceof|int|interface|long|module|native|new|non-sealed|null|open|opens|package|permits|private|protected|provides|public|record(?!\\s*[(){}[\\]<>=%~.:,;?+\\-*/&|^])|requires|return|sealed|short|static|strictfp|super|switch|synchronized|this|throw|throws|to|transient|transitive|try|uses|var|void|volatile|while|with|yield)\\b)[a-z]\\w*(?:\\.[a-z]\\w*)*\\.?", toList([rule("punctuation", "\\.")])),
+          rule("keyword", "<-|=>|\\b(?:abstract|case|catch|class|def|derives|do|else|enum|extends|extension|final|finally|for|forSome|given|if|implicit|import|infix|inline|lazy|match|new|null|object|opaque|open|override|package|private|protected|return|sealed|self|super|this|throw|trait|transparent|try|type|using|val|var|while|with|yield)\\b"),
+          rule("boolean", "\\b(?:false|true)\\b"),
+          rule("number", "(?i)\\b0x(?:[\\da-f]*\\.)?[\\da-f]+|(?:\\b\\d+(?:\\.\\d*)?|\\B\\.\\d+)(?:e\\d+)?[dfl]?"),
+          rule("operator", "(?m)(?:^|[^.])\\K(?:<<=?|>>>?=?|->|--|\\+\\+|&&|\\|\\||::|[?:~]|[-+*/%&|^!=<>]=?)"),
+          rule("punctuation", "[{}[\\];(),.:]"),
+          rule("builtin", "\\b(?:Any|AnyRef|AnyVal|Boolean|Byte|Char|Double|Float|Int|Long|Nothing|Short|String|Unit)\\b"),
+          rule("symbol", "'[^\\d\\s\\\\]\\w*")
+        ]))
+      ])),
+      rule("string", "[\\s\\S]+")
+    ])),
+    greedy_rule("string", '"""[\\s\\S]*?"""'),
+    greedy_rule("char", "'(?:\\\\.|[^'\\\\\\r\\n]){1,6}'"),
+    greedy_rule("string", `("|')(?:\\\\.|(?!\\1)[^\\\\\\r\\n])*\\1`),
+    rule("punctuation", "(?:^|[^.])\\K@\\w+(?:\\s*\\.\\s*\\w+)*"),
+    rule("generics", "<(?:[\\w\\s,.?]|&(?!&)|<(?:[\\w\\s,.?]|&(?!&)|<(?:[\\w\\s,.?]|&(?!&)|<(?:[\\w\\s,.?]|&(?!&))*>)*>)*>)*>"),
+    rule("import", "(?:\\bimport\\s+)\\K(?:[a-z]\\w*\\s*\\.\\s*)*(?:[A-Z]\\w*\\s*\\.\\s*)*(?:[A-Z]\\w*|\\*)(?=\\s*;)"),
+    rule("static", "(?:\\bimport\\s+static\\s+)\\K(?:[a-z]\\w*\\s*\\.\\s*)*(?:[A-Z]\\w*\\s*\\.\\s*)*(?:\\w+|\\*)(?=\\s*;)"),
+    rule("namespace", "(?:\\b(?:exports|import(?:\\s+static)?|module|open|opens|package|provides|requires|to|transitive|uses|with)\\s+)\\K(?!\\b(?:abstract|assert|boolean|break|byte|case|catch|char|class|const|continue|default|do|double|else|enum|exports|extends|final|finally|float|for|goto|if|implements|import|instanceof|int|interface|long|module|native|new|non-sealed|null|open|opens|package|permits|private|protected|provides|public|record(?!\\s*[(){}[\\]<>=%~.:,;?+\\-*/&|^])|requires|return|sealed|short|static|strictfp|super|switch|synchronized|this|throw|throws|to|transient|transitive|try|uses|var|void|volatile|while|with|yield)\\b)[a-z]\\w*(?:\\.[a-z]\\w*)*\\.?"),
+    rule("keyword", "<-|=>|\\b(?:abstract|case|catch|class|def|derives|do|else|enum|extends|extension|final|finally|for|forSome|given|if|implicit|import|infix|inline|lazy|match|new|null|object|opaque|open|override|package|private|protected|return|sealed|self|super|this|throw|trait|transparent|try|type|using|val|var|while|with|yield)\\b"),
+    rule("boolean", "\\b(?:false|true)\\b"),
+    rule("number", "(?i)\\b0x(?:[\\da-f]*\\.)?[\\da-f]+|(?:\\b\\d+(?:\\.\\d*)?|\\B\\.\\d+)(?:e\\d+)?[dfl]?"),
+    rule("operator", "(?m)(?:^|[^.])\\K(?:<<=?|>>>?=?|->|--|\\+\\+|&&|\\|\\||::|[?:~]|[-+*/%&|^!=<>]=?)"),
+    rule("punctuation", "[{}[\\];(),.:]"),
+    rule("builtin", "\\b(?:Any|AnyRef|AnyVal|Boolean|Byte|Char|Double|Float|Int|Long|Nothing|Short|String|Unit)\\b"),
+    rule("symbol", "'[^\\d\\s\\\\]\\w*")
+  ]);
+}
+function grammar24() {
+  return new Grammar("scala", new Some("java"), rules24());
+}
+
+// build/dev/javascript/smalto/smalto/languages/sql.mjs
+function rules25() {
+  return toList([
+    rule("comment", "(?:^|[^\\\\])\\K(?:\\/\\*[\\s\\S]*?\\*\\/|(?:--|\\/\\/|#).*)"),
+    greedy_rule("variable", "@([\"'`])(?:\\\\[\\s\\S]|(?!\\1)[^\\\\])+\\1"),
+    rule("variable", "@[\\w.$]+"),
+    greedy_rule("string", `(?:^|[^@\\\\])\\K("|')(?:\\\\[\\s\\S]|(?!\\2)[^\\\\]|\\2\\2)*\\2`),
+    greedy_rule_with_inside("identifier", "(?:^|[^@\\\\])\\K`(?:\\\\[\\s\\S]|[^`\\\\]|``)*`", toList([rule("punctuation", "^`|`$")])),
+    rule("function", "(?i)\\b(?:AVG|COUNT|FIRST|FORMAT|LAST|LCASE|LEN|MAX|MID|MIN|MOD|NOW|ROUND|SUM|UCASE)(?=\\s*\\()"),
+    rule("keyword", "(?i)\\b(?:ACTION|ADD|AFTER|ALGORITHM|ALL|ALTER|ANALYZE|ANY|APPLY|AS|ASC|AUTHORIZATION|AUTO_INCREMENT|BACKUP|BDB|BEGIN|BERKELEYDB|BIGINT|BINARY|BIT|BLOB|BOOL|BOOLEAN|BREAK|BROWSE|BTREE|BULK|BY|CALL|CASCADED?|CASE|CHAIN|CHAR(?:ACTER|SET)?|CHECK(?:POINT)?|CLOSE|CLUSTERED|COALESCE|COLLATE|COLUMNS?|COMMENT|COMMIT(?:TED)?|COMPUTE|CONNECT|CONSISTENT|CONSTRAINT|CONTAINS(?:TABLE)?|CONTINUE|CONVERT|CREATE|CROSS|CURRENT(?:_DATE|_TIME|_TIMESTAMP|_USER)?|CURSOR|CYCLE|DATA(?:BASES?)?|DATE(?:TIME)?|DAY|DBCC|DEALLOCATE|DEC|DECIMAL|DECLARE|DEFAULT|DEFINER|DELAYED|DELETE|DELIMITERS?|DENY|DESC|DESCRIBE|DETERMINISTIC|DISABLE|DISCARD|DISK|DISTINCT|DISTINCTROW|DISTRIBUTED|DO|DOUBLE|DROP|DUMMY|DUMP(?:FILE)?|DUPLICATE|ELSE(?:IF)?|ENABLE|ENCLOSED|END|ENGINE|ENUM|ERRLVL|ERRORS|ESCAPED?|EXCEPT|EXEC(?:UTE)?|EXISTS|EXIT|EXPLAIN|EXTENDED|FETCH|FIELDS|FILE|FILLFACTOR|FIRST|FIXED|FLOAT|FOLLOWING|FOR(?: EACH ROW)?|FORCE|FOREIGN|FREETEXT(?:TABLE)?|FROM|FULL|FUNCTION|GEOMETRY(?:COLLECTION)?|GLOBAL|GOTO|GRANT|GROUP|HANDLER|HASH|HAVING|HOLDLOCK|HOUR|IDENTITY(?:COL|_INSERT)?|IF|IGNORE|IMPORT|INDEX|INFILE|INNER|INNODB|INOUT|INSERT|INT|INTEGER|INTERSECT|INTERVAL|INTO|INVOKER|ISOLATION|ITERATE|JOIN|KEYS?|KILL|LANGUAGE|LAST|LEAVE|LEFT|LEVEL|LIMIT|LINENO|LINES|LINESTRING|LOAD|LOCAL|LOCK|LONG(?:BLOB|TEXT)|LOOP|MATCH(?:ED)?|MEDIUM(?:BLOB|INT|TEXT)|MERGE|MIDDLEINT|MINUTE|MODE|MODIFIES|MODIFY|MONTH|MULTI(?:LINESTRING|POINT|POLYGON)|NATIONAL|NATURAL|NCHAR|NEXT|NO|NONCLUSTERED|NULLIF|NUMERIC|OFF?|OFFSETS?|ON|OPEN(?:DATASOURCE|QUERY|ROWSET)?|OPTIMIZE|OPTION(?:ALLY)?|ORDER|OUT(?:ER|FILE)?|OVER|PARTIAL|PARTITION|PERCENT|PIVOT|PLAN|POINT|POLYGON|PRECEDING|PRECISION|PREPARE|PREV|PRIMARY|PRINT|PRIVILEGES|PROC(?:EDURE)?|PUBLIC|PURGE|QUICK|RAISERROR|READS?|REAL|RECONFIGURE|REFERENCES|RELEASE|RENAME|REPEAT(?:ABLE)?|REPLACE|REPLICATION|REQUIRE|RESIGNAL|RESTORE|RESTRICT|RETURN(?:ING|S)?|REVOKE|RIGHT|ROLLBACK|ROUTINE|ROW(?:COUNT|GUIDCOL|S)?|RTREE|RULE|SAVE(?:POINT)?|SCHEMA|SECOND|SELECT|SERIAL(?:IZABLE)?|SESSION(?:_USER)?|SET(?:USER)?|SHARE|SHOW|SHUTDOWN|SIMPLE|SMALLINT|SNAPSHOT|SOME|SONAME|SQL|START(?:ING)?|STATISTICS|STATUS|STRIPED|SYSTEM_USER|TABLES?|TABLESPACE|TEMP(?:ORARY|TABLE)?|TERMINATED|TEXT(?:SIZE)?|THEN|TIME(?:STAMP)?|TINY(?:BLOB|INT|TEXT)|TOP?|TRAN(?:SACTIONS?)?|TRIGGER|TRUNCATE|TSEQUAL|TYPES?|UNBOUNDED|UNCOMMITTED|UNDEFINED|UNION|UNIQUE|UNLOCK|UNPIVOT|UNSIGNED|UPDATE(?:TEXT)?|USAGE|USE|USER|USING|VALUES?|VAR(?:BINARY|CHAR|CHARACTER|YING)|VIEW|WAITFOR|WARNINGS|WHEN|WHERE|WHILE|WITH(?: ROLLUP|IN)?|WORK|WRITE(?:TEXT)?|YEAR)\\b"),
+    rule("boolean", "(?i)\\b(?:FALSE|NULL|TRUE)\\b"),
+    rule("number", "(?i)\\b0x[\\da-f]+\\b|\\b\\d+(?:\\.\\d*)?|\\B\\.\\d+\\b"),
+    rule("operator", "(?i)[-+*\\/=%^~]|&&?|\\|\\|?|!=?|<(?:=>?|<|>)?|>[>=]?|\\b(?:AND|BETWEEN|DIV|ILIKE|IN|IS|LIKE|NOT|OR|REGEXP|RLIKE|SOUNDS LIKE|XOR)\\b"),
+    rule("punctuation", "[;[\\]()`,.]")
+  ]);
+}
+function grammar25() {
+  return new Grammar("sql", new None, rules25());
+}
+
+// build/dev/javascript/smalto/smalto/languages/swift.mjs
+function rules26() {
+  return toList([
+    greedy_rule("comment", "(?:^|[^\\\\:])\\K(?:\\/\\/.*|\\/\\*(?:[^/*]|\\/(?!\\*)|\\*(?!\\/)|\\/\\*(?:[^*]|\\*(?!\\/))*\\*\\/)*\\*\\/)"),
+    greedy_rule_with_inside("string-literal", '(?:^|[^"#])\\K(?:"(?:\\\\(?:\\((?:[^()]|\\([^()]*\\))*\\)|\\r\\n|[^(])|[^\\\\\\r\\n"])*"|"""(?:\\\\(?:\\((?:[^()]|\\([^()]*\\))*\\)|[^(])|[^\\\\"]|"(?!""))*""")(?!["#])', toList([
+      rule_with_inside("interpolation", "(?<=\\\\\\()(?:[^()]|\\([^()]*\\))*(?=\\))", toList([
+        greedy_rule("comment", "(?:^|[^\\\\:])\\K(?:\\/\\/.*|\\/\\*(?:[^/*]|\\/(?!\\*)|\\*(?!\\/)|\\/\\*(?:[^*]|\\*(?!\\/))*\\*\\/)*\\*\\/)"),
+        greedy_rule("string-literal", '(?:^|[^"#])\\K(?:"(?:\\\\(?:\\((?:[^()]|\\([^()]*\\))*\\)|\\r\\n|[^(])|[^\\\\\\r\\n"])*"|"""(?:\\\\(?:\\((?:[^()]|\\([^()]*\\))*\\)|[^(])|[^\\\\"]|"(?!""))*""")(?!["#])'),
+        greedy_rule_with_inside("string-literal", '(?:^|[^"#])\\K(#+)(?:"(?:\\\\(?:#+\\((?:[^()]|\\([^()]*\\))*\\)|\\r\\n|[^#])|[^\\\\\\r\\n])*?"|"""(?:\\\\(?:#+\\((?:[^()]|\\([^()]*\\))*\\)|[^#])|[^\\\\])*?""")\\2', toList([
+          rule("interpolation", "(?:\\\\#+\\()\\K(?:[^()]|\\([^()]*\\))*(?=\\))"),
+          rule("punctuation", "^\\)|\\\\#+\\($"),
+          rule("string", "[\\s\\S]+")
+        ])),
+        rule_with_inside("property", "#(?:(?:elseif|if)\\b(?:[ \t]*(?:![ \\t]*)?(?:\\b\\w+\\b(?:[ \\t]*\\((?:[^()]|\\([^()]*\\))*\\))?|\\((?:[^()]|\\([^()]*\\))*\\))(?:[ \\t]*(?:&&|\\|\\|))?)+|(?:else|endif)\\b)", toList([
+          rule("directive-name", "^#\\w+"),
+          rule("boolean", "\\b(?:false|true)\\b"),
+          rule("number", "\\b\\d+(?:\\.\\d+)*\\b"),
+          rule("operator", "!|&&|\\|\\||[<>]=?"),
+          rule("punctuation", "[(),]")
+        ])),
+        rule("constant", "#(?:colorLiteral|column|dsohandle|file(?:ID|Literal|Path)?|function|imageLiteral|line)\\b"),
+        rule("property", "#\\w+\\b"),
+        rule("atrule", "@\\w+"),
+        rule("function", "(?:\\bfunc\\s+)\\K\\w+"),
+        rule("important", "\\b(?<=break|continue)\\s+\\w+|\\b[a-zA-Z_]\\w*(?=\\s*:\\s*(?:for|repeat|while)\\b)"),
+        rule("keyword", "\\b(?:Any|Protocol|Self|Type|actor|as|assignment|associatedtype|associativity|async|await|break|case|catch|class|continue|convenience|default|defer|deinit|didSet|do|dynamic|else|enum|extension|fallthrough|fileprivate|final|for|func|get|guard|higherThan|if|import|in|indirect|infix|init|inout|internal|is|isolated|lazy|left|let|lowerThan|mutating|none|nonisolated|nonmutating|open|operator|optional|override|postfix|precedencegroup|prefix|private|protocol|public|repeat|required|rethrows|return|right|safe|self|set|some|static|struct|subscript|super|switch|throw|throws|try|typealias|unowned|unsafe|var|weak|where|while|willSet)\\b"),
+        rule("boolean", "\\b(?:false|true)\\b"),
+        rule("constant", "\\bnil\\b"),
+        rule("short-argument", "\\$\\d+\\b"),
+        rule("keyword", "\\b_\\b"),
+        rule("number", "(?i)\\b(?:[\\d_]+(?:\\.[\\de_]+)?|0x[a-f0-9_]+(?:\\.[a-f0-9p_]+)?|0b[01_]+|0o[0-7_]+)\\b"),
+        rule("class-name", "\\b[A-Z](?:[A-Z_\\d]*[a-z]\\w*)?\\b"),
+        rule("function", "(?i)\\b[a-z_]\\w*(?=\\s*\\()"),
+        rule("constant", "\\b(?:[A-Z_]{2,}|k[A-Z][A-Za-z_]+)\\b"),
+        rule("operator", "[-+*/%=!<>&|^~?]+|\\.[.\\-+*/%=!<>&|^~?]+"),
+        rule("punctuation", "[{}[\\]();,.:\\\\]")
+      ])),
+      rule("punctuation", "^\\)|\\\\\\($"),
+      rule("punctuation", "\\\\(?=[\\r\\n])"),
+      rule("string", "[\\s\\S]+")
+    ])),
+    greedy_rule("string-literal", '(?:^|[^"#])\\K(#+)(?:"(?:\\\\(?:#+\\((?:[^()]|\\([^()]*\\))*\\)|\\r\\n|[^#])|[^\\\\\\r\\n])*?"|"""(?:\\\\(?:#+\\((?:[^()]|\\([^()]*\\))*\\)|[^#])|[^\\\\])*?""")\\2'),
+    rule("property", "#(?:(?:elseif|if)\\b(?:[ \t]*(?:![ \\t]*)?(?:\\b\\w+\\b(?:[ \\t]*\\((?:[^()]|\\([^()]*\\))*\\))?|\\((?:[^()]|\\([^()]*\\))*\\))(?:[ \\t]*(?:&&|\\|\\|))?)+|(?:else|endif)\\b)"),
+    rule("constant", "#(?:colorLiteral|column|dsohandle|file(?:ID|Literal|Path)?|function|imageLiteral|line)\\b"),
+    rule("property", "#\\w+\\b"),
+    rule("atrule", "@\\w+"),
+    rule("function", "(?:\\bfunc\\s+)\\K\\w+"),
+    rule("important", "\\b(?<=break|continue)\\s+\\w+|\\b[a-zA-Z_]\\w*(?=\\s*:\\s*(?:for|repeat|while)\\b)"),
+    rule("keyword", "\\b(?:Any|Protocol|Self|Type|actor|as|assignment|associatedtype|associativity|async|await|break|case|catch|class|continue|convenience|default|defer|deinit|didSet|do|dynamic|else|enum|extension|fallthrough|fileprivate|final|for|func|get|guard|higherThan|if|import|in|indirect|infix|init|inout|internal|is|isolated|lazy|left|let|lowerThan|mutating|none|nonisolated|nonmutating|open|operator|optional|override|postfix|precedencegroup|prefix|private|protocol|public|repeat|required|rethrows|return|right|safe|self|set|some|static|struct|subscript|super|switch|throw|throws|try|typealias|unowned|unsafe|var|weak|where|while|willSet)\\b"),
+    rule("boolean", "\\b(?:false|true)\\b"),
+    rule("constant", "\\bnil\\b"),
+    rule("short-argument", "\\$\\d+\\b"),
+    rule("keyword", "\\b_\\b"),
+    rule("number", "(?i)\\b(?:[\\d_]+(?:\\.[\\de_]+)?|0x[a-f0-9_]+(?:\\.[a-f0-9p_]+)?|0b[01_]+|0o[0-7_]+)\\b"),
+    rule("class-name", "\\b[A-Z](?:[A-Z_\\d]*[a-z]\\w*)?\\b"),
+    rule("function", "(?i)\\b[a-z_]\\w*(?=\\s*\\()"),
+    rule("constant", "\\b(?:[A-Z_]{2,}|k[A-Z][A-Za-z_]+)\\b"),
+    rule("operator", "[-+*/%=!<>&|^~?]+|\\.[.\\-+*/%=!<>&|^~?]+"),
+    rule("punctuation", "[{}[\\]();,.:\\\\]")
+  ]);
+}
+function grammar26() {
+  return new Grammar("swift", new Some("clike"), rules26());
+}
+
+// build/dev/javascript/smalto/smalto/languages/toml.mjs
+function rules27() {
+  return toList([
+    greedy_rule("comment", "#.*"),
+    greedy_rule("class-name", `(?m)(?:^[\\t ]*\\[\\s*(?:\\[\\s*)?)\\K(?:[\\w-]+|'[^'\\n\\r]*'|"(?:\\\\.|[^\\\\"\\r\\n])*")(?:\\s*\\.\\s*(?:[\\w-]+|'[^'\\n\\r]*'|"(?:\\\\.|[^\\\\"\\r\\n])*"))*(?=\\s*\\])`),
+    greedy_rule("property", `(?m)(?:^[\\t ]*|[{,]\\s*)\\K(?:[\\w-]+|'[^'\\n\\r]*'|"(?:\\\\.|[^\\\\"\\r\\n])*")(?:\\s*\\.\\s*(?:[\\w-]+|'[^'\\n\\r]*'|"(?:\\\\.|[^\\\\"\\r\\n])*"))*(?=\\s*=)`),
+    greedy_rule("string", `"""(?:\\\\[\\s\\S]|[^\\\\])*?"""|'''[\\s\\S]*?'''|'[^'\\n\\r]*'|"(?:\\\\.|[^\\\\"\\r\\n])*"`),
+    rule("number", "(?i)\\b\\d{4}-\\d{2}-\\d{2}(?:[T\\s]\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})?)?\\b"),
+    rule("number", "\\b\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?\\b"),
+    rule("number", "(?:\\b0(?:x[\\da-zA-Z]+(?:_[\\da-zA-Z]+)*|o[0-7]+(?:_[0-7]+)*|b[10]+(?:_[10]+)*))\\b|[-+]?\\b\\d+(?:_\\d+)*(?:\\.\\d+(?:_\\d+)*)?(?:[eE][+-]?\\d+(?:_\\d+)*)?\\b|[-+]?\\b(?:inf|nan)\\b"),
+    rule("boolean", "\\b(?:false|true)\\b"),
+    rule("punctuation", "[.,=[\\]{}]")
+  ]);
+}
+function grammar27() {
+  return new Grammar("toml", new None, rules27());
+}
+
+// build/dev/javascript/smalto/smalto/languages/typescript.mjs
+function rules28() {
+  return toList([
+    greedy_rule("comment", "(?:^|[^\\\\])\\K\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+    greedy_rule("comment", "(?:^|[^\\\\:])\\K\\/\\/.*"),
+    greedy_rule("comment", "^#!.*"),
+    greedy_rule_with_inside("template-string", "`(?:\\\\[\\s\\S]|\\$\\{(?:[^{}]|\\{(?:[^{}]|\\{[^}]*\\})*\\})+\\}|(?!\\$\\{)[^\\\\`])*`", toList([
+      rule("string", "^`|`$"),
+      nested_rule("interpolation", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K\\$\\{(?:[^{}]|\\{(?:[^{}]|\\{[^}]*\\})*\\})+\\}", "typescript"),
+      rule("string", "[\\s\\S]+")
+    ])),
+    greedy_rule("property", `(?m)(?:(?:^|[,{])[ \\t]*)\\K(["'])(?:\\\\(?:\\r\\n|[\\s\\S])|(?!\\2)[^\\\\\\r\\n])*\\2(?=\\s*:)`),
+    greedy_rule("string", `(["'])(?:\\\\(?:\\r\\n|[\\s\\S])|(?!\\1)[^\\\\\\r\\n])*\\1`),
+    greedy_rule_with_inside("class-name", "(?:\\b(?:class|extends|implements|instanceof|interface|new|type)\\s+)\\K(?!keyof\\b)(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*(?:\\s*<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>)?", toList([
+      greedy_rule("comment", "(?:^|[^\\\\])\\K\\/\\*[\\s\\S]*?(?:\\*\\/|$)"),
+      greedy_rule("comment", "(?:^|[^\\\\:])\\K\\/\\/.*"),
+      greedy_rule("comment", "^#!.*"),
+      greedy_rule_with_inside("template-string", "`(?:\\\\[\\s\\S]|\\$\\{(?:[^{}]|\\{(?:[^{}]|\\{[^}]*\\})*\\})+\\}|(?!\\$\\{)[^\\\\`])*`", toList([
+        rule("string", "^`|`$"),
+        rule("interpolation", "(?:(?:^|[^\\\\])(?:\\\\{2})*)\\K\\$\\{(?:[^{}]|\\{(?:[^{}]|\\{[^}]*\\})*\\})+\\}"),
+        rule("string", "[\\s\\S]+")
+      ])),
+      greedy_rule("property", `(?m)(?:(?:^|[,{])[ \\t]*)\\K(["'])(?:\\\\(?:\\r\\n|[\\s\\S])|(?!\\2)[^\\\\\\r\\n])*\\2(?=\\s*:)`),
+      greedy_rule("string", `(["'])(?:\\\\(?:\\r\\n|[\\s\\S])|(?!\\1)[^\\\\\\r\\n])*\\1`),
+      greedy_rule_with_inside("regex", `(?:(?:^|[^$\\w\\xA0-\\x{FFFF}."'\\])\\s]|\\b(?:return|yield))\\s*)\\K\\/(?:(?:\\[(?:[^\\]\\\\\\r\\n]|\\\\.)*\\]|\\\\.|[^/\\\\\\[\\r\\n])+\\/[dgimyus]{0,7}|(?:\\[(?:[^[\\]\\\\\\r\\n]|\\\\.|\\[(?:[^[\\]\\\\\\r\\n]|\\\\.|\\[(?:[^[\\]\\\\\\r\\n]|\\\\.)*\\])*\\])*\\]|\\\\.|[^/\\\\\\[\\r\\n])+\\/[dgimyus]{0,7}v[dgimyus]{0,7})(?=(?:\\s|\\/\\*(?:[^*]|\\*(?!\\/))*\\*\\/)*(?:$|[\\r\\n,.;:})\\]]|\\/\\/))`, toList([
+        rule("language-regex", "^(?<=\\/)[\\s\\S]+(?=\\/[a-z]*$)"),
+        rule("regex-delimiter", "^\\/|\\/$"),
+        rule("regex-flags", "^[a-z]+$")
+      ])),
+      rule("function", "#?(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*(?=\\s*[=:]\\s*(?:async\\s*)?(?:\\bfunction\\b|(?:\\((?:[^()]|\\([^()]*\\))*\\)|(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*)\\s*=>))"),
+      rule("constant", "\\b[A-Z](?:[A-Z_]|\\dx?)*\\b"),
+      rule("keyword", "(?:(?:^|\\})\\s*)\\Kcatch\\b"),
+      rule("keyword", `(?:^|[^.]|\\.\\.\\.\\s*)\\K\\b(?:as|assert(?=\\s*\\{)|async(?=\\s*(?:function\\b|\\(|[$\\w\\xA0-\\x{FFFF}]|$))|await|break|case|class|const|continue|debugger|default|delete|do|else|enum|export|extends|finally(?=\\s*(?:\\{|$))|for|from(?=\\s*(?:['"]|$))|function|(?:get|set)(?=\\s*(?:[#\\[$\\w\\xA0-\\x{FFFF}]|$))|if|implements|import|in|instanceof|interface|let|new|null|of|package|private|protected|public|return|static|super|switch|this|throw|try|typeof|undefined|var|void|while|with|yield)\\b`),
+      rule("keyword", "\\b(?:abstract|declare|is|keyof|readonly|require)\\b"),
+      rule("keyword", "\\b(?:asserts|infer|interface|module|namespace|type)\\b(?=\\s*(?:[{_$a-zA-Z\\xA0-\\x{FFFF}]|$))"),
+      rule("keyword", "\\btype\\b(?=\\s*(?:[\\{*]|$))"),
+      rule("boolean", "\\b(?:false|true)\\b"),
+      rule("function", "#?(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*(?=\\s*(?:\\.\\s*(?:apply|bind|call)\\s*)?\\()"),
+      rule("number", "(?:^|[^\\w$])\\K(?:NaN|Infinity|0[bB][01]+(?:_[01]+)*n?|0[oO][0-7]+(?:_[0-7]+)*n?|0[xX][\\dA-Fa-f]+(?:_[\\dA-Fa-f]+)*n?|\\d+(?:_\\d+)*n|(?:\\d+(?:_\\d+)*(?:\\.(?:\\d+(?:_\\d+)*)?)?|\\.\\d+(?:_\\d+)*)(?:[Ee][+-]?\\d+(?:_\\d+)*)?)(?![\\w$])"),
+      rule("operator", "--|\\+\\+|\\*\\*=?|=>|&&=?|\\|\\|=?|[!=]==|<<=?|>>>?=?|[-+*/%&|^!=<>]=?|\\.{3}|\\?\\?=?|\\?\\.?|[~:]"),
+      rule("punctuation", "[{}[\\];(),.:]"),
+      rule("builtin", "\\b(?:Array|Function|Promise|any|boolean|console|never|number|string|symbol|unknown)\\b")
+    ])),
+    greedy_rule_with_inside("regex", `(?:(?:^|[^$\\w\\xA0-\\x{FFFF}."'\\])\\s]|\\b(?:return|yield))\\s*)\\K\\/(?:(?:\\[(?:[^\\]\\\\\\r\\n]|\\\\.)*\\]|\\\\.|[^/\\\\\\[\\r\\n])+\\/[dgimyus]{0,7}|(?:\\[(?:[^[\\]\\\\\\r\\n]|\\\\.|\\[(?:[^[\\]\\\\\\r\\n]|\\\\.|\\[(?:[^[\\]\\\\\\r\\n]|\\\\.)*\\])*\\])*\\]|\\\\.|[^/\\\\\\[\\r\\n])+\\/[dgimyus]{0,7}v[dgimyus]{0,7})(?=(?:\\s|\\/\\*(?:[^*]|\\*(?!\\/))*\\*\\/)*(?:$|[\\r\\n,.;:})\\]]|\\/\\/))`, toList([
+      rule("language-regex", "^(?<=\\/)[\\s\\S]+(?=\\/[a-z]*$)"),
+      rule("regex-delimiter", "^\\/|\\/$"),
+      rule("regex-flags", "^[a-z]+$")
+    ])),
+    rule("function", "#?(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*(?=\\s*[=:]\\s*(?:async\\s*)?(?:\\bfunction\\b|(?:\\((?:[^()]|\\([^()]*\\))*\\)|(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*)\\s*=>))"),
+    rule("constant", "\\b[A-Z](?:[A-Z_]|\\dx?)*\\b"),
+    rule("keyword", "(?:(?:^|\\})\\s*)\\Kcatch\\b"),
+    rule("keyword", `(?:^|[^.]|\\.\\.\\.\\s*)\\K\\b(?:as|assert(?=\\s*\\{)|async(?=\\s*(?:function\\b|\\(|[$\\w\\xA0-\\x{FFFF}]|$))|await|break|case|class|const|continue|debugger|default|delete|do|else|enum|export|extends|finally(?=\\s*(?:\\{|$))|for|from(?=\\s*(?:['"]|$))|function|(?:get|set)(?=\\s*(?:[#\\[$\\w\\xA0-\\x{FFFF}]|$))|if|implements|import|in|instanceof|interface|let|new|null|of|package|private|protected|public|return|static|super|switch|this|throw|try|typeof|undefined|var|void|while|with|yield)\\b`),
+    rule("keyword", "\\b(?:abstract|declare|is|keyof|readonly|require)\\b"),
+    rule("keyword", "\\b(?:asserts|infer|interface|module|namespace|type)\\b(?=\\s*(?:[{_$a-zA-Z\\xA0-\\x{FFFF}]|$))"),
+    rule("keyword", "\\btype\\b(?=\\s*(?:[\\{*]|$))"),
+    rule("boolean", "\\b(?:false|true)\\b"),
+    rule_with_inside("decorator", "@[$\\w\\xA0-\\x{FFFF}]+", toList([
+      rule("operator", "^@"),
+      rule("function", "^[\\s\\S]+")
+    ])),
+    greedy_rule_with_inside("generic-function", "#?(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*\\s*<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>(?=\\s*\\()", toList([
+      rule("function", "^#?(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*"),
+      rule("class-name", "<[\\s\\S]+")
+    ])),
+    rule("function", "#?(?!\\s)[_$a-zA-Z\\xA0-\\x{FFFF}](?:(?!\\s)[$\\w\\xA0-\\x{FFFF}])*(?=\\s*(?:\\.\\s*(?:apply|bind|call)\\s*)?\\()"),
+    rule("number", "(?:^|[^\\w$])\\K(?:NaN|Infinity|0[bB][01]+(?:_[01]+)*n?|0[oO][0-7]+(?:_[0-7]+)*n?|0[xX][\\dA-Fa-f]+(?:_[\\dA-Fa-f]+)*n?|\\d+(?:_\\d+)*n|(?:\\d+(?:_\\d+)*(?:\\.(?:\\d+(?:_\\d+)*)?)?|\\.\\d+(?:_\\d+)*)(?:[Ee][+-]?\\d+(?:_\\d+)*)?)(?![\\w$])"),
+    rule("operator", "--|\\+\\+|\\*\\*=?|=>|&&=?|\\|\\|=?|[!=]==|<<=?|>>>?=?|[-+*/%&|^!=<>]=?|\\.{3}|\\?\\?=?|\\?\\.?|[~:]"),
+    rule("punctuation", "[{}[\\];(),.:]"),
+    rule("builtin", "\\b(?:Array|Function|Promise|any|boolean|console|never|number|string|symbol|unknown)\\b")
+  ]);
+}
+function grammar28() {
+  return new Grammar("typescript", new Some("javascript"), rules28());
+}
+
+// build/dev/javascript/smalto/smalto/languages/xml.mjs
+function rules29() {
+  return toList([
+    greedy_rule("comment", "<!--(?:(?!<!--)[\\s\\S])*?-->"),
+    greedy_rule("prolog", "<\\?[\\s\\S]+?\\?>"),
+    greedy_rule_with_inside("doctype", `(?i)<!DOCTYPE(?:[^>"'[\\]]|"[^"]*"|'[^']*')+(?:\\[(?:[^<"'\\]]|"[^"]*"|'[^']*'|<(?!!--)|<!--(?:[^-]|-(?!->))*-->)*\\]\\s*)?>`, toList([
+      greedy_rule_with_inside("internal-subset", "(?:^[^\\[]*\\[)\\K[\\s\\S]+(?=\\]>$)", toList([
+        greedy_rule("comment", "<!--(?:(?!<!--)[\\s\\S])*?-->"),
+        greedy_rule("prolog", "<\\?[\\s\\S]+?\\?>"),
+        greedy_rule("doctype", `(?i)<!DOCTYPE(?:[^>"'[\\]]|"[^"]*"|'[^']*')+(?:\\[(?:[^<"'\\]]|"[^"]*"|'[^']*'|<(?!!--)|<!--(?:[^-]|-(?!->))*-->)*\\]\\s*)?>`),
+        greedy_rule("cdata", "(?i)<!\\[CDATA\\[[\\s\\S]*?\\]\\]>"),
+        greedy_rule_with_inside("tag", `<\\/?(?!\\d)[^\\s>\\/=$<%]+(?:\\s(?:\\s*[^\\s>\\/=]+(?:\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s'">=]+(?=[\\s>]))|(?=[\\s/>])))+)?\\s*\\/?>`, toList([
+          rule_with_inside("tag", "^<\\/?[^\\s>\\/]+", toList([
+            rule("punctuation", "^<\\/?"),
+            rule("namespace", "^[^\\s>\\/:]+:")
+          ])),
+          rule_with_inside("attr-value", `=\\s*(?:"[^"]*"|'[^']*'|[^\\s'">=]+)`, toList([
+            rule("attr-equals", "^="),
+            rule("punctuation", `^(?:\\s*)\\K["']|["']$`),
+            rule("named-entity", "(?i)&[\\da-z]{1,8};"),
+            rule("entity", "(?i)&#x?[\\da-f]{1,8};")
+          ])),
+          rule("punctuation", "\\/?>"),
+          rule_with_inside("attr-name", "[^\\s>\\/]+", toList([rule("namespace", "^[^\\s>\\/:]+:")]))
+        ])),
+        rule("named-entity", "(?i)&[\\da-z]{1,8};"),
+        rule("entity", "(?i)&#x?[\\da-f]{1,8};")
+      ])),
+      greedy_rule("string", `"[^"]*"|'[^']*'`),
+      rule("punctuation", "^<!|>$|[[\\]]"),
+      rule("doctype-tag", "(?i)^DOCTYPE"),
+      rule("name", `[^\\s<>'"]+`)
+    ])),
+    greedy_rule("cdata", "(?i)<!\\[CDATA\\[[\\s\\S]*?\\]\\]>"),
+    greedy_rule("tag", `<\\/?(?!\\d)[^\\s>\\/=$<%]+(?:\\s(?:\\s*[^\\s>\\/=]+(?:\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s'">=]+(?=[\\s>]))|(?=[\\s/>])))+)?\\s*\\/?>`),
+    rule("named-entity", "(?i)&[\\da-z]{1,8};"),
+    rule("entity", "(?i)&#x?[\\da-f]{1,8};")
+  ]);
+}
+function grammar29() {
+  return new Grammar("xml", new None, rules29());
+}
+
+// build/dev/javascript/smalto/smalto/languages/yaml.mjs
+function rules30() {
+  return toList([
+    rule("string", "(?:[\\-:]\\s*(?:\\s(?:!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?(?:[ \t]+[*&][^\\s[\\]{},]+)?|[*&][^\\s[\\]{},]+(?:[ \t]+!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?)?)[ \\t]+)?[|>])\\K[ \\t]*(?:((?:\\r?\\n|\\r)[ \\t]+)\\S[^\\r\\n]*(?:\\2[^\\r\\n]+)*)"),
+    rule("comment", "#.*"),
+    greedy_rule("atrule", `(?:(?:^|[:\\-,[{\\r\\n?])[ \\t]*(?:(?:!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?(?:[ 	]+[*&][^\\s[\\]{},]+)?|[*&][^\\s[\\]{},]+(?:[ 	]+!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?)?)[ \\t]+)?)\\K(?:(?:[^\\s\\x00-\\x08\\x0e-\\x1f!"#%&'*,\\-:>?@[\\]\`{|}\\x7f-\\x84\\x86-\\x9f]|[?:-][^\\s\\x00-\\x08\\x0e-\\x1f,[\\]{}\\x7f-\\x84\\x86-\\x9f])(?:[ \\t]*(?:(?![#:])[^\\s\\x00-\\x08\\x0e-\\x1f,[\\]{}\\x7f-\\x84\\x86-\\x9f]|:[^\\s\\x00-\\x08\\x0e-\\x1f,[\\]{}\\x7f-\\x84\\x86-\\x9f]))*|"(?:[^"\\\\\\r\\n]|\\\\.)*"|'(?:[^'\\\\\\r\\n]|\\\\.)*')(?=\\s*:\\s)`),
+    rule("important", "(?m)(?:^[ \\t]*)\\K%.+"),
+    rule("number", "(?m)(?:[:\\-,[{]\\s*(?:\\s(?:!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?(?:[ \t]+[*&][^\\s[\\]{},]+)?|[*&][^\\s[\\]{},]+(?:[ \t]+!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?)?)[ \\t]+)?)\\K(?:\\d{4}-\\d\\d?-\\d\\d?(?:[tT]|[ \\t]+)\\d\\d?:\\d{2}:\\d{2}(?:\\.\\d*)?(?:[ \\t]*(?:Z|[-+]\\d\\d?(?::\\d{2})?))?|\\d{4}-\\d{2}-\\d{2}|\\d\\d?:\\d{2}(?::\\d{2}(?:\\.\\d*)?)?)(?=[ \\t]*(?:$|,|\\]|\\}|(?:[\\r\\n]\\s*)?#))"),
+    rule("important", "(?im)(?:[:\\-,[{]\\s*(?:\\s(?:!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?(?:[ \t]+[*&][^\\s[\\]{},]+)?|[*&][^\\s[\\]{},]+(?:[ \t]+!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?)?)[ \\t]+)?)\\K(?:false|true)(?=[ \\t]*(?:$|,|\\]|\\}|(?:[\\r\\n]\\s*)?#))"),
+    rule("important", "(?im)(?:[:\\-,[{]\\s*(?:\\s(?:!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?(?:[ \t]+[*&][^\\s[\\]{},]+)?|[*&][^\\s[\\]{},]+(?:[ \t]+!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?)?)[ \\t]+)?)\\K(?:null|~)(?=[ \\t]*(?:$|,|\\]|\\}|(?:[\\r\\n]\\s*)?#))"),
+    greedy_rule("string", `(?m)(?:[:\\-,[{]\\s*(?:\\s(?:!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?(?:[ 	]+[*&][^\\s[\\]{},]+)?|[*&][^\\s[\\]{},]+(?:[ 	]+!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?)?)[ \\t]+)?)\\K(?:"(?:[^"\\\\\\r\\n]|\\\\.)*"|'(?:[^'\\\\\\r\\n]|\\\\.)*')(?=[ \\t]*(?:$|,|\\]|\\}|(?:[\\r\\n]\\s*)?#))`),
+    rule("number", "(?im)(?:[:\\-,[{]\\s*(?:\\s(?:!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?(?:[ \t]+[*&][^\\s[\\]{},]+)?|[*&][^\\s[\\]{},]+(?:[ \t]+!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?)?)[ \\t]+)?)\\K(?:[+-]?(?:0x[\\da-f]+|0o[0-7]+|(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:e[+-]?\\d+)?|\\.inf|\\.nan))(?=[ \\t]*(?:$|,|\\]|\\}|(?:[\\r\\n]\\s*)?#))"),
+    rule("tag", "!(?:<[\\w\\-%#;/?:@&=+$,.!~*'()[\\]]+>|(?:[a-zA-Z\\d-]*!)?[\\w\\-%#;/?:@&=+$.~*'()]+)?"),
+    rule("important", "[*&][^\\s[\\]{},]+"),
+    rule("punctuation", "---|[:[\\]{}\\-,|>?]|\\.\\.\\.")
+  ]);
+}
+function grammar30() {
+  return new Grammar("yaml", new None, rules30());
+}
+
+// build/dev/javascript/smalto/smalto/languages/zig.mjs
+function rules31() {
+  return toList([
+    rule("doc-comment", "\\/\\/[/!].*"),
+    rule("comment", "\\/{2}.*"),
+    greedy_rule("string", '(?:^|[^\\\\@])\\Kc?"(?:[^"\\\\\\r\\n]|\\\\.)*"'),
+    greedy_rule("string", "(?<=[\\r\\n])([ \\t]+c?\\\\{2}).*(?:(?:\\r\\n?|\\n)\\2.*)*"),
+    greedy_rule("char", "(?:^|[^\\\\])\\K'(?:[^'\\\\\\r\\n]|[\\x{D800}-\\x{DFFF}]{2}|\\\\(?:.|x[a-fA-F\\d]{2}|u\\{[a-fA-F\\d]{1,6}\\}))'"),
+    rule("builtin", "\\B@(?!\\d)\\w+(?=\\s*\\()"),
+    rule("label", "(?:\\b(?:break|continue)\\s*:\\s*)\\K\\w+\\b|\\b(?!\\d)\\w+\\b(?=\\s*:\\s*(?:\\{|while\\b))"),
+    rule("class-name", "\\b(?!\\d)\\w+(?=\\s*=\\s*(?:(?:extern|packed)\\s+)?(?:enum|struct|union)\\s*[({])"),
+    rule_with_inside("class-name", "(?::\\s*)\\K(?!\\s)(?:!?\\s*(?:(?:\\?|\\bpromise->|(?:\\[[^[\\]]*\\]|\\*(?!\\*)|\\*\\*)(?:\\s*align\\s*\\((?:[^()]|\\([^()]*\\))*\\)|\\s*const\\b|\\s*volatile\\b|\\s*allowzero\\b)*)\\s*)*(?:\\bpromise\\b|(?:\\berror\\.)?\\b(?!\\b(?:align|allowzero|and|anyframe|anytype|asm|async|await|break|cancel|catch|comptime|const|continue|defer|else|enum|errdefer|error|export|extern|fn|for|if|inline|linksection|nakedcc|noalias|nosuspend|null|or|orelse|packed|promise|pub|resume|return|stdcallcc|struct|suspend|switch|test|threadlocal|try|undefined|union|unreachable|usingnamespace|var|volatile|while)\\b)(?!\\d)\\w+\\b(?:\\.\\b(?!\\b(?:align|allowzero|and|anyframe|anytype|asm|async|await|break|cancel|catch|comptime|const|continue|defer|else|enum|errdefer|error|export|extern|fn|for|if|inline|linksection|nakedcc|noalias|nosuspend|null|or|orelse|packed|promise|pub|resume|return|stdcallcc|struct|suspend|switch|test|threadlocal|try|undefined|union|unreachable|usingnamespace|var|volatile|while)\\b)(?!\\d)\\w+\\b)*(?!\\s+\\b(?!\\b(?:align|allowzero|and|anyframe|anytype|asm|async|await|break|cancel|catch|comptime|const|continue|defer|else|enum|errdefer|error|export|extern|fn|for|if|inline|linksection|nakedcc|noalias|nosuspend|null|or|orelse|packed|promise|pub|resume|return|stdcallcc|struct|suspend|switch|test|threadlocal|try|undefined|union|unreachable|usingnamespace|var|volatile|while)\\b)(?!\\d)\\w+\\b)))+(?=\\s*(?:align\\s*\\((?:[^()]|\\([^()]*\\))*\\)\\s*)?[=;,)])|(?!\\s)(?:!?\\s*(?:(?:\\?|\\bpromise->|(?:\\[[^[\\]]*\\]|\\*(?!\\*)|\\*\\*)(?:\\s*align\\s*\\((?:[^()]|\\([^()]*\\))*\\)|\\s*const\\b|\\s*volatile\\b|\\s*allowzero\\b)*)\\s*)*(?:\\bpromise\\b|(?:\\berror\\.)?\\b(?!\\b(?:align|allowzero|and|anyframe|anytype|asm|async|await|break|cancel|catch|comptime|const|continue|defer|else|enum|errdefer|error|export|extern|fn|for|if|inline|linksection|nakedcc|noalias|nosuspend|null|or|orelse|packed|promise|pub|resume|return|stdcallcc|struct|suspend|switch|test|threadlocal|try|undefined|union|unreachable|usingnamespace|var|volatile|while)\\b)(?!\\d)\\w+\\b(?:\\.\\b(?!\\b(?:align|allowzero|and|anyframe|anytype|asm|async|await|break|cancel|catch|comptime|const|continue|defer|else|enum|errdefer|error|export|extern|fn|for|if|inline|linksection|nakedcc|noalias|nosuspend|null|or|orelse|packed|promise|pub|resume|return|stdcallcc|struct|suspend|switch|test|threadlocal|try|undefined|union|unreachable|usingnamespace|var|volatile|while)\\b)(?!\\d)\\w+\\b)*(?!\\s+\\b(?!\\b(?:align|allowzero|and|anyframe|anytype|asm|async|await|break|cancel|catch|comptime|const|continue|defer|else|enum|errdefer|error|export|extern|fn|for|if|inline|linksection|nakedcc|noalias|nosuspend|null|or|orelse|packed|promise|pub|resume|return|stdcallcc|struct|suspend|switch|test|threadlocal|try|undefined|union|unreachable|usingnamespace|var|volatile|while)\\b)(?!\\d)\\w+\\b)))+(?=\\s*(?:align\\s*\\((?:[^()]|\\([^()]*\\))*\\)\\s*)?\\{)", toList([
+      rule("doc-comment", "\\/\\/[/!].*"),
+      rule("comment", "\\/{2}.*"),
+      greedy_rule("string", '(?:^|[^\\\\@])\\Kc?"(?:[^"\\\\\\r\\n]|\\\\.)*"'),
+      greedy_rule("string", "(?<=[\\r\\n])([ \\t]+c?\\\\{2}).*(?:(?:\\r\\n?|\\n)\\2.*)*"),
+      greedy_rule("char", "(?:^|[^\\\\])\\K'(?:[^'\\\\\\r\\n]|[\\x{D800}-\\x{DFFF}]{2}|\\\\(?:.|x[a-fA-F\\d]{2}|u\\{[a-fA-F\\d]{1,6}\\}))'"),
+      rule("builtin", "\\B@(?!\\d)\\w+(?=\\s*\\()"),
+      rule("label", "(?:\\b(?:break|continue)\\s*:\\s*)\\K\\w+\\b|\\b(?!\\d)\\w+\\b(?=\\s*:\\s*(?:\\{|while\\b))"),
+      rule("class-name", "\\b(?!\\d)\\w+(?=\\s*=\\s*(?:(?:extern|packed)\\s+)?(?:enum|struct|union)\\s*[({])"),
+      rule("class-name", "(?::\\s*)\\K(?!\\s)(?:!?\\s*(?:(?:\\?|\\bpromise->|(?:\\[[^[\\]]*\\]|\\*(?!\\*)|\\*\\*)(?:\\s*align\\s*\\((?:[^()]|\\([^()]*\\))*\\)|\\s*const\\b|\\s*volatile\\b|\\s*allowzero\\b)*)\\s*)*(?:\\bpromise\\b|(?:\\berror\\.)?\\b(?!\\b(?:align|allowzero|and|anyframe|anytype|asm|async|await|break|cancel|catch|comptime|const|continue|defer|else|enum|errdefer|error|export|extern|fn|for|if|inline|linksection|nakedcc|noalias|nosuspend|null|or|orelse|packed|promise|pub|resume|return|stdcallcc|struct|suspend|switch|test|threadlocal|try|undefined|union|unreachable|usingnamespace|var|volatile|while)\\b)(?!\\d)\\w+\\b(?:\\.\\b(?!\\b(?:align|allowzero|and|anyframe|anytype|asm|async|await|break|cancel|catch|comptime|const|continue|defer|else|enum|errdefer|error|export|extern|fn|for|if|inline|linksection|nakedcc|noalias|nosuspend|null|or|orelse|packed|promise|pub|resume|return|stdcallcc|struct|suspend|switch|test|threadlocal|try|undefined|union|unreachable|usingnamespace|var|volatile|while)\\b)(?!\\d)\\w+\\b)*(?!\\s+\\b(?!\\b(?:align|allowzero|and|anyframe|anytype|asm|async|await|break|cancel|catch|comptime|const|continue|defer|else|enum|errdefer|error|export|extern|fn|for|if|inline|linksection|nakedcc|noalias|nosuspend|null|or|orelse|packed|promise|pub|resume|return|stdcallcc|struct|suspend|switch|test|threadlocal|try|undefined|union|unreachable|usingnamespace|var|volatile|while)\\b)(?!\\d)\\w+\\b)))+(?=\\s*(?:align\\s*\\((?:[^()]|\\([^()]*\\))*\\)\\s*)?[=;,)])|(?!\\s)(?:!?\\s*(?:(?:\\?|\\bpromise->|(?:\\[[^[\\]]*\\]|\\*(?!\\*)|\\*\\*)(?:\\s*align\\s*\\((?:[^()]|\\([^()]*\\))*\\)|\\s*const\\b|\\s*volatile\\b|\\s*allowzero\\b)*)\\s*)*(?:\\bpromise\\b|(?:\\berror\\.)?\\b(?!\\b(?:align|allowzero|and|anyframe|anytype|asm|async|await|break|cancel|catch|comptime|const|continue|defer|else|enum|errdefer|error|export|extern|fn|for|if|inline|linksection|nakedcc|noalias|nosuspend|null|or|orelse|packed|promise|pub|resume|return|stdcallcc|struct|suspend|switch|test|threadlocal|try|undefined|union|unreachable|usingnamespace|var|volatile|while)\\b)(?!\\d)\\w+\\b(?:\\.\\b(?!\\b(?:align|allowzero|and|anyframe|anytype|asm|async|await|break|cancel|catch|comptime|const|continue|defer|else|enum|errdefer|error|export|extern|fn|for|if|inline|linksection|nakedcc|noalias|nosuspend|null|or|orelse|packed|promise|pub|resume|return|stdcallcc|struct|suspend|switch|test|threadlocal|try|undefined|union|unreachable|usingnamespace|var|volatile|while)\\b)(?!\\d)\\w+\\b)*(?!\\s+\\b(?!\\b(?:align|allowzero|and|anyframe|anytype|asm|async|await|break|cancel|catch|comptime|const|continue|defer|else|enum|errdefer|error|export|extern|fn|for|if|inline|linksection|nakedcc|noalias|nosuspend|null|or|orelse|packed|promise|pub|resume|return|stdcallcc|struct|suspend|switch|test|threadlocal|try|undefined|union|unreachable|usingnamespace|var|volatile|while)\\b)(?!\\d)\\w+\\b)))+(?=\\s*(?:align\\s*\\((?:[^()]|\\([^()]*\\))*\\)\\s*)?\\{)"),
+      rule("class-name", "(?:\\)\\s*)\\K(?!\\s)(?:!?\\s*(?:(?:\\?|\\bpromise->|(?:\\[[^[\\]]*\\]|\\*(?!\\*)|\\*\\*)(?:\\s*align\\s*\\((?:[^()]|\\([^()]*\\))*\\)|\\s*const\\b|\\s*volatile\\b|\\s*allowzero\\b)*)\\s*)*(?:\\bpromise\\b|(?:\\berror\\.)?\\b(?!\\b(?:align|allowzero|and|anyframe|anytype|asm|async|await|break|cancel|catch|comptime|const|continue|defer|else|enum|errdefer|error|export|extern|fn|for|if|inline|linksection|nakedcc|noalias|nosuspend|null|or|orelse|packed|promise|pub|resume|return|stdcallcc|struct|suspend|switch|test|threadlocal|try|undefined|union|unreachable|usingnamespace|var|volatile|while)\\b)(?!\\d)\\w+\\b(?:\\.\\b(?!\\b(?:align|allowzero|and|anyframe|anytype|asm|async|await|break|cancel|catch|comptime|const|continue|defer|else|enum|errdefer|error|export|extern|fn|for|if|inline|linksection|nakedcc|noalias|nosuspend|null|or|orelse|packed|promise|pub|resume|return|stdcallcc|struct|suspend|switch|test|threadlocal|try|undefined|union|unreachable|usingnamespace|var|volatile|while)\\b)(?!\\d)\\w+\\b)*(?!\\s+\\b(?!\\b(?:align|allowzero|and|anyframe|anytype|asm|async|await|break|cancel|catch|comptime|const|continue|defer|else|enum|errdefer|error|export|extern|fn|for|if|inline|linksection|nakedcc|noalias|nosuspend|null|or|orelse|packed|promise|pub|resume|return|stdcallcc|struct|suspend|switch|test|threadlocal|try|undefined|union|unreachable|usingnamespace|var|volatile|while)\\b)(?!\\d)\\w+\\b)))+(?=\\s*(?:align\\s*\\((?:[^()]|\\([^()]*\\))*\\)\\s*)?;)"),
+      rule("keyword", "\\b(?:anyerror|bool|c_u?(?:int|long|longlong|short)|c_longdouble|c_void|comptime_(?:float|int)|f(?:16|32|64|128)|[iu](?:8|16|32|64|128|size)|noreturn|type|void)\\b"),
+      rule("keyword", "\\b(?:align|allowzero|and|anyframe|anytype|asm|async|await|break|cancel|catch|comptime|const|continue|defer|else|enum|errdefer|error|export|extern|fn|for|if|inline|linksection|nakedcc|noalias|nosuspend|null|or|orelse|packed|promise|pub|resume|return|stdcallcc|struct|suspend|switch|test|threadlocal|try|undefined|union|unreachable|usingnamespace|var|volatile|while)\\b"),
+      rule("function", "\\b(?!\\d)\\w+(?=\\s*\\()"),
+      rule("number", "\\b(?:0b[01]+|0o[0-7]+|0x[a-fA-F\\d]+(?:\\.[a-fA-F\\d]*)?(?:[pP][+-]?[a-fA-F\\d]+)?|\\d+(?:\\.\\d*)?(?:[eE][+-]?\\d+)?)\\b"),
+      rule("boolean", "\\b(?:false|true)\\b"),
+      rule("operator", "\\.[*?]|\\.{2,3}|[-=]>|\\*\\*|\\+\\+|\\|\\||(?:<<|>>|[-+*]%|[-+*/%^&|<>!=])=?|[?~]"),
+      rule("punctuation", "[.:,;(){}[\\]]")
+    ])),
+    rule("class-name", "(?:\\)\\s*)\\K(?!\\s)(?:!?\\s*(?:(?:\\?|\\bpromise->|(?:\\[[^[\\]]*\\]|\\*(?!\\*)|\\*\\*)(?:\\s*align\\s*\\((?:[^()]|\\([^()]*\\))*\\)|\\s*const\\b|\\s*volatile\\b|\\s*allowzero\\b)*)\\s*)*(?:\\bpromise\\b|(?:\\berror\\.)?\\b(?!\\b(?:align|allowzero|and|anyframe|anytype|asm|async|await|break|cancel|catch|comptime|const|continue|defer|else|enum|errdefer|error|export|extern|fn|for|if|inline|linksection|nakedcc|noalias|nosuspend|null|or|orelse|packed|promise|pub|resume|return|stdcallcc|struct|suspend|switch|test|threadlocal|try|undefined|union|unreachable|usingnamespace|var|volatile|while)\\b)(?!\\d)\\w+\\b(?:\\.\\b(?!\\b(?:align|allowzero|and|anyframe|anytype|asm|async|await|break|cancel|catch|comptime|const|continue|defer|else|enum|errdefer|error|export|extern|fn|for|if|inline|linksection|nakedcc|noalias|nosuspend|null|or|orelse|packed|promise|pub|resume|return|stdcallcc|struct|suspend|switch|test|threadlocal|try|undefined|union|unreachable|usingnamespace|var|volatile|while)\\b)(?!\\d)\\w+\\b)*(?!\\s+\\b(?!\\b(?:align|allowzero|and|anyframe|anytype|asm|async|await|break|cancel|catch|comptime|const|continue|defer|else|enum|errdefer|error|export|extern|fn|for|if|inline|linksection|nakedcc|noalias|nosuspend|null|or|orelse|packed|promise|pub|resume|return|stdcallcc|struct|suspend|switch|test|threadlocal|try|undefined|union|unreachable|usingnamespace|var|volatile|while)\\b)(?!\\d)\\w+\\b)))+(?=\\s*(?:align\\s*\\((?:[^()]|\\([^()]*\\))*\\)\\s*)?;)"),
+    rule("keyword", "\\b(?:anyerror|bool|c_u?(?:int|long|longlong|short)|c_longdouble|c_void|comptime_(?:float|int)|f(?:16|32|64|128)|[iu](?:8|16|32|64|128|size)|noreturn|type|void)\\b"),
+    rule("keyword", "\\b(?:align|allowzero|and|anyframe|anytype|asm|async|await|break|cancel|catch|comptime|const|continue|defer|else|enum|errdefer|error|export|extern|fn|for|if|inline|linksection|nakedcc|noalias|nosuspend|null|or|orelse|packed|promise|pub|resume|return|stdcallcc|struct|suspend|switch|test|threadlocal|try|undefined|union|unreachable|usingnamespace|var|volatile|while)\\b"),
+    rule("function", "\\b(?!\\d)\\w+(?=\\s*\\()"),
+    rule("number", "\\b(?:0b[01]+|0o[0-7]+|0x[a-fA-F\\d]+(?:\\.[a-fA-F\\d]*)?(?:[pP][+-]?[a-fA-F\\d]+)?|\\d+(?:\\.\\d*)?(?:[eE][+-]?\\d+)?)\\b"),
+    rule("boolean", "\\b(?:false|true)\\b"),
+    rule("operator", "\\.[*?]|\\.{2,3}|[-=]>|\\*\\*|\\+\\+|\\|\\||(?:<<|>>|[-+*]%|[-+*/%^&|<>!=])=?|[?~]"),
+    rule("punctuation", "[.:,;(){}[\\]]")
+  ]);
+}
+function grammar31() {
+  return new Grammar("zig", new None, rules31());
+}
+
+// build/dev/javascript/smalto/smalto/internal/registry.mjs
+function languages() {
+  return from_list(toList([
+    ["bash", grammar()],
+    ["c", grammar2()],
+    ["clike", grammar3()],
+    ["cpp", grammar4()],
+    ["css", grammar5()],
+    ["dart", grammar6()],
+    ["dockerfile", grammar7()],
+    ["elixir", grammar8()],
+    ["erlang", grammar9()],
+    ["gleam", grammar10()],
+    ["go", grammar11()],
+    ["haskell", grammar12()],
+    ["html", grammar13()],
+    ["java", grammar14()],
+    ["javascript", grammar15()],
+    ["json", grammar16()],
+    ["kotlin", grammar17()],
+    ["lua", grammar18()],
+    ["markdown", grammar19()],
+    ["php", grammar20()],
+    ["python", grammar21()],
+    ["ruby", grammar22()],
+    ["rust", grammar23()],
+    ["scala", grammar24()],
+    ["sql", grammar25()],
+    ["swift", grammar26()],
+    ["toml", grammar27()],
+    ["typescript", grammar28()],
+    ["xml", grammar29()],
+    ["yaml", grammar30()],
+    ["zig", grammar31()]
+  ]));
+}
+
+// build/dev/javascript/smalto/smalto.mjs
+function resolve_grammar(g) {
+  let langs = languages();
+  return resolve2(g, (parent_name) => {
+    let $ = get(langs, parent_name);
+    if ($ instanceof Ok) {
+      let parent = $[0];
+      return parent;
+    } else {
+      return new Grammar(parent_name, new None, toList([]));
+    }
+  });
+}
+function lookup2() {
+  let langs = languages();
+  return (name2) => {
+    let $ = get(langs, name2);
+    if ($ instanceof Ok) {
+      let g = $[0];
+      return resolve2(g, (parent_name) => {
+        let $1 = get(langs, parent_name);
+        if ($1 instanceof Ok) {
+          let parent = $1[0];
+          return parent;
+        } else {
+          return new Grammar(parent_name, new None, toList([]));
+        }
+      });
+    } else {
+      return toList([]);
+    }
+  };
+}
+function to_tokens(code2, grammar32) {
+  let resolved_rules = resolve_grammar(grammar32);
+  return tokenize(code2, resolved_rules, lookup2());
+}
+// build/dev/javascript/smalto_lustre/smalto/lustre.mjs
+class Config3 extends CustomType {
+  constructor(keyword, string5, number, comment, function$, operator, punctuation, type_2, module, variable, constant, builtin, tag, attribute3, selector, property3, regex, custom) {
+    super();
+    this.keyword = keyword;
+    this.string = string5;
+    this.number = number;
+    this.comment = comment;
+    this.function = function$;
+    this.operator = operator;
+    this.punctuation = punctuation;
+    this.type_ = type_2;
+    this.module = module;
+    this.variable = variable;
+    this.constant = constant;
+    this.builtin = builtin;
+    this.tag = tag;
+    this.attribute = attribute3;
+    this.selector = selector;
+    this.property = property3;
+    this.regex = regex;
+    this.custom = custom;
+  }
+}
+function token_to_element(tok, config2) {
+  if (tok instanceof Keyword) {
+    let v = tok[0];
+    return config2.keyword(v);
+  } else if (tok instanceof String2) {
+    let v = tok[0];
+    return config2.string(v);
+  } else if (tok instanceof Number2) {
+    let v = tok[0];
+    return config2.number(v);
+  } else if (tok instanceof Comment) {
+    let v = tok[0];
+    return config2.comment(v);
+  } else if (tok instanceof Function2) {
+    let v = tok[0];
+    return config2.function(v);
+  } else if (tok instanceof Operator) {
+    let v = tok[0];
+    return config2.operator(v);
+  } else if (tok instanceof Punctuation) {
+    let v = tok[0];
+    return config2.punctuation(v);
+  } else if (tok instanceof Type) {
+    let v = tok[0];
+    return config2.type_(v);
+  } else if (tok instanceof Module) {
+    let v = tok[0];
+    return config2.module(v);
+  } else if (tok instanceof Variable) {
+    let v = tok[0];
+    return config2.variable(v);
+  } else if (tok instanceof Constant) {
+    let v = tok[0];
+    return config2.constant(v);
+  } else if (tok instanceof Builtin) {
+    let v = tok[0];
+    return config2.builtin(v);
+  } else if (tok instanceof Tag) {
+    let v = tok[0];
+    return config2.tag(v);
+  } else if (tok instanceof Attribute2) {
+    let v = tok[0];
+    return config2.attribute(v);
+  } else if (tok instanceof Selector) {
+    let v = tok[0];
+    return config2.selector(v);
+  } else if (tok instanceof Property2) {
+    let v = tok[0];
+    return config2.property(v);
+  } else if (tok instanceof Regex) {
+    let v = tok[0];
+    return config2.regex(v);
+  } else if (tok instanceof Whitespace) {
+    let v = tok[0];
+    return text2(v);
+  } else if (tok instanceof Other) {
+    let v = tok[0];
+    return text2(v);
+  } else {
+    let name2 = tok.name;
+    let v = tok.value;
+    return config2.custom(name2, v);
+  }
+}
+function to_lustre(tokens, config2) {
+  return map2(tokens, (_capture) => {
+    return token_to_element(_capture, config2);
+  });
+}
+function colored_span(color) {
+  return (value3) => {
+    return span(toList([style("color", color)]), toList([text2(value3)]));
+  };
+}
+function default_custom_renderer(name2, value3) {
+  if (name2 === "important") {
+    return span(toList([
+      style("font-weight", "bold"),
+      style("color", "#b8860b")
+    ]), toList([text2(value3)]));
+  } else if (name2 === "bold") {
+    return span(toList([style("font-weight", "bold")]), toList([text2(value3)]));
+  } else if (name2 === "italic") {
+    return span(toList([style("font-style", "italic")]), toList([text2(value3)]));
+  } else if (name2 === "strike") {
+    return span(toList([style("text-decoration", "line-through")]), toList([text2(value3)]));
+  } else if (name2 === "code") {
+    return span(toList([style("color", "#008000")]), toList([text2(value3)]));
+  } else if (name2 === "url") {
+    return span(toList([
+      style("text-decoration", "underline"),
+      style("color", "#008b8b")
+    ]), toList([text2(value3)]));
+  } else {
+    return text2(value3);
+  }
+}
+function default_config2() {
+  return new Config3(colored_span("#b8860b"), colored_span("#008000"), colored_span("#008000"), (value3) => {
+    return span(toList([
+      style("color", "#808080"),
+      style("font-style", "italic")
+    ]), toList([text2(value3)]));
+  }, colored_span("#0000ff"), colored_span("#800080"), colored_span("#808080"), colored_span("#008b8b"), colored_span("#008b8b"), colored_span("#ffd700"), colored_span("#ff00ff"), colored_span("#1e90ff"), colored_span("#ff0000"), colored_span("#b8860b"), colored_span("#008b8b"), colored_span("#b8860b"), colored_span("#008000"), default_custom_renderer);
+}
+
+// build/dev/javascript/client/client/highlight.mjs
+var FILEPATH = "src/client/highlight.gleam";
+function detect_grammar(file_path) {
+  let _block;
+  let $ = split2(file_path, " (+");
+  if ($ instanceof Empty) {
+    _block = file_path;
+  } else {
+    let path = $.head;
+    _block = path;
+  }
+  let clean_path = _block;
+  let _block$1;
+  let $1 = split2(clean_path, ".");
+  if ($1 instanceof Empty) {
+    let parts = $1;
+    let $2 = last(parts);
+    let last2;
+    if ($2 instanceof Ok) {
+      last2 = $2[0];
+    } else {
+      throw makeError("let_assert", FILEPATH, "client/highlight", 50, "detect_grammar", "Pattern match failed, no pattern matched the value.", {
+        value: $2,
+        start: 1525,
+        end: 1563,
+        pattern_start: 1536,
+        pattern_end: 1544
+      });
+    }
+    _block$1 = lowercase(last2);
+  } else {
+    let $2 = $1.tail;
+    if ($2 instanceof Empty) {
+      _block$1 = "";
+    } else {
+      let parts = $1;
+      let $3 = last(parts);
+      let last2;
+      if ($3 instanceof Ok) {
+        last2 = $3[0];
+      } else {
+        throw makeError("let_assert", FILEPATH, "client/highlight", 50, "detect_grammar", "Pattern match failed, no pattern matched the value.", {
+          value: $3,
+          start: 1525,
+          end: 1563,
+          pattern_start: 1536,
+          pattern_end: 1544
+        });
+      }
+      _block$1 = lowercase(last2);
+    }
+  }
+  let ext = _block$1;
+  if (ext === "gleam") {
+    return new Some(grammar10());
+  } else if (ext === "js") {
+    return new Some(grammar15());
+  } else if (ext === "jsx") {
+    return new Some(grammar15());
+  } else if (ext === "mjs") {
+    return new Some(grammar15());
+  } else if (ext === "ts") {
+    return new Some(grammar28());
+  } else if (ext === "tsx") {
+    return new Some(grammar28());
+  } else if (ext === "py") {
+    return new Some(grammar21());
+  } else if (ext === "rb") {
+    return new Some(grammar22());
+  } else if (ext === "rs") {
+    return new Some(grammar23());
+  } else if (ext === "go") {
+    return new Some(grammar11());
+  } else if (ext === "java") {
+    return new Some(grammar14());
+  } else if (ext === "kt") {
+    return new Some(grammar17());
+  } else if (ext === "swift") {
+    return new Some(grammar26());
+  } else if (ext === "ex") {
+    return new Some(grammar8());
+  } else if (ext === "exs") {
+    return new Some(grammar8());
+  } else if (ext === "erl") {
+    return new Some(grammar9());
+  } else if (ext === "css") {
+    return new Some(grammar5());
+  } else if (ext === "scss") {
+    return new Some(grammar5());
+  } else if (ext === "html") {
+    return new Some(grammar13());
+  } else if (ext === "htm") {
+    return new Some(grammar13());
+  } else if (ext === "xml") {
+    return new Some(grammar29());
+  } else if (ext === "json") {
+    return new Some(grammar16());
+  } else if (ext === "yaml") {
+    return new Some(grammar30());
+  } else if (ext === "yml") {
+    return new Some(grammar30());
+  } else if (ext === "md") {
+    return new Some(grammar19());
+  } else if (ext === "sql") {
+    return new Some(grammar25());
+  } else if (ext === "sh") {
+    return new Some(grammar());
+  } else if (ext === "bash") {
+    return new Some(grammar());
+  } else if (ext === "zsh") {
+    return new Some(grammar());
+  } else if (ext === "fish") {
+    return new Some(grammar());
+  } else if (ext === "toml") {
+    return new Some(grammar27());
+  } else if (ext === "dockerfile") {
+    return new Some(grammar7());
+  } else if (ext === "c") {
+    return new Some(grammar2());
+  } else if (ext === "h") {
+    return new Some(grammar2());
+  } else if (ext === "cpp") {
+    return new Some(grammar4());
+  } else if (ext === "hpp") {
+    return new Some(grammar4());
+  } else if (ext === "cc") {
+    return new Some(grammar4());
+  } else if (ext === "cxx") {
+    return new Some(grammar4());
+  } else if (ext === "dart") {
+    return new Some(grammar6());
+  } else if (ext === "hs") {
+    return new Some(grammar12());
+  } else if (ext === "lua") {
+    return new Some(grammar18());
+  } else if (ext === "php") {
+    return new Some(grammar20());
+  } else if (ext === "scala") {
+    return new Some(grammar24());
+  } else if (ext === "zig") {
+    return new Some(grammar31());
+  } else {
+    return new None;
+  }
+}
+function highlight_line(code2, grammar32) {
+  if (grammar32 instanceof Some) {
+    let g = grammar32[0];
+    let tokens = to_tokens(code2, g);
+    return to_lustre(tokens, default_config2());
+  } else {
+    return toList([text3(code2)]);
+  }
+}
 
 // build/dev/javascript/splitter/splitter_ffi.mjs
 function make2(patterns) {
@@ -8348,7 +11397,7 @@ function make2(patterns) {
   }
   return new RegExp(pattern);
 }
-function split4(splitter, string5) {
+function split5(splitter, string5) {
   const match = string5.match(splitter);
   if (!match)
     return [string5, "", ""];
@@ -8372,7 +11421,7 @@ function escapeRegExp(string5) {
 }
 
 // build/dev/javascript/splitter/splitter.mjs
-function new$6(substrings) {
+function new$7(substrings) {
   let _pipe = substrings;
   let _pipe$1 = filter(_pipe, (x) => {
     return x !== "";
@@ -8653,7 +11702,7 @@ class Anchor extends CustomType {
     this.id = id2;
   }
 }
-function new$7(options) {
+function new$8(options) {
   return new Document(options, toList([]), make(), make());
 }
 function new_destination(uri) {
@@ -8686,7 +11735,7 @@ var ascii_printable = digits + ascii_letters + ascii_punctuation + ascii_whitesp
 var alnum = ascii_letters + digits;
 
 // build/dev/javascript/mork/mork/internal/util.mjs
-var FILEPATH = "src/mork/internal/util.gleam";
+var FILEPATH2 = "src/mork/internal/util.gleam";
 function check3(cond, yes, nope) {
   if (cond) {
     return yes;
@@ -9040,7 +12089,7 @@ function collapse_interior_space(s) {
   if ($ instanceof Ok) {
     re = $[0];
   } else {
-    throw makeError("let_assert", FILEPATH, "mork/internal/util", 234, "collapse_interior_space", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH2, "mork/internal/util", 234, "collapse_interior_space", "Pattern match failed, no pattern matched the value.", {
       value: $,
       start: 5934,
       end: 5980,
@@ -9055,7 +12104,7 @@ function do_gobble_link_label(loop$sp, loop$rest, loop$acc) {
     let sp = loop$sp;
     let rest = loop$rest;
     let acc = loop$acc;
-    let $ = split4(sp, rest);
+    let $ = split5(sp, rest);
     let l;
     let s;
     let r;
@@ -9091,7 +12140,7 @@ function do_gobble_link_label(loop$sp, loop$rest, loop$acc) {
     } else if (s === "]") {
       return [body, r];
     } else {
-      throw makeError("panic", FILEPATH, "mork/internal/util", 262, "do_gobble_link_label", "bad splitter, bad", {});
+      throw makeError("panic", FILEPATH2, "mork/internal/util", 262, "do_gobble_link_label", "bad splitter, bad", {});
     }
   }
 }
@@ -9124,8 +12173,8 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
     let in$ = loop$in;
     let acc = loop$acc;
     let stack = loop$stack;
-    let value2 = loop$value;
-    let $ = split4(sp, in$);
+    let value3 = loop$value;
+    let $ = split5(sp, in$);
     let l;
     let s;
     let r;
@@ -9138,14 +12187,14 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         if (body === "") {
           return new Error(undefined);
         } else {
-          return value2(new_destination(body), r);
+          return value3(new_destination(body), r);
         }
       } else {
         return new Error(undefined);
       }
     } else if (s === `
 `) {
-      return value2(new_destination(body), r);
+      return value3(new_destination(body), r);
     } else if (s === "\\") {
       if (r.startsWith("!")) {
         let ch = "!";
@@ -9154,7 +12203,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("#")) {
         let ch = "#";
         let rest = r.slice(1);
@@ -9162,7 +12211,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("$")) {
         let ch = "$";
         let rest = r.slice(1);
@@ -9170,7 +12219,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("%")) {
         let ch = "%";
         let rest = r.slice(1);
@@ -9178,7 +12227,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("&")) {
         let ch = "&";
         let rest = r.slice(1);
@@ -9186,7 +12235,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("'")) {
         let ch = "'";
         let rest = r.slice(1);
@@ -9194,7 +12243,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("(")) {
         let ch = "(";
         let rest = r.slice(1);
@@ -9202,7 +12251,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith(")")) {
         let ch = ")";
         let rest = r.slice(1);
@@ -9210,7 +12259,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("*")) {
         let ch = "*";
         let rest = r.slice(1);
@@ -9218,7 +12267,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("+")) {
         let ch = "+";
         let rest = r.slice(1);
@@ -9226,7 +12275,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith(",")) {
         let ch = ",";
         let rest = r.slice(1);
@@ -9234,7 +12283,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("-")) {
         let ch = "-";
         let rest = r.slice(1);
@@ -9242,7 +12291,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith(".")) {
         let ch = ".";
         let rest = r.slice(1);
@@ -9250,7 +12299,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("/")) {
         let ch = "/";
         let rest = r.slice(1);
@@ -9258,7 +12307,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith(":")) {
         let ch = ":";
         let rest = r.slice(1);
@@ -9266,7 +12315,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith(";")) {
         let ch = ";";
         let rest = r.slice(1);
@@ -9274,7 +12323,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("=")) {
         let ch = "=";
         let rest = r.slice(1);
@@ -9282,7 +12331,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("?")) {
         let ch = "?";
         let rest = r.slice(1);
@@ -9290,7 +12339,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("@")) {
         let ch = "@";
         let rest = r.slice(1);
@@ -9298,7 +12347,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("[")) {
         let ch = "[";
         let rest = r.slice(1);
@@ -9306,7 +12355,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("\\")) {
         let ch = "\\";
         let rest = r.slice(1);
@@ -9314,7 +12363,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("]")) {
         let ch = "]";
         let rest = r.slice(1);
@@ -9322,7 +12371,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("^")) {
         let ch = "^";
         let rest = r.slice(1);
@@ -9330,7 +12379,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("_")) {
         let ch = "_";
         let rest = r.slice(1);
@@ -9338,7 +12387,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("`")) {
         let ch = "`";
         let rest = r.slice(1);
@@ -9346,7 +12395,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("{")) {
         let ch = "{";
         let rest = r.slice(1);
@@ -9354,7 +12403,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("|")) {
         let ch = "|";
         let rest = r.slice(1);
@@ -9362,7 +12411,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("}")) {
         let ch = "}";
         let rest = r.slice(1);
@@ -9370,7 +12419,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("~")) {
         let ch = "~";
         let rest = r.slice(1);
@@ -9378,7 +12427,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith('"')) {
         let ch = '"';
         let rest = r.slice(1);
@@ -9386,7 +12435,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("<")) {
         let ch = "<";
         let rest = r.slice(1);
@@ -9394,7 +12443,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith(">")) {
         let ch = ">";
         let rest = r.slice(1);
@@ -9402,17 +12451,17 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$in = rest;
         loop$acc = body + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else {
         loop$sp = sp;
         loop$in = r;
         loop$acc = body + "\\";
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       }
     } else if (s === ")") {
       if (stack instanceof Empty) {
-        return value2(new_destination(body), ")" + r);
+        return value3(new_destination(body), ")" + r);
       } else {
         let $1 = stack.head;
         if ($1 === ")") {
@@ -9421,7 +12470,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
           loop$in = r;
           loop$acc = body + ")";
           loop$stack = rest;
-          loop$value = value2;
+          loop$value = value3;
         } else {
           return new Error(undefined);
         }
@@ -9431,30 +12480,30 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
       loop$in = r;
       loop$acc = body + "(";
       loop$stack = prepend(")", stack);
-      loop$value = value2;
+      loop$value = value3;
     } else if (s === " ") {
       if (stack instanceof Empty) {
-        return value2(new_destination(body), r);
+        return value3(new_destination(body), r);
       } else {
         return new Error(undefined);
       }
     } else if (s === "\t") {
       if (stack instanceof Empty) {
-        return value2(new_destination(body), r);
+        return value3(new_destination(body), r);
       } else {
         return new Error(undefined);
       }
     } else {
-      throw makeError("panic", FILEPATH, "mork/internal/util", 402, "do_parse_link_dest", "missing case in splitter", {});
+      throw makeError("panic", FILEPATH2, "mork/internal/util", 402, "do_parse_link_dest", "missing case in splitter", {});
     }
   }
 }
-function try_pop(ch, in$, value2) {
+function try_pop(ch, in$, value3) {
   if (in$.startsWith("<")) {
     let first3 = "<";
     if (ch === first3) {
       let rest = in$.slice(1);
-      return value2(rest);
+      return value3(rest);
     } else {
       return new Error(undefined);
     }
@@ -9462,7 +12511,7 @@ function try_pop(ch, in$, value2) {
     let first3 = ">";
     if (ch === first3) {
       let rest = in$.slice(1);
-      return value2(rest);
+      return value3(rest);
     } else {
       return new Error(undefined);
     }
@@ -9470,7 +12519,7 @@ function try_pop(ch, in$, value2) {
     let first3 = "[";
     if (ch === first3) {
       let rest = in$.slice(1);
-      return value2(rest);
+      return value3(rest);
     } else {
       return new Error(undefined);
     }
@@ -9478,7 +12527,7 @@ function try_pop(ch, in$, value2) {
     let first3 = "]";
     if (ch === first3) {
       let rest = in$.slice(1);
-      return value2(rest);
+      return value3(rest);
     } else {
       return new Error(undefined);
     }
@@ -9491,8 +12540,8 @@ function do_parse_link_dest_tag(loop$sp, loop$in, loop$acc, loop$value) {
     let sp = loop$sp;
     let in$ = loop$in;
     let acc = loop$acc;
-    let value2 = loop$value;
-    let $ = split4(sp, in$);
+    let value3 = loop$value;
+    let $ = split5(sp, in$);
     let l;
     let s;
     let r;
@@ -9509,12 +12558,12 @@ function do_parse_link_dest_tag(loop$sp, loop$in, loop$acc, loop$value) {
         loop$sp = sp;
         loop$in = rest;
         loop$acc = acc + ch;
-        loop$value = value2;
+        loop$value = value3;
       } else {
         loop$sp = sp;
         loop$in = "";
         loop$acc = acc + "\\";
-        loop$value = value2;
+        loop$value = value3;
       }
     } else if (s === `
 `) {
@@ -9522,33 +12571,33 @@ function do_parse_link_dest_tag(loop$sp, loop$in, loop$acc, loop$value) {
     } else if (s === "<") {
       return new Error(undefined);
     } else if (s === ">") {
-      return value2(new_destination(acc + l), s + r);
+      return value3(new_destination(acc + l), s + r);
     } else {
-      throw makeError("panic", FILEPATH, "mork/internal/util", 438, "do_parse_link_dest_tag", "`panic` expression evaluated.", {});
+      throw makeError("panic", FILEPATH2, "mork/internal/util", 438, "do_parse_link_dest_tag", "`panic` expression evaluated.", {});
     }
   }
 }
-function parse_link_dest(in$, sp_link_dest, sp_link_dest_tag, value2) {
+function parse_link_dest(in$, sp_link_dest, sp_link_dest_tag, value3) {
   let $ = starts_with(in$, "<");
   if ($) {
     return try_pop("<", in$, (in$2) => {
       return do_parse_link_dest_tag(sp_link_dest_tag, in$2, "", (dest, in$3) => {
         return try_pop(">", in$3, (in$4) => {
           if (in$4 === " ") {
-            return value2(dest, in$4);
+            return value3(dest, in$4);
           } else if (in$4 === "\t") {
-            return value2(dest, in$4);
+            return value3(dest, in$4);
           } else if (in$4 === "\r") {
-            return value2(dest, in$4);
+            return value3(dest, in$4);
           } else if (in$4 === `
 `) {
-            return value2(dest, in$4);
+            return value3(dest, in$4);
           } else if (in$4 === "") {
-            return value2(dest, in$4);
+            return value3(dest, in$4);
           } else if (in$4 === ")") {
-            return value2(dest, in$4);
+            return value3(dest, in$4);
           } else if (in$4 === "]") {
-            return value2(dest, in$4);
+            return value3(dest, in$4);
           } else {
             return new Error(undefined);
           }
@@ -9558,7 +12607,7 @@ function parse_link_dest(in$, sp_link_dest, sp_link_dest_tag, value2) {
   } else {
     let in$1 = gobble_hspace(in$);
     return do_parse_link_dest(sp_link_dest, in$1, "", toList([]), (dest, in$2) => {
-      return value2(dest, in$2);
+      return value3(dest, in$2);
     });
   }
 }
@@ -9604,8 +12653,8 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
     let brace = loop$brace;
     let acc = loop$acc;
     let stack = loop$stack;
-    let value2 = loop$value;
-    let $ = split4(sp, in$);
+    let value3 = loop$value;
+    let $ = split5(sp, in$);
     let l;
     let s;
     let r;
@@ -9621,7 +12670,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("#")) {
         let ch = "#";
         let rest = r.slice(1);
@@ -9630,7 +12679,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("$")) {
         let ch = "$";
         let rest = r.slice(1);
@@ -9639,7 +12688,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("%")) {
         let ch = "%";
         let rest = r.slice(1);
@@ -9648,7 +12697,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("&")) {
         let rest = r.slice(1);
         loop$sp = sp;
@@ -9656,7 +12705,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + "&amp;";
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("'")) {
         let ch = "'";
         let rest = r.slice(1);
@@ -9665,7 +12714,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("(")) {
         let ch = "(";
         let rest = r.slice(1);
@@ -9674,7 +12723,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith(")")) {
         let ch = ")";
         let rest = r.slice(1);
@@ -9683,7 +12732,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("*")) {
         let ch = "*";
         let rest = r.slice(1);
@@ -9692,7 +12741,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("+")) {
         let ch = "+";
         let rest = r.slice(1);
@@ -9701,7 +12750,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith(",")) {
         let ch = ",";
         let rest = r.slice(1);
@@ -9710,7 +12759,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("-")) {
         let ch = "-";
         let rest = r.slice(1);
@@ -9719,7 +12768,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith(".")) {
         let ch = ".";
         let rest = r.slice(1);
@@ -9728,7 +12777,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("/")) {
         let ch = "/";
         let rest = r.slice(1);
@@ -9737,7 +12786,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith(":")) {
         let ch = ":";
         let rest = r.slice(1);
@@ -9746,7 +12795,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith(";")) {
         let ch = ";";
         let rest = r.slice(1);
@@ -9755,7 +12804,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("<")) {
         let rest = r.slice(1);
         loop$sp = sp;
@@ -9763,7 +12812,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + "&lt;";
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("=")) {
         let ch = "=";
         let rest = r.slice(1);
@@ -9772,7 +12821,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith(">")) {
         let rest = r.slice(1);
         loop$sp = sp;
@@ -9780,7 +12829,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + "&gt;";
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("?")) {
         let ch = "?";
         let rest = r.slice(1);
@@ -9789,7 +12838,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("@")) {
         let ch = "@";
         let rest = r.slice(1);
@@ -9798,7 +12847,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("[")) {
         let ch = "[";
         let rest = r.slice(1);
@@ -9807,7 +12856,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith('"')) {
         let rest = r.slice(1);
         loop$sp = sp;
@@ -9815,7 +12864,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + "&quot;";
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("\\")) {
         let ch = "\\";
         let rest = r.slice(1);
@@ -9824,7 +12873,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("]")) {
         let ch = "]";
         let rest = r.slice(1);
@@ -9833,7 +12882,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("^")) {
         let ch = "^";
         let rest = r.slice(1);
@@ -9842,7 +12891,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("_")) {
         let ch = "_";
         let rest = r.slice(1);
@@ -9851,7 +12900,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("`")) {
         let ch = "`";
         let rest = r.slice(1);
@@ -9860,7 +12909,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("{")) {
         let ch = "{";
         let rest = r.slice(1);
@@ -9869,7 +12918,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("|")) {
         let ch = "|";
         let rest = r.slice(1);
@@ -9878,7 +12927,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("}")) {
         let ch = "}";
         let rest = r.slice(1);
@@ -9887,7 +12936,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else if (r.startsWith("~")) {
         let ch = "~";
         let rest = r.slice(1);
@@ -9896,42 +12945,42 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ch;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       } else {
         loop$sp = sp;
         loop$in = r;
         loop$brace = brace;
         loop$acc = acc + l + s;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       }
     } else if (s === '"') {
       let $1 = brace === '"';
       if ($1) {
-        return value2(new Some(acc + l), r);
+        return value3(new Some(acc + l), r);
       } else {
         loop$sp = sp;
         loop$in = r;
         loop$brace = brace;
         loop$acc = acc + l + '"';
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       }
     } else if (s === "'") {
       let $1 = brace === "'";
       if ($1) {
-        return value2(new Some(acc + l), r);
+        return value3(new Some(acc + l), r);
       } else {
         loop$sp = sp;
         loop$in = r;
         loop$brace = brace;
         loop$acc = acc + l + "'";
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       }
     } else if (s === ")") {
       if (stack instanceof Empty) {
-        return value2(new Some(acc + l), r);
+        return value3(new Some(acc + l), r);
       } else {
         let stack$1 = stack.tail;
         loop$sp = sp;
@@ -9939,7 +12988,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$brace = brace;
         loop$acc = acc + l + ")";
         loop$stack = stack$1;
-        loop$value = value2;
+        loop$value = value3;
       }
     } else if (s === "(") {
       loop$sp = sp;
@@ -9947,7 +12996,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
       loop$brace = brace;
       loop$acc = acc + l + "(";
       loop$stack = prepend(")", stack);
-      loop$value = value2;
+      loop$value = value3;
     } else if (s === `
 `) {
       let $1 = r !== "" && is_blankn(r);
@@ -9960,28 +13009,28 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + `
 `;
         loop$stack = stack;
-        loop$value = value2;
+        loop$value = value3;
       }
     } else {
       return new Error(undefined);
     }
   }
 }
-function parse_link_title(in$, sp_link_title, value2) {
+function parse_link_title(in$, sp_link_title, value3) {
   if (in$.startsWith(")")) {
-    return value2(new None, in$);
+    return value3(new None, in$);
   } else if (in$.startsWith('"')) {
     let ch = '"';
     let rest = in$.slice(1);
-    return do_parse_link_title(sp_link_title, rest, ch, "", toList([]), value2);
+    return do_parse_link_title(sp_link_title, rest, ch, "", toList([]), value3);
   } else if (in$.startsWith("'")) {
     let ch = "'";
     let rest = in$.slice(1);
-    return do_parse_link_title(sp_link_title, rest, ch, "", toList([]), value2);
+    return do_parse_link_title(sp_link_title, rest, ch, "", toList([]), value3);
   } else if (in$.startsWith("(")) {
     let ch = "(";
     let rest = in$.slice(1);
-    return do_parse_link_title(sp_link_title, rest, ch, "", toList([]), value2);
+    return do_parse_link_title(sp_link_title, rest, ch, "", toList([]), value3);
   } else {
     return new Error(undefined);
   }
@@ -10079,7 +13128,7 @@ function is_empty_list(sp_dot_paren, line) {
     let rest = line$1.slice(1);
     return is_blank(rest);
   } else {
-    let $1 = split4(sp_dot_paren, line$1);
+    let $1 = split5(sp_dot_paren, line$1);
     let ord;
     let marker;
     let rest;
@@ -10148,7 +13197,7 @@ function parse_ordinal_item(sp_dot_paren, line) {
   let line$1;
   idx = $[0];
   line$1 = $[1];
-  let $1 = split4(sp_dot_paren, line$1);
+  let $1 = split5(sp_dot_paren, line$1);
   let ord;
   let marker;
   let rest;
@@ -10229,7 +13278,7 @@ function take_fence_run(in$, fence) {
   } else if (fence === "~") {
     return take_tilde_run(in$, 1);
   } else {
-    throw makeError("panic", FILEPATH, "mork/internal/util", 746, "take_fence_run", "take_fence_run bad fence: " + fence, {});
+    throw makeError("panic", FILEPATH2, "mork/internal/util", 746, "take_fence_run", "take_fence_run bad fence: " + fence, {});
   }
 }
 function hr_eat_and_count_star(loop$line, loop$count) {
@@ -10321,7 +13370,7 @@ function match_hr(line) {
 }
 
 // build/dev/javascript/mork/mork/internal/cache.mjs
-var FILEPATH2 = "src/mork/internal/cache.gleam";
+var FILEPATH3 = "src/mork/internal/cache.gleam";
 
 class Cache2 extends CustomType {
   constructor(atx_heading_empty, atx_heading_tail, atx_heading_id, autolink, email_autolink, setext_h1, setext_h2, open_tag, close_tag, is_html_block_start, is_paragraph_continuation_text, is_a_html_tag, starts_with_ws, ends_with_ws, starts_with_p, ends_with_p, html_1_start, html_1_end, html_2_start, html_3_start, sp_hspace, sp_line, sp_scheme, sp_semi, sp_question, sp_escape, sp_html_escape, sp_dot_paren, sp_tag, sp_link_text, sp_link_dest, sp_inline, sp_link_label, sp_link_title, sp_link_dest_tag, sp_1backquote, sp_pipe) {
@@ -10380,7 +13429,7 @@ function re_from_string(re) {
   if ($ instanceof Ok) {
     re$1 = $[0];
   } else {
-    throw makeError("let_assert", FILEPATH2, "mork/internal/cache", 152, "re_from_string", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH3, "mork/internal/cache", 152, "re_from_string", "Pattern match failed, no pattern matched the value.", {
       value: $,
       start: 4971,
       end: 5013,
@@ -10397,7 +13446,7 @@ function re_from_string_i(re) {
   if ($ instanceof Ok) {
     re$1 = $[0];
   } else {
-    throw makeError("let_assert", FILEPATH2, "mork/internal/cache", 158, "re_from_string_i", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH3, "mork/internal/cache", 158, "re_from_string_i", "Pattern match failed, no pattern matched the value.", {
       value: $,
       start: 5128,
       end: 5171,
@@ -10487,7 +13536,7 @@ function make_is_paragraph_continuation_text(is_html_block, sp_dot_paren) {
   if ($ instanceof Ok) {
     re_hr_1 = $[0];
   } else {
-    throw makeError("let_assert", FILEPATH2, "mork/internal/cache", 243, "make_is_paragraph_continuation_text", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH3, "mork/internal/cache", 243, "make_is_paragraph_continuation_text", "Pattern match failed, no pattern matched the value.", {
       value: $,
       start: 7948,
       end: 8023,
@@ -10500,7 +13549,7 @@ function make_is_paragraph_continuation_text(is_html_block, sp_dot_paren) {
   if ($1 instanceof Ok) {
     re_hr_2 = $1[0];
   } else {
-    throw makeError("let_assert", FILEPATH2, "mork/internal/cache", 244, "make_is_paragraph_continuation_text", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH3, "mork/internal/cache", 244, "make_is_paragraph_continuation_text", "Pattern match failed, no pattern matched the value.", {
       value: $1,
       start: 8026,
       end: 8097,
@@ -10513,7 +13562,7 @@ function make_is_paragraph_continuation_text(is_html_block, sp_dot_paren) {
   if ($2 instanceof Ok) {
     re_hr_3 = $2[0];
   } else {
-    throw makeError("let_assert", FILEPATH2, "mork/internal/cache", 245, "make_is_paragraph_continuation_text", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH3, "mork/internal/cache", 245, "make_is_paragraph_continuation_text", "Pattern match failed, no pattern matched the value.", {
       value: $2,
       start: 8100,
       end: 8171,
@@ -10526,7 +13575,7 @@ function make_is_paragraph_continuation_text(is_html_block, sp_dot_paren) {
   if ($3 instanceof Ok) {
     re_fenced = $3[0];
   } else {
-    throw makeError("let_assert", FILEPATH2, "mork/internal/cache", 246, "make_is_paragraph_continuation_text", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH3, "mork/internal/cache", 246, "make_is_paragraph_continuation_text", "Pattern match failed, no pattern matched the value.", {
       value: $3,
       start: 8174,
       end: 8257,
@@ -10539,7 +13588,7 @@ function make_is_paragraph_continuation_text(is_html_block, sp_dot_paren) {
   if ($4 instanceof Ok) {
     re_h_atx = $4[0];
   } else {
-    throw makeError("let_assert", FILEPATH2, "mork/internal/cache", 248, "make_is_paragraph_continuation_text", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH3, "mork/internal/cache", 248, "make_is_paragraph_continuation_text", "Pattern match failed, no pattern matched the value.", {
       value: $4,
       start: 8260,
       end: 8338,
@@ -10552,7 +13601,7 @@ function make_is_paragraph_continuation_text(is_html_block, sp_dot_paren) {
   if ($5 instanceof Ok) {
     re_list_1 = $5[0];
   } else {
-    throw makeError("let_assert", FILEPATH2, "mork/internal/cache", 249, "make_is_paragraph_continuation_text", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH3, "mork/internal/cache", 249, "make_is_paragraph_continuation_text", "Pattern match failed, no pattern matched the value.", {
       value: $5,
       start: 8341,
       end: 8415,
@@ -10629,7 +13678,7 @@ function make_is_a_html_tag() {
     if ($ instanceof Ok) {
       open_tag = $[0];
     } else {
-      throw makeError("let_assert", FILEPATH2, "mork/internal/cache", 285, "make_is_a_html_tag", "Pattern match failed, no pattern matched the value.", {
+      throw makeError("let_assert", FILEPATH3, "mork/internal/cache", 285, "make_is_a_html_tag", "Pattern match failed, no pattern matched the value.", {
         value: $,
         start: 9547,
         end: 9647,
@@ -10642,7 +13691,7 @@ function make_is_a_html_tag() {
     if ($1 instanceof Ok) {
       open_tag_s = $1[0];
     } else {
-      throw makeError("let_assert", FILEPATH2, "mork/internal/cache", 287, "make_is_a_html_tag", "Pattern match failed, no pattern matched the value.", {
+      throw makeError("let_assert", FILEPATH3, "mork/internal/cache", 287, "make_is_a_html_tag", "Pattern match failed, no pattern matched the value.", {
         value: $1,
         start: 9652,
         end: 9759,
@@ -10655,7 +13704,7 @@ function make_is_a_html_tag() {
     if ($2 instanceof Ok) {
       open_tag_e = $2[0];
     } else {
-      throw makeError("let_assert", FILEPATH2, "mork/internal/cache", 289, "make_is_a_html_tag", "Pattern match failed, no pattern matched the value.", {
+      throw makeError("let_assert", FILEPATH3, "mork/internal/cache", 289, "make_is_a_html_tag", "Pattern match failed, no pattern matched the value.", {
         value: $2,
         start: 9764,
         end: 9871,
@@ -10668,7 +13717,7 @@ function make_is_a_html_tag() {
     if ($3 instanceof Ok) {
       open_tag_se = $3[0];
     } else {
-      throw makeError("let_assert", FILEPATH2, "mork/internal/cache", 291, "make_is_a_html_tag", "Pattern match failed, no pattern matched the value.", {
+      throw makeError("let_assert", FILEPATH3, "mork/internal/cache", 291, "make_is_a_html_tag", "Pattern match failed, no pattern matched the value.", {
         value: $3,
         start: 9876,
         end: 10006,
@@ -10681,7 +13730,7 @@ function make_is_a_html_tag() {
     if ($4 instanceof Ok) {
       close_tag = $4[0];
     } else {
-      throw makeError("let_assert", FILEPATH2, "mork/internal/cache", 295, "make_is_a_html_tag", "Pattern match failed, no pattern matched the value.", {
+      throw makeError("let_assert", FILEPATH3, "mork/internal/cache", 295, "make_is_a_html_tag", "Pattern match failed, no pattern matched the value.", {
         value: $4,
         start: 10011,
         end: 10087,
@@ -10694,7 +13743,7 @@ function make_is_a_html_tag() {
     if ($5 instanceof Ok) {
       close_tag_s = $5[0];
     } else {
-      throw makeError("let_assert", FILEPATH2, "mork/internal/cache", 296, "make_is_a_html_tag", "Pattern match failed, no pattern matched the value.", {
+      throw makeError("let_assert", FILEPATH3, "mork/internal/cache", 296, "make_is_a_html_tag", "Pattern match failed, no pattern matched the value.", {
         value: $5,
         start: 10092,
         end: 10181,
@@ -10707,7 +13756,7 @@ function make_is_a_html_tag() {
     if ($6 instanceof Ok) {
       close_tag_e = $6[0];
     } else {
-      throw makeError("let_assert", FILEPATH2, "mork/internal/cache", 298, "make_is_a_html_tag", "Pattern match failed, no pattern matched the value.", {
+      throw makeError("let_assert", FILEPATH3, "mork/internal/cache", 298, "make_is_a_html_tag", "Pattern match failed, no pattern matched the value.", {
         value: $6,
         start: 10186,
         end: 10275,
@@ -10720,7 +13769,7 @@ function make_is_a_html_tag() {
     if ($7 instanceof Ok) {
       close_tag_se = $7[0];
     } else {
-      throw makeError("let_assert", FILEPATH2, "mork/internal/cache", 300, "make_is_a_html_tag", "Pattern match failed, no pattern matched the value.", {
+      throw makeError("let_assert", FILEPATH3, "mork/internal/cache", 300, "make_is_a_html_tag", "Pattern match failed, no pattern matched the value.", {
         value: $7,
         start: 10280,
         end: 10375,
@@ -10743,8 +13792,8 @@ function make_is_a_html_tag() {
     }
   };
 }
-function new$8() {
-  let sp_dot_paren = new$6(toList([".", ")"]));
+function new$9() {
+  let sp_dot_paren = new$7(toList([".", ")"]));
   let is_a_html_tag = make_is_a_html_tag();
   let is_html_block_start = make_is_html_block_start(is_a_html_tag);
   let is_pct = make_is_paragraph_continuation_text(is_html_block_start, sp_dot_paren);
@@ -10778,11 +13827,11 @@ function new$8() {
   let html_1_end = re_from_string_i("<\\/(?:pre|script|style|textarea)>");
   let html_2_start = re_from_string_i("^<\\/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h1|h2|h3|h4|h5|h6|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:(?:[ \\t>])|$|\\/>)");
   let html_3_start = re_from_string("^<![A-Za-z]");
-  return new Cache2(re_from_string("^#+[ \\t]*$"), re_from_string("[ \\t]+#+[ \\t]*$"), re_from_string("\\{#(\\S+)\\}[ \\t]*$"), re_from_string("^[A-Za-z][A-Za-z0-9+.-]{1,31}:[^\\x00-\\x20<> ]*$"), re_from_string("^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"), re_from_string("^[ ]{0,3}=+[ \\t]*$"), re_from_string("^[ ]{0,3}-+[ \\t]*$"), re_from_string("<" + tag_name + attribute3 + "*" + "\\s/?>"), re_from_string("</" + tag_name + attribute3 + "*" + "\\s/?>"), is_html_block_start, is_pct, is_a_html_tag, starts_with_ws, ends_with_ws, starts_with_p, ends_with_p, html_1_start, html_1_end, html_2_start, html_3_start, new$6(toList([" ", "\t"])), new$6(toList([`
+  return new Cache2(re_from_string("^#+[ \\t]*$"), re_from_string("[ \\t]+#+[ \\t]*$"), re_from_string("\\{#(\\S+)\\}[ \\t]*$"), re_from_string("^[A-Za-z][A-Za-z0-9+.-]{1,31}:[^\\x00-\\x20<> ]*$"), re_from_string("^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"), re_from_string("^[ ]{0,3}=+[ \\t]*$"), re_from_string("^[ ]{0,3}-+[ \\t]*$"), re_from_string("<" + tag_name + attribute3 + "*" + "\\s/?>"), re_from_string("</" + tag_name + attribute3 + "*" + "\\s/?>"), is_html_block_start, is_pct, is_a_html_tag, starts_with_ws, ends_with_ws, starts_with_p, ends_with_p, html_1_start, html_1_end, html_2_start, html_3_start, new$7(toList([" ", "\t"])), new$7(toList([`
 `, `\r
-`])), new$6(toList(["://", ":"])), new$6(toList([";"])), new$6(toList(["?"])), new$6(toList(["\\"])), new$6(toList(["\\", "&", "<", ">", '"'])), sp_dot_paren, new$6(toList([">", "\\", '"', "'"])), new$6(toList(["[", "]", "\\", `
-`])), new$6(toList(["\\", " ", "\t", ")", "(", `
-`])), new$6(toList([
+`])), new$7(toList(["://", ":"])), new$7(toList([";"])), new$7(toList(["?"])), new$7(toList(["\\"])), new$7(toList(["\\", "&", "<", ">", '"'])), sp_dot_paren, new$7(toList([">", "\\", '"', "'"])), new$7(toList(["[", "]", "\\", `
+`])), new$7(toList(["\\", " ", "\t", ")", "(", `
+`])), new$7(toList([
     "\\",
     "*",
     "_",
@@ -10802,9 +13851,9 @@ function new$8() {
     "https://",
     "http://",
     "www."
-  ])), new$6(toList(["\\", "[", "]"])), new$6(toList(["\\", '"', "'", "(", ")", `
-`])), new$6(toList(["\\", `
-`, "<", ">"])), new$6(toList(["`"])), new$6(toList(["|", "\\|"])));
+  ])), new$7(toList(["\\", "[", "]"])), new$7(toList(["\\", '"', "'", "(", ")", `
+`])), new$7(toList(["\\", `
+`, "<", ">"])), new$7(toList(["`"])), new$7(toList(["|", "\\|"])));
 }
 
 // build/dev/javascript/mork/mork/internal/mork_ffi.js
@@ -10824,7 +13873,7 @@ function do_take_while(haystack, needle, acc) {
 }
 
 // build/dev/javascript/mork/mork/internal/parser.mjs
-var FILEPATH3 = "src/mork/internal/parser.gleam";
+var FILEPATH4 = "src/mork/internal/parser.gleam";
 
 class Parser extends CustomType {
   constructor(line_splitter, start5, rest, line, pos, indent) {
@@ -10838,7 +13887,7 @@ class Parser extends CustomType {
   }
 }
 function new_state(start5, line_splitter) {
-  let $ = split4(line_splitter, start5);
+  let $ = split5(line_splitter, start5);
   let current;
   let rest;
   current = $[0];
@@ -10851,7 +13900,7 @@ function new_state(start5, line_splitter) {
   return new Parser(line_splitter, start5, rest, line, line, indent);
 }
 function advance_line(state) {
-  let $ = split4(state.line_splitter, state.rest);
+  let $ = split5(state.line_splitter, state.rest);
   let new_current;
   let new_rest;
   new_current = $[0];
@@ -10864,13 +13913,13 @@ function advance_line(state) {
   return new Parser(state.line_splitter, state.start, new_rest, line, line, indent);
 }
 function next_line_is_blank(state) {
-  let $ = split4(state.line_splitter, state.rest);
+  let $ = split5(state.line_splitter, state.rest);
   let next;
   next = $[0];
   return is_blank(next);
 }
 function next_line(state) {
-  let $ = split4(state.line_splitter, state.rest);
+  let $ = split5(state.line_splitter, state.rest);
   let next;
   next = $[0];
   return next;
@@ -10924,7 +13973,7 @@ function do_merge_until_unescaped_end_bracket(loop$in, loop$sp, loop$acc, loop$s
     let sp = loop$sp;
     let acc = loop$acc;
     let stack = loop$stack;
-    let $ = split4(sp, in$);
+    let $ = split5(sp, in$);
     let l;
     let s;
     let r;
@@ -10951,7 +14000,7 @@ function do_merge_until_unescaped_end_bracket(loop$in, loop$sp, loop$acc, loop$s
           loop$acc = body + "]";
           loop$stack = stack$1;
         } else {
-          throw makeError("panic", FILEPATH3, "mork/internal/parser", 140, "do_merge_until_unescaped_end_bracket", "unexpected stack contents", {});
+          throw makeError("panic", FILEPATH4, "mork/internal/parser", 140, "do_merge_until_unescaped_end_bracket", "unexpected stack contents", {});
         }
       }
     } else if (s === "\\") {
@@ -10986,7 +14035,7 @@ function do_merge_until_unescaped_end_bracket(loop$in, loop$sp, loop$acc, loop$s
       loop$acc = body + " ";
       loop$stack = stack;
     } else {
-      throw makeError("panic", FILEPATH3, "mork/internal/parser", 153, "do_merge_until_unescaped_end_bracket", "unexpected split", {});
+      throw makeError("panic", FILEPATH4, "mork/internal/parser", 153, "do_merge_until_unescaped_end_bracket", "unexpected split", {});
     }
   }
 }
@@ -11014,9 +14063,9 @@ class NestItem extends CustomType {
   }
 }
 function from_string2(options, text4) {
-  let cache = new$8();
+  let cache = new$9();
   let state = new_state(text4, cache.sp_line);
-  let doc = new$7(options);
+  let doc = new$8(options);
   return new Context(cache, state, toList([]), doc, toList([]));
 }
 function update_blocks(ctx, blocks) {
@@ -11051,7 +14100,7 @@ function merge3(ctx, other, blocks) {
 }
 
 // build/dev/javascript/mork/mork/internal/blocks.mjs
-var FILEPATH4 = "src/mork/internal/blocks.gleam";
+var FILEPATH5 = "src/mork/internal/blocks.gleam";
 
 class SetextH1 extends CustomType {
 }
@@ -11241,10 +14290,10 @@ function are_separated(items) {
   }
 }
 function calculate_list_pack(items) {
-  let contains2 = any(items, (item) => {
+  let contains3 = any(items, (item) => {
     return item.contains_blank;
   });
-  return check3(contains2 || are_separated(items), new Loose, new Tight);
+  return check3(contains3 || are_separated(items), new Loose, new Tight);
 }
 function list_item_indent(ctx, line, marker) {
   if (marker === ".") {
@@ -11876,7 +14925,7 @@ function column_alignment(spec) {
   if ($ instanceof Ok) {
     re = $[0];
   } else {
-    throw makeError("let_assert", FILEPATH4, "mork/internal/blocks", 1091, "column_alignment", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH5, "mork/internal/blocks", 1091, "column_alignment", "Pattern match failed, no pattern matched the value.", {
       value: $,
       start: 30852,
       end: 30902,
@@ -11910,7 +14959,7 @@ function do_delim_row(loop$pipe, loop$input, loop$count, loop$res) {
     let count2 = loop$count;
     let res = loop$res;
     let input$1 = gobble_hspace(input2);
-    let $ = split4(pipe, input$1);
+    let $ = split5(pipe, input$1);
     let l;
     let s;
     let r;
@@ -11959,7 +15008,7 @@ function do_delim_row(loop$pipe, loop$input, loop$count, loop$res) {
         }
       }
     } else {
-      throw makeError("panic", FILEPATH4, "mork/internal/blocks", 1085, "do_delim_row", "unreachable", {});
+      throw makeError("panic", FILEPATH5, "mork/internal/blocks", 1085, "do_delim_row", "unreachable", {});
     }
   }
 }
@@ -11981,7 +15030,7 @@ function do_pipe_split(loop$pipe, loop$input, loop$acc, loop$res) {
     let input2 = loop$input;
     let acc = loop$acc;
     let res = loop$res;
-    let $ = split4(pipe, input2);
+    let $ = split5(pipe, input2);
     let l;
     let s;
     let r;
@@ -12002,7 +15051,7 @@ function do_pipe_split(loop$pipe, loop$input, loop$acc, loop$res) {
     } else if (s === "") {
       return prepend(body, res);
     } else {
-      throw makeError("panic", FILEPATH4, "mork/internal/blocks", 1144, "do_pipe_split", "unreachable", {});
+      throw makeError("panic", FILEPATH5, "mork/internal/blocks", 1144, "do_pipe_split", "unreachable", {});
     }
   }
 }
@@ -12135,7 +15184,7 @@ function block_fallback(ctx) {
   return try_parse_table(ctx, () => {
     return try_parse_paragraph(ctx, () => {
       return try_parse_blank(ctx, () => {
-        throw makeError("panic", FILEPATH4, "mork/internal/blocks", 63, "block_fallback", "try_parse_block could not parse: " + inspect2(ctx), {});
+        throw makeError("panic", FILEPATH5, "mork/internal/blocks", 63, "block_fallback", "try_parse_block could not parse: " + inspect2(ctx), {});
       });
     });
   });
@@ -12836,7 +15885,7 @@ function try_parse_blockquote(ctx) {
 }
 
 // build/dev/javascript/mork/mork/internal/inlines.mjs
-var FILEPATH5 = "src/mork/internal/inlines.gleam";
+var FILEPATH6 = "src/mork/internal/inlines.gleam";
 
 class InlineState extends CustomType {
   constructor(ctx, inlines) {
@@ -12992,7 +16041,7 @@ function do_split_at_tag(loop$sp, loop$rest, loop$acc, loop$stack) {
     let rest = loop$rest;
     let acc = loop$acc;
     let stack = loop$stack;
-    let $ = split4(sp, rest);
+    let $ = split5(sp, rest);
     let l;
     let s;
     let r;
@@ -13090,7 +16139,7 @@ function do_split_at_tag(loop$sp, loop$rest, loop$acc, loop$stack) {
         loop$stack = stack;
       }
     } else {
-      throw makeError("panic", FILEPATH5, "mork/internal/inlines", 767, "do_split_at_tag", "unreachable", {});
+      throw makeError("panic", FILEPATH6, "mork/internal/inlines", 767, "do_split_at_tag", "unreachable", {});
     }
   }
 }
@@ -13147,7 +16196,7 @@ function backtrack_autolink(loop$s, loop$acc) {
       if ($ instanceof Ok) {
         re = $[0];
       } else {
-        throw makeError("let_assert", FILEPATH5, "mork/internal/inlines", 838, "backtrack_autolink", "Pattern match failed, no pattern matched the value.", {
+        throw makeError("let_assert", FILEPATH6, "mork/internal/inlines", 838, "backtrack_autolink", "Pattern match failed, no pattern matched the value.", {
           value: $,
           start: 24286,
           end: 24342,
@@ -13220,7 +16269,7 @@ function parse_autolink_tail(_, rest) {
   if ($ instanceof Ok) {
     re = $[0];
   } else {
-    throw makeError("let_assert", FILEPATH5, "mork/internal/inlines", 812, "parse_autolink_tail", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH6, "mork/internal/inlines", 812, "parse_autolink_tail", "Pattern match failed, no pattern matched the value.", {
       value: $,
       start: 23495,
       end: 23569,
@@ -13230,10 +16279,10 @@ function parse_autolink_tail(_, rest) {
   }
   let $1 = check2(re, rest);
   if ($1) {
-    let sp = new$6(toList([" ", `\r
+    let sp = new$7(toList([" ", `\r
 `, `
 `, "\t", "<"]));
-    let $2 = split4(sp, rest);
+    let $2 = split5(sp, rest);
     let l;
     let s;
     let r;
@@ -13363,7 +16412,7 @@ function process_inlines(ctx) {
   return new Document(_record.options, blocks, _record.links, footnotes);
 }
 function handle_und_emoji(acc, und, r, ctx, inlines) {
-  let sp = new$6(toList([":"]));
+  let sp = new$7(toList([":"]));
   let rhead = split_after(sp, reverse3(acc));
   let head = reverse3(rhead[0]);
   let $ = split_after(sp, r);
@@ -13376,7 +16425,7 @@ function handle_und_emoji(acc, und, r, ctx, inlines) {
   if ($1 instanceof Ok) {
     re = $1[0];
   } else {
-    throw makeError("let_assert", FILEPATH5, "mork/internal/inlines", 213, "handle_und_emoji", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH6, "mork/internal/inlines", 213, "handle_und_emoji", "Pattern match failed, no pattern matched the value.", {
       value: $1,
       start: 7073,
       end: 7134,
@@ -13434,7 +16483,7 @@ function do_parse_inlines(loop$ctx, loop$acc, loop$inlines) {
     let ctx = loop$ctx;
     let acc = loop$acc;
     let inlines = loop$inlines;
-    let $ = split4(ctx.cache.sp_inline, ctx.state.start);
+    let $ = split5(ctx.cache.sp_inline, ctx.state.start);
     let l;
     let sep;
     let r;
@@ -13531,7 +16580,7 @@ function do_parse_inlines(loop$ctx, loop$acc, loop$inlines) {
           let ctx$1 = new Context(ctx.cache, new_state(r, ctx.cache.sp_line), stack, ctx.doc, ctx.nest);
           return new InlineState(ctx$1, push_text(acc$1, inlines));
         } else {
-          throw makeError("panic", FILEPATH5, "mork/internal/inlines", 186, "do_parse_inlines", "non-bracket on the stack", {});
+          throw makeError("panic", FILEPATH6, "mork/internal/inlines", 186, "do_parse_inlines", "non-bracket on the stack", {});
         }
       }
     } else if (sep === "https://") {
@@ -13562,7 +16611,7 @@ function do_parse_inlines(loop$ctx, loop$acc, loop$inlines) {
         loop$inlines = inlines;
       }
     } else {
-      throw makeError("panic", FILEPATH5, "mork/internal/inlines", 194, "do_parse_inlines", "unimplemented inline: " + sep, {});
+      throw makeError("panic", FILEPATH6, "mork/internal/inlines", 194, "do_parse_inlines", "unimplemented inline: " + sep, {});
     }
   }
 }
@@ -13584,7 +16633,7 @@ function link_handle_reference(ctx, start5, rest, acc, text4, inner_inlines, inl
   } else if (acc === "") {
     _block = [text4, rest];
   } else {
-    throw makeError("panic", FILEPATH5, "mork/internal/inlines", 639, "link_handle_reference", "unreachable label case, acc=" + acc, {});
+    throw makeError("panic", FILEPATH6, "mork/internal/inlines", 639, "link_handle_reference", "unreachable label case, acc=" + acc, {});
   }
   let $ = _block;
   let raw_label;
@@ -13853,7 +16902,7 @@ function do_parse_codespan_end(loop$ctx, loop$runsplit, loop$run, loop$acc, loop
     let run2 = loop$run;
     let acc = loop$acc;
     let inlines = loop$inlines;
-    let $ = split4(runsplit, ctx.state.start);
+    let $ = split5(runsplit, ctx.state.start);
     let pre3;
     let runend;
     let post2;
@@ -13873,7 +16922,7 @@ function do_parse_codespan_end(loop$ctx, loop$runsplit, loop$run, loop$acc, loop
       } else {
         let body = acc + pre3;
         let marker = lazy_unwrap(first2(run2), () => {
-          throw makeError("panic", FILEPATH5, "mork/internal/inlines", 969, "do_parse_codespan_end", "`panic` expression evaluated.", {});
+          throw makeError("panic", FILEPATH6, "mork/internal/inlines", 969, "do_parse_codespan_end", "`panic` expression evaluated.", {});
         });
         let $3 = starts_with(post2, marker);
         if ($3) {
@@ -13891,7 +16940,7 @@ function do_parse_codespan_end(loop$ctx, loop$runsplit, loop$run, loop$acc, loop
         } else {
           let $4 = "";
           if (!(body !== $4)) {
-            throw makeError("assert", FILEPATH5, "mork/internal/inlines", 984, "do_parse_codespan_end", "Unreachable = empty code", {
+            throw makeError("assert", FILEPATH6, "mork/internal/inlines", 984, "do_parse_codespan_end", "Unreachable = empty code", {
               kind: "binary_operator",
               operator: "!=",
               left: {
@@ -13922,7 +16971,7 @@ function do_parse_codespan(ctx, run2, acc, inlines) {
     _block = ["`", ctx.cache.sp_1backquote];
   } else {
     let runs2 = repeat("`", run2);
-    _block = [runs2, new$6(toList([runs2]))];
+    _block = [runs2, new$7(toList([runs2]))];
   }
   let $ = _block;
   let runs;
@@ -14159,7 +17208,7 @@ function do_resolve_delims(loop$ctx, loop$inlines, loop$acc, loop$resolves) {
           if (opener instanceof Some) {
             let opener$1 = opener[0];
             if (!(opener$1 instanceof Delim)) {
-              throw makeError("let_assert", FILEPATH5, "mork/internal/inlines", 325, "do_resolve_delims", "Pattern match failed, no pattern matched the value.", {
+              throw makeError("let_assert", FILEPATH6, "mork/internal/inlines", 325, "do_resolve_delims", "Pattern match failed, no pattern matched the value.", {
                 value: opener$1,
                 start: 10275,
                 end: 10304,
@@ -14184,7 +17233,7 @@ function do_resolve_delims(loop$ctx, loop$inlines, loop$acc, loop$resolves) {
             if (opener$1 instanceof Some) {
               let opener$2 = opener$1[0];
               if (!(opener$2 instanceof Delim)) {
-                throw makeError("let_assert", FILEPATH5, "mork/internal/inlines", 341, "do_resolve_delims", "Pattern match failed, no pattern matched the value.", {
+                throw makeError("let_assert", FILEPATH6, "mork/internal/inlines", 341, "do_resolve_delims", "Pattern match failed, no pattern matched the value.", {
                   value: opener$2,
                   start: 10744,
                   end: 10773,
@@ -14503,10 +17552,10 @@ function extended(_, on2) {
   return new Options3(on2, on2, on2, on2, on2, on2, on2);
 }
 function split_frontmatter_from_input(input2) {
-  let fms = new$6(toList([`---
+  let fms = new$7(toList([`---
 `, `---\r
 `]));
-  let $ = split4(fms, input2);
+  let $ = split5(fms, input2);
   let nothing;
   let start5;
   let rest;
@@ -14517,7 +17566,7 @@ function split_frontmatter_from_input(input2) {
   if ($1) {
     return ["", input2];
   } else {
-    let $2 = split4(fms, rest);
+    let $2 = split5(fms, rest);
     let frontmatter;
     let end;
     let rest$1;
@@ -14616,7 +17665,7 @@ function aligned_cell_view(view3) {
     return view3(toList([style("text-align", align_value)]), children);
   };
 }
-function default$() {
+function default$2() {
   return new Components((href2, title2, children) => {
     let _block;
     if (title2 instanceof Some) {
@@ -15058,7 +18107,7 @@ function render_markdown(markdown, render_options, components) {
 }
 
 // build/dev/javascript/client/client/markdown.mjs
-var FILEPATH6 = "src/client/markdown.gleam";
+var FILEPATH7 = "src/client/markdown.gleam";
 var github_proxy_prefixes = /* @__PURE__ */ toList([
   "https://github.com/",
   "https://user-images.githubusercontent.com/",
@@ -15070,12 +18119,12 @@ function convert_picture_tags(text4) {
   if ($ instanceof Ok) {
     re = $[0];
   } else {
-    throw makeError("let_assert", FILEPATH6, "client/markdown", 65, "convert_picture_tags", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH7, "client/markdown", 85, "convert_picture_tags", "Pattern match failed, no pattern matched the value.", {
       value: $,
-      start: 1776,
-      end: 1951,
-      pattern_start: 1787,
-      pattern_end: 1793
+      start: 2448,
+      end: 2623,
+      pattern_start: 2459,
+      pattern_end: 2465
     });
   }
   let matches2 = scan2(re, text4);
@@ -15103,12 +18152,12 @@ function convert_html_images(text4) {
   if ($ instanceof Ok) {
     img_re = $[0];
   } else {
-    throw makeError("let_assert", FILEPATH6, "client/markdown", 82, "convert_html_images", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH7, "client/markdown", 102, "convert_html_images", "Pattern match failed, no pattern matched the value.", {
       value: $,
-      start: 2300,
-      end: 2462,
-      pattern_start: 2311,
-      pattern_end: 2321
+      start: 2972,
+      end: 3134,
+      pattern_start: 2983,
+      pattern_end: 2993
     });
   }
   let $1 = compile2('\\balt="([^"]*?)"', new Options2(true, false));
@@ -15116,12 +18165,12 @@ function convert_html_images(text4) {
   if ($1 instanceof Ok) {
     alt_re = $1[0];
   } else {
-    throw makeError("let_assert", FILEPATH6, "client/markdown", 87, "convert_html_images", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH7, "client/markdown", 107, "convert_html_images", "Pattern match failed, no pattern matched the value.", {
       value: $1,
-      start: 2465,
-      end: 2609,
-      pattern_start: 2476,
-      pattern_end: 2486
+      start: 3137,
+      end: 3281,
+      pattern_start: 3148,
+      pattern_end: 3158
     });
   }
   let matches2 = scan2(img_re, text4);
@@ -15170,12 +18219,12 @@ function convert_details_tags(text4) {
   if ($ instanceof Ok) {
     re = $[0];
   } else {
-    throw makeError("let_assert", FILEPATH6, "client/markdown", 114, "convert_details_tags", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH7, "client/markdown", 134, "convert_details_tags", "Pattern match failed, no pattern matched the value.", {
       value: $,
-      start: 3231,
-      end: 3432,
-      pattern_start: 3242,
-      pattern_end: 3248
+      start: 3903,
+      end: 4104,
+      pattern_start: 3914,
+      pattern_end: 3920
     });
   }
   let matches2 = scan2(re, text4);
@@ -15225,12 +18274,12 @@ function convert_video_tags(text4) {
   if ($ instanceof Ok) {
     re = $[0];
   } else {
-    throw makeError("let_assert", FILEPATH6, "client/markdown", 133, "convert_video_tags", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH7, "client/markdown", 153, "convert_video_tags", "Pattern match failed, no pattern matched the value.", {
       value: $,
-      start: 3966,
-      end: 4148,
-      pattern_start: 3977,
-      pattern_end: 3983
+      start: 4638,
+      end: 4820,
+      pattern_start: 4649,
+      pattern_end: 4655
     });
   }
   let matches2 = scan2(re, text4);
@@ -15262,31 +18311,49 @@ function render(text4) {
   _block = convert_video_tags(_pipe$3);
   let processed = _block;
   let _block$1;
-  let _pipe$4 = default$();
+  let _pipe$4 = default$2();
   _block$1 = img2(_pipe$4, (src3, alt2, _) => {
-    let needs_proxy = any(github_proxy_prefixes, (prefix) => {
-      return starts_with(src3, prefix);
-    });
-    let _block$2;
-    if (needs_proxy) {
-      _block$2 = "/api/image-proxy?url=" + src3;
+    let $ = contains_string(src3, "/releases/download/");
+    if ($) {
+      return a(toList([
+        href(src3),
+        target("_blank"),
+        styles(toList([["color", "var(--indigo-6)"], ["word-break", "break-all"]]))
+      ]), toList([
+        text3((() => {
+          if (alt2 === "") {
+            return src3;
+          } else {
+            let a2 = alt2;
+            return a2 + " (download)";
+          }
+        })())
+      ]));
     } else {
-      _block$2 = src3;
+      let needs_proxy = any(github_proxy_prefixes, (prefix) => {
+        return starts_with(src3, prefix);
+      });
+      let _block$2;
+      if (needs_proxy) {
+        _block$2 = "/api/image-proxy?url=" + src3;
+      } else {
+        _block$2 = src3;
+      }
+      let proxied_src = _block$2;
+      return img(toList([
+        src(proxied_src),
+        alt(alt2),
+        styles(toList([
+          ["max-width", "100%"],
+          ["min-width", "20px"],
+          ["min-height", "20px"],
+          ["height", "auto"],
+          ["border-radius", "8px"],
+          ["margin", "0.5rem 0"],
+          ["display", "block"]
+        ]))
+      ]));
     }
-    let proxied_src = _block$2;
-    return img(toList([
-      src(proxied_src),
-      alt(alt2),
-      styles(toList([
-        ["max-width", "100%"],
-        ["min-width", "20px"],
-        ["min-height", "20px"],
-        ["height", "auto"],
-        ["border-radius", "8px"],
-        ["margin", "0.5rem 0"],
-        ["display", "block"]
-      ]))
-    ]));
   });
   let custom_components = _block$1;
   return render_markdown(processed, (() => {
@@ -15297,14 +18364,27 @@ function render(text4) {
 
 // build/dev/javascript/client/client/views/pr_review.mjs
 class DiffLineEntry extends CustomType {
-  constructor(display_line, file_line, text4) {
+  constructor(display_line, file_line, file_path, text4) {
     super();
     this.display_line = display_line;
     this.file_line = file_line;
+    this.file_path = file_path;
     this.text = text4;
   }
 }
 var heartbeat_interval_seconds = 3;
+function is_bot_comment(comment) {
+  return ends_with(comment.author, "[bot]") || ends_with(comment.author, "-bot") || comment.author === "github-actions" || comment.author === "dependabot" || comment.author === "renovate" || comment.author === "codecov";
+}
+function filter_comments(comments, hide_bots) {
+  if (hide_bots) {
+    return filter(comments, (c) => {
+      return !is_bot_comment(c);
+    });
+  } else {
+    return comments;
+  }
+}
 function description_accordion(body, is_open) {
   let $ = trim(body);
   if ($ === "") {
@@ -15413,6 +18493,56 @@ function back_button() {
 function analyze_button() {
   return styled_button("Analyze PR", new AnalyzePr, indigo_7, true);
 }
+function bot_comments_toggle(hidden2) {
+  let _block;
+  if (hidden2) {
+    _block = [gray_2, gray_6, "smart_toy"];
+  } else {
+    _block = [blue_2, blue_8, "smart_toy"];
+  }
+  let $ = _block;
+  let bg;
+  let fg;
+  let icon;
+  bg = $[0];
+  fg = $[1];
+  icon = $[2];
+  return button(toList([
+    on_click(new ToggleBotComments),
+    title((() => {
+      if (hidden2) {
+        return "Show bot comments";
+      } else {
+        return "Hide bot comments";
+      }
+    })()),
+    styles(toList([
+      inline_flex,
+      center,
+      raw10("0.25rem"),
+      raw14("0.375rem 0.625rem"),
+      raw(bg),
+      raw5(fg),
+      none4,
+      raw4(radius_2),
+      pointer,
+      raw8(font_size_0),
+      raw9("500")
+    ]))
+  ]), toList([
+    span(toList([
+      class$("material-symbols-outlined"),
+      styles(toList([raw8(font_size_1)]))
+    ]), toList([text3(icon)])),
+    text3((() => {
+      if (hidden2) {
+        return "Bots hidden";
+      } else {
+        return "Hide bots";
+      }
+    })())
+  ]));
+}
 function header_area(title2, number, url, head_branch, model) {
   return div(toList([
     styles(toList([
@@ -15487,8 +18617,9 @@ function header_area(title2, number, url, head_branch, model) {
       ]))
     ])),
     div(toList([
-      styles(toList([flex, raw10(size_2)]))
+      styles(toList([flex, raw10(size_2), center]))
     ]), toList([
+      bot_comments_toggle(model.hide_bot_comments),
       back_button(),
       (() => {
         let $ = model.analysis_state;
@@ -15712,46 +18843,72 @@ function parse_hunk_new_start(header) {
     }
   }
 }
-function index_file_lines_acc(loop$lines, loop$display_idx, loop$current_file_line, loop$acc) {
+function index_file_lines_acc(loop$lines, loop$display_idx, loop$current_file_line, loop$current_file_path, loop$acc) {
   while (true) {
     let lines = loop$lines;
     let display_idx = loop$display_idx;
     let current_file_line = loop$current_file_line;
+    let current_file_path = loop$current_file_path;
     let acc = loop$acc;
     if (lines instanceof Empty) {
       return acc;
     } else {
       let line = lines.head;
       let rest = lines.tail;
-      let $ = starts_with(line, "@@");
+      let $ = starts_with(line, "== ");
       if ($) {
-        let new_line = parse_hunk_new_start(line);
-        let entry = new DiffLineEntry(display_idx, 0, line);
+        let _block;
+        let _pipe = drop_start(line, 3);
+        _block = trim(_pipe);
+        let new_path = _block;
+        let entry = new DiffLineEntry(display_idx, 0, new_path, line);
         loop$lines = rest;
         loop$display_idx = display_idx + 1;
-        loop$current_file_line = new_line;
+        loop$current_file_line = 0;
+        loop$current_file_path = new_path;
         loop$acc = prepend(entry, acc);
       } else {
-        let $1 = starts_with(line, "-");
+        let $1 = starts_with(line, "@@");
         if ($1) {
-          let entry = new DiffLineEntry(display_idx, current_file_line, line);
+          let new_line = parse_hunk_new_start(line);
+          let entry = new DiffLineEntry(display_idx, 0, current_file_path, line);
           loop$lines = rest;
           loop$display_idx = display_idx + 1;
-          loop$current_file_line = current_file_line;
+          loop$current_file_line = new_line;
+          loop$current_file_path = current_file_path;
           loop$acc = prepend(entry, acc);
         } else {
-          let entry = new DiffLineEntry(display_idx, current_file_line, line);
-          loop$lines = rest;
-          loop$display_idx = display_idx + 1;
-          loop$current_file_line = current_file_line + 1;
-          loop$acc = prepend(entry, acc);
+          let $2 = starts_with(line, "-");
+          if ($2) {
+            let entry = new DiffLineEntry(display_idx, current_file_line, current_file_path, line);
+            loop$lines = rest;
+            loop$display_idx = display_idx + 1;
+            loop$current_file_line = current_file_line;
+            loop$current_file_path = current_file_path;
+            loop$acc = prepend(entry, acc);
+          } else {
+            let entry = new DiffLineEntry(display_idx, current_file_line, current_file_path, line);
+            loop$lines = rest;
+            loop$display_idx = display_idx + 1;
+            loop$current_file_line = current_file_line + 1;
+            loop$current_file_path = current_file_path;
+            loop$acc = prepend(entry, acc);
+          }
         }
       }
     }
   }
 }
-function index_with_file_lines(lines) {
-  let _pipe = index_file_lines_acc(lines, 1, 0, toList([]));
+function index_with_file_lines(lines, chunk_file_path) {
+  let _block;
+  let $ = contains_string(chunk_file_path, " (+");
+  if ($) {
+    _block = "";
+  } else {
+    _block = chunk_file_path;
+  }
+  let initial_path = _block;
+  let _pipe = index_file_lines_acc(lines, 1, 0, initial_path, toList([]));
   return reverse(_pipe);
 }
 function line_colors(line) {
@@ -15761,11 +18918,13 @@ function line_colors(line) {
     return ["#fee2e2", "#ef4444"];
   } else if (line.startsWith("@@")) {
     return ["#ede9fe", "#8b5cf6"];
+  } else if (line.startsWith("== ")) {
+    return [indigo_1, indigo_4];
   } else {
     return ["transparent", "transparent"];
   }
 }
-function diff_line_row(display_line, file_line, line, language) {
+function diff_line_row(display_line, file_line, line, grammar32) {
   let $ = line_colors(line);
   let bg;
   let border_color;
@@ -15805,7 +18964,7 @@ function diff_line_row(display_line, file_line, line, language) {
   let code2;
   marker = $1[0];
   code2 = $1[1];
-  let is_hunk_header = starts_with(line, "@@");
+  let is_hunk_header = starts_with(line, "@@") || starts_with(line, "== ");
   return div(toList([
     on_click(new StartComment(display_line, file_line)),
     styles(toList([
@@ -15837,15 +18996,28 @@ function diff_line_row(display_line, file_line, line, language) {
     ]), toList([text3(gutter_text)])),
     (() => {
       if (is_hunk_header) {
+        let is_file_sep = starts_with(line, "== ");
         return span(toList([
-          styles(toList([
-            raw14("0 " + size_3),
-            pre2,
-            raw7("1")
-          ]))
+          styles(flatten(toList([
+            toList([
+              raw14("0 " + size_3),
+              pre2,
+              raw7("1")
+            ]),
+            (() => {
+              if (is_file_sep) {
+                return toList([
+                  raw9("600"),
+                  raw5(indigo_9)
+                ]);
+              } else {
+                return toList([]);
+              }
+            })()
+          ])))
         ]), toList([text3(line)]));
       } else {
-        let highlighted_html = highlight_line(code2, language);
+        let highlighted = highlight_line(code2, grammar32);
         return span(toList([
           styles(toList([
             raw14("0 " + size_3),
@@ -15855,7 +19027,7 @@ function diff_line_row(display_line, file_line, line, language) {
           ]))
         ]), toList([
           span(toList([]), toList([text3(marker)])),
-          unsafe_raw_html("", "span", toList([]), highlighted_html)
+          span(toList([]), highlighted)
         ]));
       }
     })()
@@ -15882,7 +19054,7 @@ function comment_input(text4, posting_comment) {
     _block = "Comment";
   }
   let button_text = _block;
-  return div(toList([
+  return div2(toList([
     styles(toList([
       raw14(size_3 + " " + size_3 + " " + size_3 + " 4.25rem"),
       raw(yellow_0),
@@ -15892,67 +19064,76 @@ function comment_input(text4, posting_comment) {
       flex_start
     ]))
   ]), toList([
-    textarea(toList([
-      styles(toList([
-        raw7("1"),
-        raw21("3rem"),
-        raw14(size_2),
-        raw2("1px solid " + gray_4),
-        raw4(radius_2),
-        ["font-family", font_system_ui],
-        raw8(font_size_1),
-        vertical,
-        none6
-      ])),
-      placeholder("Add a comment..."),
-      property2("value", string3(text4)),
-      on_input((var0) => {
-        return new UpdateCommentText(var0);
-      })
-    ]), ""),
-    div(toList([
-      styles(toList([flex, column, raw10("0.375rem")]))
-    ]), toList([
-      button(toList([
-        on_click(new SubmitComment),
-        disabled(posting_comment),
+    [
+      "comment-textarea",
+      textarea(toList([
         styles(toList([
-          raw14("0.375rem " + size_3),
-          raw((() => {
-            if (posting_comment) {
-              return gray_5;
-            } else {
-              return indigo_7;
-            }
-          })()),
-          raw5("white"),
-          none4,
+          raw7("1"),
+          raw21("3rem"),
+          raw14(size_2),
+          raw2("1px solid " + gray_4),
           raw4(radius_2),
-          raw6((() => {
-            if (posting_comment) {
-              return "not-allowed";
-            } else {
-              return "pointer";
-            }
-          })()),
+          ["font-family", font_system_ui],
           raw8(font_size_1),
-          raw9("500")
-        ]))
-      ]), toList([text3(button_text)])),
-      button(toList([
-        on_click(new CancelComment),
+          vertical,
+          none6
+        ])),
+        placeholder("Add a comment..."),
+        on_input((var0) => {
+          return new UpdateCommentText(var0);
+        })
+      ]), text4)
+    ],
+    [
+      "comment-buttons",
+      div(toList([
         styles(toList([
-          raw14("0.375rem " + size_3),
-          raw(gray_3),
-          raw5(gray_8),
-          none4,
-          raw4(radius_2),
-          pointer,
-          raw8(font_size_1),
-          raw9("500")
+          flex,
+          column,
+          raw10("0.375rem")
         ]))
-      ]), toList([text3("Cancel")]))
-    ]))
+      ]), toList([
+        button(toList([
+          on_click(new SubmitComment),
+          disabled(posting_comment),
+          styles(toList([
+            raw14("0.375rem " + size_3),
+            raw((() => {
+              if (posting_comment) {
+                return gray_5;
+              } else {
+                return indigo_7;
+              }
+            })()),
+            raw5("white"),
+            none4,
+            raw4(radius_2),
+            raw6((() => {
+              if (posting_comment) {
+                return "not-allowed";
+              } else {
+                return "pointer";
+              }
+            })()),
+            raw8(font_size_1),
+            raw9("500")
+          ]))
+        ]), toList([text3(button_text)])),
+        button(toList([
+          on_click(new CancelComment),
+          styles(toList([
+            raw14("0.375rem " + size_3),
+            raw(gray_3),
+            raw5(gray_8),
+            none4,
+            raw4(radius_2),
+            pointer,
+            raw8(font_size_1),
+            raw9("500")
+          ]))
+        ]), toList([text3("Cancel")]))
+      ]))
+    ]
   ]));
 }
 function reply_form(reply_text, is_posting) {
@@ -15984,11 +19165,10 @@ function reply_form(reply_text, is_posting) {
         none6
       ])),
       placeholder("Write a reply..."),
-      property2("value", string3(reply_text)),
       on_input((var0) => {
         return new UpdateCommentText(var0);
       })
-    ]), ""),
+    ]), reply_text),
     div(toList([
       styles(toList([flex, column, raw10("0.375rem")]))
     ]), toList([
@@ -16147,11 +19327,11 @@ function github_comment_display(comment, commenting) {
     })()
   ]));
 }
-function diff_view(chunk, commenting, chunk_comments, chunk_github_comments) {
+function diff_view(chunk, commenting, chunk_comments, github_comments) {
   let lines = split2(chunk.diff_content, `
 `);
-  let file_indexed_lines = index_with_file_lines(lines);
-  let language = detect_language(chunk.file_path);
+  let file_indexed_lines = index_with_file_lines(lines, chunk.file_path);
+  let grammar32 = detect_grammar(chunk.file_path);
   let _block;
   if (commenting instanceof NotCommenting) {
     _block = new None;
@@ -16189,6 +19369,9 @@ function diff_view(chunk, commenting, chunk_comments, chunk_github_comments) {
     _block$2 = false;
   }
   let is_posting = _block$2;
+  let line_key = (n) => {
+    return "line-" + to_string(n);
+  };
   return div(toList([
     styles(toList([
       ["overflow-x", "auto"],
@@ -16197,27 +19380,39 @@ function diff_view(chunk, commenting, chunk_comments, chunk_github_comments) {
       raw19("1.5")
     ]))
   ]), toList([
-    div(toList([styles(toList([["min-width", "fit-content"]]))]), flat_map(file_indexed_lines, (entry) => {
+    div2(toList([styles(toList([["min-width", "fit-content"]]))]), flat_map(file_indexed_lines, (entry) => {
+      let dl = entry.display_line;
       let line_comments = filter(chunk_comments, (c) => {
-        return c.line_number === entry.display_line;
+        return c.line_number === dl;
       });
-      let line_github_comments = filter(chunk_github_comments, (c) => {
-        return c.line === entry.file_line;
+      let line_github_comments = filter(github_comments, (c) => {
+        return c.path === entry.file_path && c.path !== "" && c.line === entry.file_line;
       });
-      let is_commenting = isEqual(commenting_display_line, new Some(entry.display_line));
+      let is_commenting = isEqual(commenting_display_line, new Some(dl));
       return flatten(toList([
         toList([
-          diff_line_row(entry.display_line, entry.file_line, entry.text, language)
+          [
+            line_key(dl),
+            diff_line_row(dl, entry.file_line, entry.text, grammar32)
+          ]
         ]),
-        map2(line_github_comments, (c) => {
-          return github_comment_display(c, commenting);
+        index_map(line_github_comments, (c, i) => {
+          return [
+            line_key(dl) + "-gc-" + to_string(i),
+            github_comment_display(c, commenting)
+          ];
         }),
-        map2(line_comments, (c) => {
-          return comment_display(c);
+        index_map(line_comments, (c, i) => {
+          return [
+            line_key(dl) + "-lc-" + to_string(i),
+            comment_display(c)
+          ];
         }),
         (() => {
           if (is_commenting) {
-            return toList([comment_input(comment_text, is_posting)]);
+            return toList([
+              ["comment-input", comment_input(comment_text, is_posting)]
+            ]);
           } else {
             return toList([]);
           }
@@ -16229,9 +19424,6 @@ function diff_view(chunk, commenting, chunk_comments, chunk_github_comments) {
 function chunk_panel(chunk, pr_url, commenting, comments, github_comments) {
   let chunk_comments = filter(comments, (c) => {
     return c.chunk_index === chunk.index;
-  });
-  let chunk_github_comments = filter(github_comments, (c) => {
-    return contains_string(chunk.file_path, c.path) && c.path !== "";
   });
   return div(toList([
     styles(toList([
@@ -16299,7 +19491,7 @@ function chunk_panel(chunk, pr_url, commenting, comments, github_comments) {
         span(toList([class$("material-symbols-outlined")]), toList([text3("open_in_new")]))
       ]))
     ])),
-    diff_view(chunk, commenting, chunk_comments, chunk_github_comments)
+    diff_view(chunk, commenting, chunk_comments, github_comments)
   ]));
 }
 function general_comments_section(github_comments) {
@@ -16443,11 +19635,10 @@ function review_submission_section(review) {
         raw12(size_3)
       ])),
       placeholder("Leave a comment with your review (optional for approvals)..."),
-      property2("value", string3(review_body)),
       on_input((var0) => {
         return new SetReviewBody(var0);
       })
-    ]), ""),
+    ]), review_body),
     div(toList([
       styles(toList([flex, raw10(size_2), wrap]))
     ]), toList([
@@ -16457,7 +19648,7 @@ function review_submission_section(review) {
     ]))
   ]));
 }
-function analysis_view(analysis, pr_url, model) {
+function analysis_view(analysis, pr_url, visible_comments, model) {
   let chunk_count = length(analysis.chunks);
   let current = model.current_chunk;
   let _block;
@@ -16469,7 +19660,7 @@ function analysis_view(analysis, pr_url, model) {
     (() => {
       if (maybe_chunk instanceof Ok) {
         let chunk = maybe_chunk[0];
-        return chunk_panel(chunk, pr_url, model.commenting, model.comments, model.github_comments);
+        return chunk_panel(chunk, pr_url, model.commenting, model.comments, visible_comments);
       } else {
         return p(toList([]), toList([text3("No chunks available.")]));
       }
@@ -16520,6 +19711,7 @@ function view3(model) {
   let $ = model.selected_pr;
   if ($ instanceof Some) {
     let detail = $[0];
+    let visible_comments = filter_comments(model.github_comments, model.hide_bot_comments);
     return div(toList([
       styles(toList([
         raw13("1100px"),
@@ -16540,7 +19732,7 @@ function view3(model) {
           return text3("");
         }
       })(),
-      general_comments_section(model.github_comments),
+      general_comments_section(visible_comments),
       (() => {
         let $1 = model.analysis_state;
         if ($1 instanceof NotAnalyzed) {
@@ -16555,7 +19747,7 @@ function view3(model) {
           return loading_indicator2(heartbeats);
         } else {
           let analysis = $1.result;
-          return analysis_view(analysis, detail.url, model);
+          return analysis_view(analysis, detail.url, visible_comments, model);
         }
       })()
     ]));
@@ -16577,7 +19769,7 @@ function view3(model) {
 }
 
 // build/dev/javascript/client/client.mjs
-var FILEPATH7 = "src/client.gleam";
+var FILEPATH8 = "src/client.gleam";
 
 class DashboardRoute extends CustomType {
 }
@@ -16608,7 +19800,7 @@ function format_error(err) {
   }
 }
 function reset_pr_state(model) {
-  return new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, new NotAnalyzed, 0, toList([]), new NotCommenting, toList([]), model.description_open, new ReviewIdle(""));
+  return new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, new NotAnalyzed, 0, toList([]), new NotCommenting, toList([]), model.description_open, new ReviewIdle(""), model.hide_bot_comments);
 }
 function parse_route(uri) {
   let path = uri.path;
@@ -16679,7 +19871,7 @@ function handle_submit_comment(model) {
         }
         let file_path = _block;
         return [
-          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, prepend(comment, model.comments), new PostingComment(display_line, file_line, text4), model.github_comments, model.description_open, model.review),
+          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, prepend(comment, model.comments), new PostingComment(display_line, file_line, text4), model.github_comments, model.description_open, model.review, model.hide_bot_comments),
           post_github_comment(model.active_repo, detail.number, text4, file_path, file_line)
         ];
       } else {
@@ -16690,7 +19882,7 @@ function handle_submit_comment(model) {
       let text4 = $.text;
       let comment = new LineComment(model.current_chunk, display_line, text4);
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, prepend(comment, model.comments), new NotCommenting, model.github_comments, model.description_open, model.review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, prepend(comment, model.comments), new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
         none()
       ];
     } else {
@@ -16708,14 +19900,14 @@ function handle_submit_review(model, event4) {
       let detail = $[0];
       let body = $1.body;
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new SubmittingReview(body)),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new SubmittingReview(body), model.hide_bot_comments),
         submit_review(model.active_repo, detail.number, event4, body)
       ];
     } else {
       let detail = $[0];
       let body = $1.body;
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new SubmittingReview(body)),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new SubmittingReview(body), model.hide_bot_comments),
         submit_review(model.active_repo, detail.number, event4, body)
       ];
     }
@@ -16732,7 +19924,7 @@ function handle_url_changed(model, uri) {
     } else {
       let new_model = reset_pr_state(model);
       return [
-        new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new None, new_model.loading, new Dashboard, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review),
+        new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new None, new_model.loading, new Dashboard, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments),
         none()
       ];
     }
@@ -16742,7 +19934,7 @@ function handle_url_changed(model, uri) {
     if ($1 instanceof Dashboard) {
       let new_model = reset_pr_state(model);
       return [
-        new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review),
+        new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments),
         fetch_pr_detail(model.active_repo, number)
       ];
     } else {
@@ -16754,14 +19946,14 @@ function handle_url_changed(model, uri) {
         } else {
           let new_model = reset_pr_state(model);
           return [
-            new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review),
+            new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments),
             fetch_pr_detail(model.active_repo, number)
           ];
         }
       } else {
         let new_model = reset_pr_state(model);
         return [
-          new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review),
+          new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments),
           fetch_pr_detail(model.active_repo, number)
         ];
       }
@@ -16774,13 +19966,13 @@ function update2(model, msg) {
     if ($ instanceof Ok) {
       let groups = $[0];
       return [
-        new Model(model.repos, model.active_repo, new Some(groups), model.selected_pr, false, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
+        new Model(model.repos, model.active_repo, new Some(groups), model.selected_pr, false, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
         none()
       ];
     } else {
       let err = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
         none()
       ];
     }
@@ -16789,7 +19981,7 @@ function update2(model, msg) {
     if ($ instanceof Ok) {
       let detail = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, new Some(detail), true, model.view, new None, new Analyzing(0), model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
+        new Model(model.repos, model.active_repo, model.pr_groups, new Some(detail), true, model.view, new None, new Analyzing(0), model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
         batch(toList([
           fetch_github_comments(model.active_repo, detail.number),
           analyze_pr_stream(model.active_repo, detail.number)
@@ -16798,7 +19990,7 @@ function update2(model, msg) {
     } else {
       let err = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
         none()
       ];
     }
@@ -16806,7 +19998,7 @@ function update2(model, msg) {
     let number = msg[0];
     let new_model = reset_pr_state(model);
     return [
-      new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review),
+      new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments),
       batch(toList([
         push_url("/pr/" + to_string(number)),
         fetch_pr_detail(model.active_repo, number)
@@ -16815,18 +20007,18 @@ function update2(model, msg) {
   } else if (msg instanceof SetRepo) {
     let repo = msg[0];
     return [
-      new Model(model.repos, repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
+      new Model(model.repos, repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
       none()
     ];
   } else if (msg instanceof BackToDashboard) {
     let new_model = reset_pr_state(model);
     return [
-      new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new None, new_model.loading, new Dashboard, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review),
+      new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new None, new_model.loading, new Dashboard, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments),
       push_url("/")
     ];
   } else if (msg instanceof FetchPrs) {
     return [
-      new Model(model.repos, model.active_repo, new None, model.selected_pr, true, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
+      new Model(model.repos, model.active_repo, new None, model.selected_pr, true, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
       fetch_prs(model.active_repo)
     ];
   } else if (msg instanceof AnalyzePr) {
@@ -16834,7 +20026,7 @@ function update2(model, msg) {
     if ($ instanceof Some) {
       let detail = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, true, model.view, new None, new Analyzing(0), model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, true, model.view, new None, new Analyzing(0), model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
         analyze_pr_stream(model.active_repo, detail.number)
       ];
     } else {
@@ -16845,13 +20037,13 @@ function update2(model, msg) {
     if ($ instanceof Ok) {
       let analysis = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new None, new Analyzed(analysis), 0, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new None, new Analyzed(analysis), 0, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
         none()
       ];
     } else {
       let err = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
         none()
       ];
     }
@@ -16861,12 +20053,12 @@ function update2(model, msg) {
     if ($ instanceof Ok) {
       let analysis = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new None, new Analyzed(analysis), 0, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new None, new Analyzed(analysis), 0, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
         none()
       ];
     } else {
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some("Failed to parse analysis response"), new NotAnalyzed, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some("Failed to parse analysis response"), new NotAnalyzed, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
         none()
       ];
     }
@@ -16884,7 +20076,7 @@ function update2(model, msg) {
     }
     let error_msg = _block;
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some("Analysis failed: " + error_msg), new NotAnalyzed, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some("Analysis failed: " + error_msg), new NotAnalyzed, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
       none()
     ];
   } else if (msg instanceof SseHeartbeat) {
@@ -16892,7 +20084,7 @@ function update2(model, msg) {
     if ($ instanceof Analyzing) {
       let n = $.heartbeats;
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, new Analyzing(n + 1), model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, new Analyzing(n + 1), model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
         none()
       ];
     } else {
@@ -16901,7 +20093,7 @@ function update2(model, msg) {
   } else if (msg instanceof SseConnectionError) {
     let msg$1 = msg[0];
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some("Connection error: " + msg$1), new NotAnalyzed, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some("Connection error: " + msg$1), new NotAnalyzed, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
       none()
     ];
   } else if (msg instanceof NextChunk) {
@@ -16915,9 +20107,9 @@ function update2(model, msg) {
       let analysis = $.result;
       _block = length(analysis.chunks) - 1;
     }
-    let max2 = _block;
+    let max3 = _block;
     let _block$1;
-    let $1 = model.current_chunk < max2;
+    let $1 = model.current_chunk < max3;
     if ($1) {
       _block$1 = model.current_chunk + 1;
     } else {
@@ -16925,7 +20117,7 @@ function update2(model, msg) {
     }
     let next = _block$1;
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, next, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, next, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
       none()
     ];
   } else if (msg instanceof PrevChunk) {
@@ -16938,25 +20130,25 @@ function update2(model, msg) {
     }
     let prev = _block;
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, prev, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, prev, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
       none()
     ];
   } else if (msg instanceof GoToChunk) {
     let n = msg[0];
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, n, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, n, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
       none()
     ];
   } else if (msg instanceof StartComment) {
     let display_line = msg[0];
     let file_line = msg[1];
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new Commenting(display_line, file_line, ""), model.github_comments, model.description_open, model.review),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new Commenting(display_line, file_line, ""), model.github_comments, model.description_open, model.review, model.hide_bot_comments),
       none()
     ];
   } else if (msg instanceof CancelComment) {
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
       none()
     ];
   } else if (msg instanceof UpdateCommentText) {
@@ -16968,26 +20160,26 @@ function update2(model, msg) {
       let dl = $.display_line;
       let fl = $.file_line;
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new Commenting(dl, fl, text4), model.github_comments, model.description_open, model.review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new Commenting(dl, fl, text4), model.github_comments, model.description_open, model.review, model.hide_bot_comments),
         none()
       ];
     } else if ($ instanceof PostingComment) {
       let dl = $.display_line;
       let fl = $.file_line;
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new PostingComment(dl, fl, text4), model.github_comments, model.description_open, model.review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new PostingComment(dl, fl, text4), model.github_comments, model.description_open, model.review, model.hide_bot_comments),
         none()
       ];
     } else if ($ instanceof Replying) {
       let id2 = $.comment_id;
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new Replying(id2, text4), model.github_comments, model.description_open, model.review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new Replying(id2, text4), model.github_comments, model.description_open, model.review, model.hide_bot_comments),
         none()
       ];
     } else {
       let id2 = $.comment_id;
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new PostingReply(id2, text4), model.github_comments, model.description_open, model.review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new PostingReply(id2, text4), model.github_comments, model.description_open, model.review, model.hide_bot_comments),
         none()
       ];
     }
@@ -16998,13 +20190,13 @@ function update2(model, msg) {
     if ($ instanceof Ok) {
       let comments = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, comments, model.description_open, model.review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, comments, model.description_open, model.review, model.hide_bot_comments),
         none()
       ];
     } else {
       let err = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
         none()
       ];
     }
@@ -17015,26 +20207,26 @@ function update2(model, msg) {
       if ($1 instanceof Some) {
         let detail = $1[0];
         return [
-          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review),
+          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
           fetch_github_comments(model.active_repo, detail.number)
         ];
       } else {
         return [
-          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review),
+          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
           none()
         ];
       }
     } else {
       let err = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
         none()
       ];
     }
   } else if (msg instanceof StartReply) {
     let comment_id = msg[0];
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new Replying(comment_id, ""), model.github_comments, model.description_open, model.review),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new Replying(comment_id, ""), model.github_comments, model.description_open, model.review, model.hide_bot_comments),
       none()
     ];
   } else if (msg instanceof SubmitReply) {
@@ -17045,7 +20237,7 @@ function update2(model, msg) {
       let comment_id = $.comment_id;
       let text4 = $.text;
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new PostingReply(comment_id, text4), model.github_comments, model.description_open, model.review),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new PostingReply(comment_id, text4), model.github_comments, model.description_open, model.review, model.hide_bot_comments),
         reply_to_comment(model.active_repo, detail.number, comment_id, text4)
       ];
     } else {
@@ -17056,7 +20248,12 @@ function update2(model, msg) {
     return handle_url_changed(model, uri);
   } else if (msg instanceof ToggleDescription) {
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, !model.description_open, model.review),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, !model.description_open, model.review, model.hide_bot_comments),
+      none()
+    ];
+  } else if (msg instanceof ToggleBotComments) {
+    return [
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, !model.hide_bot_comments),
       none()
     ];
   } else if (msg instanceof SubmitReview) {
@@ -17065,7 +20262,7 @@ function update2(model, msg) {
   } else if (msg instanceof SetReviewBody) {
     let text4 = msg[0];
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new ReviewIdle(text4)),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new ReviewIdle(text4), model.hide_bot_comments),
       none()
     ];
   } else if (msg instanceof ReviewSubmitted) {
@@ -17075,12 +20272,12 @@ function update2(model, msg) {
       if ($1 instanceof Some) {
         let detail = $1[0];
         return [
-          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new ReviewIdle("")),
+          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new ReviewIdle(""), model.hide_bot_comments),
           fetch_github_comments(model.active_repo, detail.number)
         ];
       } else {
         return [
-          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new ReviewIdle("")),
+          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new ReviewIdle(""), model.hide_bot_comments),
           none()
         ];
       }
@@ -17096,7 +20293,7 @@ function update2(model, msg) {
             let body = $1.body;
             return body;
           }
-        })())),
+        })()), model.hide_bot_comments),
         none()
       ];
     }
@@ -17142,7 +20339,7 @@ function init2(_) {
   initial_loading = $[1];
   initial_effect = $[2];
   return [
-    new Model(toList([default_repo]), default_repo, new None, new None, initial_loading, initial_view, new None, new NotAnalyzed, 0, toList([]), new NotCommenting, toList([]), false, new ReviewIdle("")),
+    new Model(toList([default_repo]), default_repo, new None, new None, initial_loading, initial_view, new None, new NotAnalyzed, 0, toList([]), new NotCommenting, toList([]), false, new ReviewIdle(""), false),
     batch(toList([
       init((var0) => {
         return new UrlChanged(var0);
@@ -17156,12 +20353,12 @@ function main() {
   let app = application(init2, update2, view4);
   let $ = start4(app, "#app", undefined);
   if (!($ instanceof Ok)) {
-    throw makeError("let_assert", FILEPATH7, "client", 33, "main", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH8, "client", 34, "main", "Pattern match failed, no pattern matched the value.", {
       value: $,
-      start: 1079,
-      end: 1128,
-      pattern_start: 1090,
-      pattern_end: 1095
+      start: 1100,
+      end: 1149,
+      pattern_start: 1111,
+      pattern_end: 1116
     });
   }
   return;

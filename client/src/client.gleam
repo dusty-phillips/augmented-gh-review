@@ -7,7 +7,8 @@ import client/model.{
   RefreshPrs, Replying, ReviewIdle, ReviewSubmitted, SelectPr, SetRepo,
   SetReviewBody, SseAnalysisComplete, SseAnalysisError, SseConnectionError,
   SseHeartbeat, StartComment, StartReply, SubmitComment, SubmitReply,
-  SubmitReview, SubmittingReview, ToggleDescription, UpdateCommentText,
+  SubmitReview, SubmittingReview, ToggleBotComments, ToggleDescription,
+  UpdateCommentText,
   UrlChanged,
 }
 import client/views/dashboard
@@ -99,6 +100,7 @@ fn init(_flags: Nil) -> #(Model, effect.Effect(Msg)) {
       github_comments: [],
       description_open: False,
       review: ReviewIdle(body: ""),
+      hide_bot_comments: False,
     ),
     effect.batch([
       modem.init(UrlChanged),
@@ -452,6 +454,11 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 
     ToggleDescription -> #(
       Model(..model, description_open: !model.description_open),
+      effect.none(),
+    )
+
+    ToggleBotComments -> #(
+      Model(..model, hide_bot_comments: !model.hide_bot_comments),
       effect.none(),
     )
 

@@ -1,4 +1,5 @@
 import client/model.{type Model, type Msg, FetchPrs, SelectPr, SetRepo}
+import client/stack_tree.{type FlatEntry, FlatEntry}
 import gleam/int
 import gleam/list
 import gleam/option
@@ -204,12 +205,19 @@ fn pr_sections(groups: option.Option(PrGroups)) -> Element(Msg) {
         ],
         [html.text("No pull requests found. Click Fetch PRs to load.")],
       )
-    option.Some(g) ->
+    option.Some(g) -> {
+      let prod_number = case g.production_pr {
+        option.Some(prod) -> prod.number
+        option.None -> -1
+      }
+      let all_open =
+        list.filter(g.all_open, fn(p) { p.number != prod_number })
       html.div([], [
         pr_section("Created by Me", g.created_by_me),
         pr_section("My Review Requested", g.review_requested),
-        pr_section("All Open PRs", g.all_open),
+        pr_section("All Open PRs", all_open),
       ])
+    }
   }
 }
 
@@ -222,7 +230,7 @@ fn pr_section(title: String, prs: List(PullRequest)) -> Element(Msg) {
       ]),
     ],
     [
-      section_header(title, count),
+      section_header(title, count, prs),
       case count {
         0 -> empty_section_message()
         _ -> pr_table(prs)
@@ -231,7 +239,55 @@ fn pr_section(title: String, prs: List(PullRequest)) -> Element(Msg) {
   )
 }
 
-fn section_header(title: String, count: Int) -> Element(Msg) {
+fn count_by_state(prs: List(PullRequest)) -> List(#(String, String, String, Int)) {
+  let #(approved, changes, review, draft, no_reviews) =
+    list.fold(prs, #(0, 0, 0, 0, 0), fn(acc, p) {
+      let #(a, c, r, d, n) = acc
+      case p.draft, p.review_decision {
+        True, _ -> #(a, c, r, d + 1, n)
+        _, "APPROVED" -> #(a + 1, c, r, d, n)
+        _, "CHANGES_REQUESTED" -> #(a, c + 1, r, d, n)
+        _, "REVIEW_REQUIRED" -> #(a, c, r + 1, d, n)
+        _, _ -> #(a, c, r, d, n + 1)
+      }
+    })
+  [
+    #(colors.green_2, colors.green_10, "Approved", approved),
+    #(colors.red_2, colors.red_10, "Changes", changes),
+    #(colors.yellow_2, colors.yellow_10, "Review", review),
+    #(colors.blue_2, colors.blue_9, "Draft", draft),
+    #(colors.gray_1, colors.gray_6, "No reviews", no_reviews),
+  ]
+  |> list.filter(fn(entry) { entry.3 > 0 })
+}
+
+fn state_count_badge(
+  bg: String,
+  fg: String,
+  label: String,
+  count: Int,
+) -> Element(Msg) {
+  html.span(
+    [
+      attribute.styles([
+        padding.raw("0.15rem " <> sizes.size_2),
+        border_radius.raw("10px"),
+        font_size.raw(fonts.font_size_0),
+        font_weight.raw("500"),
+        white_space.nowrap,
+        background.raw(bg),
+        color.raw(fg),
+      ]),
+    ],
+    [html.text(label <> " " <> int.to_string(count))],
+  )
+}
+
+fn section_header(
+  title: String,
+  count: Int,
+  prs: List(PullRequest),
+) -> Element(Msg) {
   html.div(
     [
       attribute.styles([
@@ -239,33 +295,39 @@ fn section_header(title: String, count: Int) -> Element(Msg) {
         align_items.center,
         gap.raw(sizes.size_2),
         margin_bottom.raw(sizes.size_3),
+        #("flex-wrap", "wrap"),
       ]),
     ],
-    [
-      html.h2(
-        [
-          attribute.styles([
-            color.raw(colors.indigo_12),
-            font_size.raw(fonts.font_size_2),
-            margin.raw("0"),
-          ]),
-        ],
-        [html.text(title)],
-      ),
-      html.span(
-        [
-          attribute.styles([
-            background.raw(colors.indigo_6),
-            color.raw("white"),
-            padding.raw("0.15rem " <> sizes.size_2),
-            border_radius.raw("10px"),
-            font_size.raw(fonts.font_size_0),
-            font_weight.raw("600"),
-          ]),
-        ],
-        [html.text(int.to_string(count))],
-      ),
-    ],
+    list.flatten([
+      [
+        html.h2(
+          [
+            attribute.styles([
+              color.raw(colors.indigo_12),
+              font_size.raw(fonts.font_size_2),
+              margin.raw("0"),
+            ]),
+          ],
+          [html.text(title)],
+        ),
+        html.span(
+          [
+            attribute.styles([
+              background.raw(colors.indigo_6),
+              color.raw("white"),
+              padding.raw("0.15rem " <> sizes.size_2),
+              border_radius.raw("10px"),
+              font_size.raw(fonts.font_size_0),
+              font_weight.raw("600"),
+            ]),
+          ],
+          [html.text(int.to_string(count))],
+        ),
+      ],
+      list.map(count_by_state(prs), fn(entry) {
+        state_count_badge(entry.0, entry.1, entry.2, entry.3)
+      }),
+    ]),
   )
 }
 
@@ -286,6 +348,7 @@ fn empty_section_message() -> Element(Msg) {
 }
 
 fn pr_table(prs: List(PullRequest)) -> Element(Msg) {
+  let entries = stack_tree.build_and_flatten(prs)
   html.table(
     [
       attribute.styles([
@@ -311,7 +374,7 @@ fn pr_table(prs: List(PullRequest)) -> Element(Msg) {
           ],
         ),
       ]),
-      html.tbody([], list.map(prs, pr_row)),
+      html.tbody([], list.map(entries, pr_row)),
     ],
   )
 }
@@ -329,13 +392,19 @@ fn header_cell(label: String) -> Element(Msg) {
   )
 }
 
-fn pr_row(pull_request: PullRequest) -> Element(Msg) {
+fn pr_row(entry: FlatEntry) -> Element(Msg) {
+  let FlatEntry(pull_request, depth, is_last, in_stack) = entry
+  let bg = case in_stack {
+    True -> background.raw("rgba(99, 102, 241, 0.04)")
+    False -> background.raw("transparent")
+  }
   html.tr(
     [
       event.on_click(SelectPr(pull_request.number)),
       attribute.styles([
         cursor.pointer,
         border_bottom.raw("1px solid " <> colors.gray_2),
+        bg,
       ]),
     ],
     [
@@ -358,15 +427,29 @@ fn pr_row(pull_request: PullRequest) -> Element(Msg) {
           ),
         ],
       ),
-      html.td(
-        [
-          attribute.styles([
-            padding.raw(sizes.size_3 <> " " <> sizes.size_4),
-            font_weight.raw("500"),
+      {
+        let title_pad_left = case depth {
+          0 -> sizes.size_4
+          d ->
+            "calc(" <> sizes.size_4 <> " + " <> int.to_string(d * 20) <> "px)"
+        }
+        html.td(
+          [
+            attribute.styles([
+              padding.raw(
+                sizes.size_3 <> " " <> sizes.size_4 <> " " <> sizes.size_3
+                <> " " <> title_pad_left,
+              ),
+              font_weight.raw("500"),
+              #("position", "relative"),
+              #("overflow", "visible"),
+            ]),
+          ],
+          list.append(tree_connectors(depth, is_last), [
+            html.text(pull_request.title),
           ]),
-        ],
-        [html.text(pull_request.title)],
-      ),
+        )
+      },
       html.td(
         [attribute.styles([padding.raw(sizes.size_3 <> " " <> sizes.size_4)])],
         [
@@ -399,12 +482,64 @@ fn pr_row(pull_request: PullRequest) -> Element(Msg) {
           attribute.styles([
             padding.raw(sizes.size_3 <> " " <> sizes.size_4),
             #("min-width", "8rem"),
+            display.flex,
+            align_items.center,
+            gap.raw(sizes.size_2),
+            #("flex-wrap", "wrap"),
           ]),
         ],
-        [review_badge(pull_request.review_decision, pull_request.draft)],
+        [
+          review_badge(pull_request.review_decision, pull_request.draft),
+          ..list.map(pull_request.feedback, feedback_badge)
+        ],
       ),
     ],
   )
+}
+
+fn tree_connectors(depth: Int, is_last: Bool) -> List(Element(Msg)) {
+  case depth {
+    0 -> []
+    _ -> {
+      let left =
+        "calc(" <> sizes.size_4 <> " + " <> int.to_string({ depth - 1 } * 20)
+        <> "px)"
+      let vert_bottom = case is_last {
+        True -> "50%"
+        False -> "0"
+      }
+      [
+        // Vertical line — positioned relative to the td
+        html.span(
+          [
+            attribute.styles([
+              #("position", "absolute"),
+              #("left", left),
+              #("top", "-1px"),
+              #("bottom", vert_bottom),
+              #("width", "1px"),
+              background.raw(colors.gray_4),
+            ]),
+          ],
+          [],
+        ),
+        // Horizontal connector
+        html.span(
+          [
+            attribute.styles([
+              #("position", "absolute"),
+              #("left", left),
+              #("top", "50%"),
+              #("width", "14px"),
+              #("height", "1px"),
+              background.raw(colors.gray_4),
+            ]),
+          ],
+          [],
+        ),
+      ]
+    }
+  }
 }
 
 fn review_badge(decision: String, draft: Bool) -> Element(Msg) {
@@ -428,6 +563,41 @@ fn review_badge(decision: String, draft: Bool) -> Element(Msg) {
       ]),
     ],
     [html.text(label)],
+  )
+}
+
+fn feedback_badge(fc: pr.FeedbackCount) -> Element(Msg) {
+  html.span(
+    [
+      attribute.title(
+        fc.author <> ": " <> int.to_string(fc.count) <> " comment"
+        <> case fc.count {
+          1 -> ""
+          _ -> "s"
+        },
+      ),
+      attribute.styles([
+        display.inline_flex,
+        align_items.center,
+        gap.raw("0.25rem"),
+        padding.raw("0.15rem " <> sizes.size_2),
+        border_radius.raw(borders.radius_2),
+        font_size.raw(fonts.font_size_0),
+        white_space.nowrap,
+        background.raw(colors.orange_1),
+        color.raw(colors.orange_9),
+      ]),
+    ],
+    [
+      html.span(
+        [
+          attribute.class("material-symbols-outlined"),
+          attribute.styles([font_size.raw(fonts.font_size_0)]),
+        ],
+        [html.text("chat_bubble")],
+      ),
+      html.text(fc.author <> " (" <> int.to_string(fc.count) <> ")"),
+    ],
   )
 }
 

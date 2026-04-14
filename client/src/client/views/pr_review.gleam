@@ -4,19 +4,20 @@ import client/model.{
   CancelComment, Commenting, GoToChunk, NextChunk, NotAnalyzed, NotCommenting,
   PostingComment, PostingReply, PrevChunk, Replying, ReviewIdle, SetReviewBody,
   StartComment, StartReply, SubmitComment, SubmitReply, SubmitReview,
-  SubmittingReview, ToggleDescription, UpdateCommentText,
+  SubmittingReview, ToggleBotComments, ToggleDescription, UpdateCommentText,
 }
 import gleam/int
-import gleam/json
 import gleam/list
 import gleam/option
 import gleam/string
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
+import lustre/element/keyed
 import lustre/event
 import client/markdown
 import shared/pr.{type LineComment, type PrComment, type ReviewChunk}
+import smalto/grammar as smalto_grammar
 
 import monks/align_items
 import monks/animation
@@ -64,6 +65,25 @@ import open_props/sizes
 
 const heartbeat_interval_seconds = 3
 
+fn is_bot_comment(comment: PrComment) -> Bool {
+  string.ends_with(comment.author, "[bot]")
+  || string.ends_with(comment.author, "-bot")
+  || comment.author == "github-actions"
+  || comment.author == "dependabot"
+  || comment.author == "renovate"
+  || comment.author == "codecov"
+}
+
+fn filter_comments(
+  comments: List(PrComment),
+  hide_bots: Bool,
+) -> List(PrComment) {
+  case hide_bots {
+    False -> comments
+    True -> list.filter(comments, fn(c) { !is_bot_comment(c) })
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Main view
 // ---------------------------------------------------------------------------
@@ -90,7 +110,9 @@ pub fn view(model: Model) -> Element(Msg) {
             back_button(),
           ])
       }
-    option.Some(detail) ->
+    option.Some(detail) -> {
+      let visible_comments =
+        filter_comments(model.github_comments, model.hide_bot_comments)
       html.div(
         [
           attribute.styles([
@@ -112,11 +134,11 @@ pub fn view(model: Model) -> Element(Msg) {
             option.None -> html.text("")
           },
           // General PR comments (always visible)
-          general_comments_section(model.github_comments),
+          general_comments_section(visible_comments),
           // B. Analysis content or loading
           case model.analysis_state {
             Analyzed(analysis) ->
-              analysis_view(analysis, detail.url, model)
+              analysis_view(analysis, detail.url, visible_comments, model)
             Analyzing(heartbeats) ->
               loading_indicator(heartbeats)
             NotAnalyzed ->
@@ -127,6 +149,7 @@ pub fn view(model: Model) -> Element(Msg) {
           },
         ],
       )
+    }
   }
 }
 
@@ -235,8 +258,15 @@ fn header_area(
         ],
       ),
       html.div(
-        [attribute.styles([display.flex, gap.raw(sizes.size_2)])],
         [
+          attribute.styles([
+            display.flex,
+            gap.raw(sizes.size_2),
+            align_items.center,
+          ]),
+        ],
+        [
+          bot_comments_toggle(model.hide_bot_comments),
           back_button(),
           case model.analysis_state {
             NotAnalyzed -> analyze_button()
@@ -376,6 +406,48 @@ fn analyze_button() -> Element(Msg) {
   styled_button("Analyze PR", AnalyzePr, colors.indigo_7, True)
 }
 
+fn bot_comments_toggle(hidden: Bool) -> Element(Msg) {
+  let #(bg, fg, icon) = case hidden {
+    True -> #(colors.gray_2, colors.gray_6, "smart_toy")
+    False -> #(colors.blue_2, colors.blue_8, "smart_toy")
+  }
+  html.button(
+    [
+      event.on_click(ToggleBotComments),
+      attribute.title(case hidden {
+        True -> "Show bot comments"
+        False -> "Hide bot comments"
+      }),
+      attribute.styles([
+        display.inline_flex,
+        align_items.center,
+        gap.raw("0.25rem"),
+        padding.raw("0.375rem 0.625rem"),
+        background.raw(bg),
+        color.raw(fg),
+        border.none,
+        border_radius.raw(borders.radius_2),
+        cursor.pointer,
+        font_size.raw(fonts.font_size_0),
+        font_weight.raw("500"),
+      ]),
+    ],
+    [
+      html.span(
+        [
+          attribute.class("material-symbols-outlined"),
+          attribute.styles([font_size.raw(fonts.font_size_1)]),
+        ],
+        [html.text(icon)],
+      ),
+      html.text(case hidden {
+        True -> "Bots hidden"
+        False -> "Hide bots"
+      }),
+    ],
+  )
+}
+
 fn analyze_prompt() -> Element(Msg) {
   html.div(
     [
@@ -476,6 +548,7 @@ fn loading_indicator(heartbeats: Int) -> Element(Msg) {
 fn analysis_view(
   analysis: pr.AnalysisResult,
   pr_url: String,
+  visible_comments: List(PrComment),
   model: Model,
 ) -> Element(Msg) {
   let chunk_count = list.length(analysis.chunks)
@@ -495,7 +568,7 @@ fn analysis_view(
           pr_url,
           model.commenting,
           model.comments,
-          model.github_comments,
+          visible_comments,
         )
       Error(_) ->
         html.p([], [html.text("No chunks available.")])
@@ -703,12 +776,6 @@ fn chunk_panel(
 ) -> Element(Msg) {
   let chunk_comments =
     list.filter(comments, fn(c) { c.chunk_index == chunk.index })
-  // Filter GitHub comments that match any file in this chunk
-  // (chunk.file_path may have " (+N more)" suffix for multi-file chunks)
-  let chunk_github_comments =
-    list.filter(github_comments, fn(c) {
-      string.contains(chunk.file_path, c.path) && c.path != ""
-    })
 
   html.div(
     [
@@ -803,7 +870,7 @@ fn chunk_panel(
         chunk,
         commenting,
         chunk_comments,
-        chunk_github_comments,
+        github_comments,
       ),
     ],
   )
@@ -817,13 +884,13 @@ fn diff_view(
   chunk: ReviewChunk,
   commenting: model.CommentingState,
   chunk_comments: List(LineComment),
-  chunk_github_comments: List(PrComment),
+  github_comments: List(PrComment),
 ) -> Element(Msg) {
   let lines = string.split(chunk.diff_content, "\n")
   // Parse actual file line numbers from hunk headers
-  let file_indexed_lines = index_with_file_lines(lines)
+  let file_indexed_lines = index_with_file_lines(lines, chunk.file_path)
   // Detect language once per chunk from the file path
-  let language = highlight.detect_language(chunk.file_path)
+  let grammar = highlight.detect_grammar(chunk.file_path)
 
   // Extract commenting state for this view
   let commenting_display_line = case commenting {
@@ -840,6 +907,7 @@ fn diff_view(
     _ -> False
   }
 
+  let line_key = fn(n) { "line-" <> int.to_string(n) }
   html.div(
     [
       attribute.styles([
@@ -849,46 +917,74 @@ fn diff_view(
         line_height.raw("1.5"),
       ]),
     ],
-    [html.div(
-      [attribute.styles([#("min-width", "fit-content")])],
-      list.flat_map(file_indexed_lines, fn(entry) {
+    [
+      keyed.div(
+        [attribute.styles([#("min-width", "fit-content")])],
+        list.flat_map(file_indexed_lines, fn(entry) {
+          let dl = entry.display_line
           let line_comments =
-            list.filter(chunk_comments, fn(c) {
-              c.line_number == entry.display_line
-            })
+            list.filter(chunk_comments, fn(c) { c.line_number == dl })
           let line_github_comments =
-            list.filter(chunk_github_comments, fn(c) {
-              c.line == entry.file_line
+            list.filter(github_comments, fn(c) {
+              c.path == entry.file_path
+              && c.path != ""
+              && c.line == entry.file_line
             })
-          let is_commenting =
-            commenting_display_line == option.Some(entry.display_line)
+          let is_commenting = commenting_display_line == option.Some(dl)
 
           list.flatten([
-            [diff_line_row(entry.display_line, entry.file_line, entry.text, language)],
-            list.map(line_github_comments, fn(c) { github_comment_display(c, commenting) }),
-            list.map(line_comments, fn(c) { comment_display(c) }),
+            [
+              #(
+                line_key(dl),
+                diff_line_row(dl, entry.file_line, entry.text, grammar),
+              ),
+            ],
+            list.index_map(line_github_comments, fn(c, i) {
+              #(
+                line_key(dl) <> "-gc-" <> int.to_string(i),
+                github_comment_display(c, commenting),
+              )
+            }),
+            list.index_map(line_comments, fn(c, i) {
+              #(
+                line_key(dl) <> "-lc-" <> int.to_string(i),
+                comment_display(c),
+              )
+            }),
             case is_commenting {
-              True -> [comment_input(comment_text, is_posting)]
+              True -> [#("comment-input", comment_input(comment_text, is_posting))]
               False -> []
             },
           ])
         }),
-    )],
+      ),
+    ],
   )
 }
 
-/// A diff line with both display index and actual file line number.
+/// A diff line with display index, actual file line number, and owning file path.
 type DiffLineEntry {
   DiffLineEntry(
     display_line: Int,
     file_line: Int,
+    file_path: String,
     text: String,
   )
 }
 
 /// Parse diff lines and compute actual file line numbers from @@ headers.
-fn index_with_file_lines(lines: List(String)) -> List(DiffLineEntry) {
-  index_file_lines_acc(lines, 1, 0, [])
+fn index_with_file_lines(
+  lines: List(String),
+  chunk_file_path: String,
+) -> List(DiffLineEntry) {
+  // For single-file chunks, chunk_file_path is the file.
+  // For multi-file chunks, it has " (+N more)" suffix; the actual paths
+  // come from "== path" separator lines in the diff content.
+  let initial_path = case string.contains(chunk_file_path, " (+") {
+    True -> ""
+    False -> chunk_file_path
+  }
+  index_file_lines_acc(lines, 1, 0, initial_path, [])
   |> list.reverse
 }
 
@@ -896,62 +992,87 @@ fn index_file_lines_acc(
   lines: List(String),
   display_idx: Int,
   current_file_line: Int,
+  current_file_path: String,
   acc: List(DiffLineEntry),
 ) -> List(DiffLineEntry) {
   case lines {
     [] -> acc
     [line, ..rest] -> {
-      case string.starts_with(line, "@@") {
+      case string.starts_with(line, "== ") {
         True -> {
-          // Parse new file line from @@ header: @@ -old,count +new,start @@
-          let new_line = parse_hunk_new_start(line)
+          // File separator in multi-file chunks: "== path/to/file"
+          let new_path = string.drop_start(line, 3) |> string.trim
           let entry =
             DiffLineEntry(
               display_line: display_idx,
               file_line: 0,
+              file_path: new_path,
               text: line,
             )
           index_file_lines_acc(
             rest,
             display_idx + 1,
-            new_line,
+            0,
+            new_path,
             [entry, ..acc],
           )
         }
-        False -> {
-          case string.starts_with(line, "-") {
+        False ->
+          case string.starts_with(line, "@@") {
             True -> {
-              // Removed line -- doesn't increment new file line number
+              let new_line = parse_hunk_new_start(line)
               let entry =
                 DiffLineEntry(
                   display_line: display_idx,
-                  file_line: current_file_line,
+                  file_line: 0,
+                  file_path: current_file_path,
                   text: line,
                 )
               index_file_lines_acc(
                 rest,
                 display_idx + 1,
-                current_file_line,
+                new_line,
+                current_file_path,
                 [entry, ..acc],
               )
             }
             False -> {
-              // Added line or context line -- increments new file line number
-              let entry =
-                DiffLineEntry(
-                  display_line: display_idx,
-                  file_line: current_file_line,
-                  text: line,
-                )
-              index_file_lines_acc(
-                rest,
-                display_idx + 1,
-                current_file_line + 1,
-                [entry, ..acc],
-              )
+              case string.starts_with(line, "-") {
+                True -> {
+                  let entry =
+                    DiffLineEntry(
+                      display_line: display_idx,
+                      file_line: current_file_line,
+                      file_path: current_file_path,
+                      text: line,
+                    )
+                  index_file_lines_acc(
+                    rest,
+                    display_idx + 1,
+                    current_file_line,
+                    current_file_path,
+                    [entry, ..acc],
+                  )
+                }
+                False -> {
+                  let entry =
+                    DiffLineEntry(
+                      display_line: display_idx,
+                      file_line: current_file_line,
+                      file_path: current_file_path,
+                      text: line,
+                    )
+                  index_file_lines_acc(
+                    rest,
+                    display_idx + 1,
+                    current_file_line + 1,
+                    current_file_path,
+                    [entry, ..acc],
+                  )
+                }
+              }
             }
           }
-        }
       }
     }
   }
@@ -978,7 +1099,7 @@ fn diff_line_row(
   display_line: Int,
   file_line: Int,
   line: String,
-  language: String,
+  grammar: option.Option(smalto_grammar.Grammar),
 ) -> Element(Msg) {
   let #(bg, border_color) = line_colors(line)
   // Show file line number in gutter (0 for hunk headers)
@@ -999,8 +1120,9 @@ fn diff_line_row(
       }
   }
 
-  // For hunk headers, render as plain text; otherwise highlight
-  let is_hunk_header = string.starts_with(line, "@@")
+  // For hunk headers and file separators, render as plain text
+  let is_hunk_header =
+    string.starts_with(line, "@@") || string.starts_with(line, "== ")
 
   html.div(
     [
@@ -1036,19 +1158,30 @@ fn diff_line_row(
       ),
       // Line content
       case is_hunk_header {
-        True ->
+        True -> {
+          let is_file_sep = string.starts_with(line, "== ")
           html.span(
             [
-              attribute.styles([
-                padding.raw("0 " <> sizes.size_3),
-                white_space.pre,
-                flex.raw("1"),
-              ]),
+              attribute.styles(list.flatten([
+                [
+                  padding.raw("0 " <> sizes.size_3),
+                  white_space.pre,
+                  flex.raw("1"),
+                ],
+                case is_file_sep {
+                  True -> [
+                    font_weight.raw("600"),
+                    color.raw(colors.indigo_9),
+                  ]
+                  False -> []
+                },
+              ])),
             ],
             [html.text(line)],
           )
+        }
         False -> {
-          let highlighted_html = highlight.highlight_line(code, language)
+          let highlighted = highlight.highlight_line(code, grammar)
           html.span(
             [
               attribute.styles([
@@ -1058,10 +1191,7 @@ fn diff_line_row(
                 display.flex,
               ]),
             ],
-            [
-              html.span([], [html.text(marker)]),
-              element.unsafe_raw_html("", "span", [], highlighted_html),
-            ],
+            [html.span([], [html.text(marker)]), html.span([], highlighted)],
           )
         }
       },
@@ -1076,6 +1206,7 @@ fn line_colors(line: String) -> #(String, String) {
     "+" <> _ -> #("#dcfce7", "#22c55e")
     "-" <> _ -> #("#fee2e2", "#ef4444")
     "@@" <> _ -> #("#ede9fe", "#8b5cf6")
+    "== " <> _ -> #(colors.indigo_1, colors.indigo_4)
     _ -> #("transparent", "transparent")
   }
 }
@@ -1106,7 +1237,7 @@ fn comment_input(text: String, posting_comment: Bool) -> Element(Msg) {
     True -> "Posting..."
     False -> "Comment"
   }
-  html.div(
+  keyed.div(
     [
       attribute.styles([
         padding.raw(sizes.size_3 <> " " <> sizes.size_3 <> " " <> sizes.size_3 <> " 4.25rem"),
@@ -1118,7 +1249,7 @@ fn comment_input(text: String, posting_comment: Bool) -> Element(Msg) {
       ]),
     ],
     [
-      html.textarea(
+      #("comment-textarea", html.textarea(
         [
           attribute.styles([
             flex.raw("1"),
@@ -1132,12 +1263,11 @@ fn comment_input(text: String, posting_comment: Bool) -> Element(Msg) {
             outline.none,
           ]),
           attribute.placeholder("Add a comment..."),
-          attribute.property("value", json.string(text)),
           event.on_input(UpdateCommentText),
         ],
-        "",
-      ),
-      html.div(
+        text,
+      )),
+      #("comment-buttons", html.div(
         [
           attribute.styles([
             display.flex,
@@ -1186,7 +1316,7 @@ fn comment_input(text: String, posting_comment: Bool) -> Element(Msg) {
             [html.text("Cancel")],
           ),
         ],
-      ),
+      )),
     ],
   )
 }
@@ -1302,10 +1432,9 @@ fn reply_form(reply_text: String, is_posting: Bool) -> Element(Msg) {
             outline.none,
           ]),
           attribute.placeholder("Write a reply..."),
-          attribute.property("value", json.string(reply_text)),
           event.on_input(UpdateCommentText),
         ],
-        "",
+        reply_text,
       ),
       html.div(
         [attribute.styles([display.flex, flex_direction.column, gap.raw("0.375rem")])],
@@ -1525,10 +1654,9 @@ fn review_submission_section(
           attribute.placeholder(
             "Leave a comment with your review (optional for approvals)...",
           ),
-          attribute.property("value", json.string(review_body)),
           event.on_input(SetReviewBody),
         ],
-        "",
+        review_body,
       ),
       html.div(
         [

@@ -46,6 +46,7 @@ pub type Model {
     github_comments: List(PrComment),
     description_open: Bool,
     review: ReviewState,
+    hide_bot_comments: Bool,
   )
 }
 
@@ -75,6 +76,7 @@ pub type Msg {
   SubmitReply
   UrlChanged(Uri)
   ToggleDescription
+  ToggleBotComments
   SubmitReview(String)
   SetReviewBody(String)
   ReviewSubmitted(Result(Nil, rsvp.Error))
