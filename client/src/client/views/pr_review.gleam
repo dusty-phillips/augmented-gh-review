@@ -849,28 +849,31 @@ fn diff_view(
         line_height.raw("1.5"),
       ]),
     ],
-    list.flat_map(file_indexed_lines, fn(entry) {
-        let line_comments =
-          list.filter(chunk_comments, fn(c) {
-            c.line_number == entry.display_line
-          })
-        let line_github_comments =
-          list.filter(chunk_github_comments, fn(c) {
-            c.line == entry.file_line
-          })
-        let is_commenting =
-          commenting_display_line == option.Some(entry.display_line)
+    [html.div(
+      [attribute.styles([#("min-width", "fit-content")])],
+      list.flat_map(file_indexed_lines, fn(entry) {
+          let line_comments =
+            list.filter(chunk_comments, fn(c) {
+              c.line_number == entry.display_line
+            })
+          let line_github_comments =
+            list.filter(chunk_github_comments, fn(c) {
+              c.line == entry.file_line
+            })
+          let is_commenting =
+            commenting_display_line == option.Some(entry.display_line)
 
-        list.flatten([
-          [diff_line_row(entry.display_line, entry.file_line, entry.text, language)],
-          list.map(line_github_comments, fn(c) { github_comment_display(c, commenting) }),
-          list.map(line_comments, fn(c) { comment_display(c) }),
-          case is_commenting {
-            True -> [comment_input(comment_text, is_posting)]
-            False -> []
-          },
-        ])
-      }),
+          list.flatten([
+            [diff_line_row(entry.display_line, entry.file_line, entry.text, language)],
+            list.map(line_github_comments, fn(c) { github_comment_display(c, commenting) }),
+            list.map(line_comments, fn(c) { comment_display(c) }),
+            case is_commenting {
+              True -> [comment_input(comment_text, is_posting)]
+              False -> []
+            },
+          ])
+        }),
+    )],
   )
 }
 

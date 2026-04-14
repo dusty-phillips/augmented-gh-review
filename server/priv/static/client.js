@@ -150,14 +150,12 @@ class BitArray {
     return true;
   }
   get buffer() {
-    bitArrayPrintDeprecationWarning("buffer", "Use BitArray.byteAt() or BitArray.rawBuffer instead");
     if (this.bitOffset !== 0 || this.bitSize % 8 !== 0) {
       throw new globalThis.Error("BitArray.buffer does not support unaligned bit arrays");
     }
     return this.rawBuffer;
   }
   get length() {
-    bitArrayPrintDeprecationWarning("length", "Use BitArray.bitSize or BitArray.byteSize instead");
     if (this.bitOffset !== 0 || this.bitSize % 8 !== 0) {
       throw new globalThis.Error("BitArray.length does not support unaligned bit arrays");
     }
@@ -178,14 +176,6 @@ class UtfCodepoint {
   constructor(value) {
     this.value = value;
   }
-}
-var isBitArrayDeprecationMessagePrinted = {};
-function bitArrayPrintDeprecationWarning(name, message) {
-  if (isBitArrayDeprecationMessagePrinted[name]) {
-    return;
-  }
-  console.warn(`Deprecated BitArray.${name} property used in JavaScript FFI code. ${message}.`);
-  isBitArrayDeprecationMessagePrinted[name] = true;
 }
 class Result extends CustomType {
   static isResult(data2) {
@@ -10017,22 +10007,26 @@ function calc_post_item_width(idx, post2) {
     let expanded;
     expanded = $[0];
     let $1 = count_spaces(expanded, 0);
-    let sp = $1;
-    if (sp > 4) {
-      _block = 1;
-    } else {
-      _block = $1;
+    {
+      let sp = $1;
+      if (sp > 4) {
+        _block = 1;
+      } else {
+        _block = $1;
+      }
     }
   } else if (post2.startsWith("\t")) {
     let $ = expand_tabs_indent(post2);
     let expanded;
     expanded = $[0];
     let $1 = count_spaces(expanded, 0);
-    let sp = $1;
-    if (sp > 4) {
-      _block = 1;
-    } else {
-      _block = $1;
+    {
+      let sp = $1;
+      if (sp > 4) {
+        _block = 1;
+      } else {
+        _block = $1;
+      }
     }
   } else {
     _block = 0;
@@ -16202,33 +16196,35 @@ function diff_view(chunk, commenting, chunk_comments, chunk_github_comments) {
       raw8(font_size_1),
       raw19("1.5")
     ]))
-  ]), flat_map(file_indexed_lines, (entry) => {
-    let line_comments = filter(chunk_comments, (c) => {
-      return c.line_number === entry.display_line;
-    });
-    let line_github_comments = filter(chunk_github_comments, (c) => {
-      return c.line === entry.file_line;
-    });
-    let is_commenting = isEqual(commenting_display_line, new Some(entry.display_line));
-    return flatten(toList([
-      toList([
-        diff_line_row(entry.display_line, entry.file_line, entry.text, language)
-      ]),
-      map2(line_github_comments, (c) => {
-        return github_comment_display(c, commenting);
-      }),
-      map2(line_comments, (c) => {
-        return comment_display(c);
-      }),
-      (() => {
-        if (is_commenting) {
-          return toList([comment_input(comment_text, is_posting)]);
-        } else {
-          return toList([]);
-        }
-      })()
-    ]));
-  }));
+  ]), toList([
+    div(toList([styles(toList([["min-width", "fit-content"]]))]), flat_map(file_indexed_lines, (entry) => {
+      let line_comments = filter(chunk_comments, (c) => {
+        return c.line_number === entry.display_line;
+      });
+      let line_github_comments = filter(chunk_github_comments, (c) => {
+        return c.line === entry.file_line;
+      });
+      let is_commenting = isEqual(commenting_display_line, new Some(entry.display_line));
+      return flatten(toList([
+        toList([
+          diff_line_row(entry.display_line, entry.file_line, entry.text, language)
+        ]),
+        map2(line_github_comments, (c) => {
+          return github_comment_display(c, commenting);
+        }),
+        map2(line_comments, (c) => {
+          return comment_display(c);
+        }),
+        (() => {
+          if (is_commenting) {
+            return toList([comment_input(comment_text, is_posting)]);
+          } else {
+            return toList([]);
+          }
+        })()
+      ]));
+    }))
+  ]));
 }
 function chunk_panel(chunk, pr_url, commenting, comments, github_comments) {
   let chunk_comments = filter(comments, (c) => {
