@@ -7950,6 +7950,7 @@ var font_size_3 = "var(--font-size-3)";
 var font_size_4 = "var(--font-size-4)";
 
 // build/dev/javascript/open_props/open_props/sizes.mjs
+var size_1 = "var(--size-1)";
 var size_2 = "var(--size-2)";
 var size_3 = "var(--size-3)";
 var size_4 = "var(--size-4)";
@@ -8230,7 +8231,7 @@ function empty_section_message() {
 function header_cell(label2) {
   return th(toList([
     styles(toList([
-      raw14(size_3 + " " + size_4),
+      raw14(size_1 + " " + size_3),
       raw3("2px solid " + gray_3),
       raw9("600")
     ]))
@@ -8399,7 +8400,7 @@ function pr_row(entry, show_branch) {
     ]))
   ]), toList([
     td(toList([
-      styles(toList([raw14(size_3 + " " + size_4)]))
+      styles(toList([raw14(size_1 + " " + size_3)]))
     ]), toList([
       a(toList([
         href(pull_request.url),
@@ -8419,15 +8420,15 @@ function pr_row(entry, show_branch) {
     (() => {
       let _block$1;
       if (depth === 0) {
-        _block$1 = size_4;
+        _block$1 = size_3;
       } else {
         let d = depth;
-        _block$1 = "calc(" + size_4 + " + " + to_string(d * 20) + "px)";
+        _block$1 = "calc(" + size_3 + " + " + to_string(d * 20) + "px)";
       }
       let title_pad_left = _block$1;
       return td(toList([
         styles(toList([
-          raw14(size_3 + " " + size_4 + " " + size_3 + " " + title_pad_left),
+          raw14(size_1 + " " + size_3 + " " + size_1 + " " + title_pad_left),
           raw9("500"),
           ["position", "relative"],
           ["overflow", "visible"]
@@ -8452,7 +8453,7 @@ function pr_row(entry, show_branch) {
       ])));
     })(),
     td(toList([
-      styles(toList([raw14(size_3 + " " + size_4)]))
+      styles(toList([raw14(size_1 + " " + size_3)]))
     ]), toList([
       text3(pull_request.author),
       (() => {
@@ -8472,13 +8473,13 @@ function pr_row(entry, show_branch) {
       })()
     ])),
     td(toList([
-      styles(toList([raw14(size_3 + " " + size_4)]))
+      styles(toList([raw14(size_1 + " " + size_3)]))
     ]), toList([
       checks_badge(pull_request.checks_status, pull_request.checks_url)
     ])),
     td(toList([
       styles(toList([
-        raw14(size_3 + " " + size_4),
+        raw14(size_1 + " " + size_3),
         ["min-width", "8rem"],
         flex,
         center,
@@ -8555,9 +8556,9 @@ function pr_sections(groups) {
 function view2(model) {
   return div(toList([
     styles(toList([
-      raw13("960px"),
+      raw13("100%"),
       raw11("0 auto"),
-      raw14(size_7),
+      raw14(size_4 + " " + size_5),
       ["font-family", font_system_ui]
     ]))
   ]), toList([

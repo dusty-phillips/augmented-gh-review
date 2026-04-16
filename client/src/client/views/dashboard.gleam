@@ -42,9 +42,9 @@ pub fn view(model: Model) -> Element(Msg) {
   html.div(
     [
       attribute.styles([
-        max_width.raw("960px"),
+        max_width.raw("100%"),
         margin.raw("0 auto"),
-        padding.raw(sizes.size_7),
+        padding.raw(sizes.size_4 <> " " <> sizes.size_5),
         #("font-family", fonts.font_system_ui),
       ]),
     ],
@@ -387,7 +387,7 @@ fn header_cell(label: String) -> Element(Msg) {
   html.th(
     [
       attribute.styles([
-        padding.raw(sizes.size_3 <> " " <> sizes.size_4),
+        padding.raw(sizes.size_1 <> " " <> sizes.size_3),
         border_bottom.raw("2px solid " <> colors.gray_3),
         font_weight.raw("600"),
       ]),
@@ -413,7 +413,7 @@ fn pr_row(entry: FlatEntry, show_branch: Bool) -> Element(Msg) {
     ],
     [
       html.td(
-        [attribute.styles([padding.raw(sizes.size_3 <> " " <> sizes.size_4)])],
+        [attribute.styles([padding.raw(sizes.size_1 <> " " <> sizes.size_3)])],
         [
           html.a(
             [
@@ -433,15 +433,15 @@ fn pr_row(entry: FlatEntry, show_branch: Bool) -> Element(Msg) {
       ),
       {
         let title_pad_left = case depth {
-          0 -> sizes.size_4
+          0 -> sizes.size_3
           d ->
-            "calc(" <> sizes.size_4 <> " + " <> int.to_string(d * 20) <> "px)"
+            "calc(" <> sizes.size_3 <> " + " <> int.to_string(d * 20) <> "px)"
         }
         html.td(
           [
             attribute.styles([
               padding.raw(
-                sizes.size_3 <> " " <> sizes.size_4 <> " " <> sizes.size_3
+                sizes.size_1 <> " " <> sizes.size_3 <> " " <> sizes.size_1
                 <> " " <> title_pad_left,
               ),
               font_weight.raw("500"),
@@ -471,7 +471,7 @@ fn pr_row(entry: FlatEntry, show_branch: Bool) -> Element(Msg) {
         )
       },
       html.td(
-        [attribute.styles([padding.raw(sizes.size_3 <> " " <> sizes.size_4)])],
+        [attribute.styles([padding.raw(sizes.size_1 <> " " <> sizes.size_3)])],
         [
           html.text(pull_request.author),
           case pull_request.reviewers {
@@ -494,13 +494,13 @@ fn pr_row(entry: FlatEntry, show_branch: Bool) -> Element(Msg) {
           },
         ],
       ),
-      html.td([attribute.styles([padding.raw(sizes.size_3 <> " " <> sizes.size_4)])], [
+      html.td([attribute.styles([padding.raw(sizes.size_1 <> " " <> sizes.size_3)])], [
         checks_badge(pull_request.checks_status, pull_request.checks_url),
       ]),
       html.td(
         [
           attribute.styles([
-            padding.raw(sizes.size_3 <> " " <> sizes.size_4),
+            padding.raw(sizes.size_1 <> " " <> sizes.size_3),
             #("min-width", "8rem"),
             display.flex,
             align_items.center,
