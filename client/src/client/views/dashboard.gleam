@@ -213,15 +213,19 @@ fn pr_sections(groups: option.Option(PrGroups)) -> Element(Msg) {
       let all_open =
         list.filter(g.all_open, fn(p) { p.number != prod_number })
       html.div([], [
-        pr_section("Created by Me", g.created_by_me),
-        pr_section("My Review Requested", g.review_requested),
-        pr_section("All Open PRs", all_open),
+        pr_section("Created by Me", g.created_by_me, True),
+        pr_section("My Review Requested", g.review_requested, False),
+        pr_section("All Open PRs", all_open, False),
       ])
     }
   }
 }
 
-fn pr_section(title: String, prs: List(PullRequest)) -> Element(Msg) {
+fn pr_section(
+  title: String,
+  prs: List(PullRequest),
+  show_branch: Bool,
+) -> Element(Msg) {
   let count = list.length(prs)
   html.div(
     [
@@ -233,7 +237,7 @@ fn pr_section(title: String, prs: List(PullRequest)) -> Element(Msg) {
       section_header(title, count, prs),
       case count {
         0 -> empty_section_message()
-        _ -> pr_table(prs)
+        _ -> pr_table(prs, show_branch)
       },
     ],
   )
@@ -347,7 +351,7 @@ fn empty_section_message() -> Element(Msg) {
   )
 }
 
-fn pr_table(prs: List(PullRequest)) -> Element(Msg) {
+fn pr_table(prs: List(PullRequest), show_branch: Bool) -> Element(Msg) {
   let entries = stack_tree.build_and_flatten(prs)
   html.table(
     [
@@ -374,7 +378,7 @@ fn pr_table(prs: List(PullRequest)) -> Element(Msg) {
           ],
         ),
       ]),
-      html.tbody([], list.map(entries, pr_row)),
+      html.tbody([], list.map(entries, fn(e) { pr_row(e, show_branch) })),
     ],
   )
 }
@@ -392,7 +396,7 @@ fn header_cell(label: String) -> Element(Msg) {
   )
 }
 
-fn pr_row(entry: FlatEntry) -> Element(Msg) {
+fn pr_row(entry: FlatEntry, show_branch: Bool) -> Element(Msg) {
   let FlatEntry(pull_request, depth, is_last, in_stack) = entry
   let bg = case in_stack {
     True -> background.raw("rgba(99, 102, 241, 0.04)")
@@ -446,7 +450,23 @@ fn pr_row(entry: FlatEntry) -> Element(Msg) {
             ]),
           ],
           list.append(tree_connectors(depth, is_last), [
-            html.text(pull_request.title),
+            html.div([], [html.text(pull_request.title)]),
+            case show_branch {
+              False -> html.text("")
+              True ->
+                html.div(
+                  [
+                    attribute.styles([
+                      margin.raw("0.15rem 0 0 0"),
+                      font_size.raw(fonts.font_size_0),
+                      font_weight.raw("400"),
+                      color.raw(colors.gray_6),
+                      #("font-family", fonts.font_mono),
+                    ]),
+                  ],
+                  [html.text(pull_request.head_ref_name)],
+                )
+            },
           ]),
         )
       },

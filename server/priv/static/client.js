@@ -8374,7 +8374,7 @@ function checks_badge(status, checks_url) {
     ]), toList([icon_el]));
   }
 }
-function pr_row(entry) {
+function pr_row(entry, show_branch) {
   let pull_request;
   let depth;
   let is_last;
@@ -8432,7 +8432,24 @@ function pr_row(entry) {
           ["position", "relative"],
           ["overflow", "visible"]
         ]))
-      ]), append(tree_connectors(depth, is_last), toList([text3(pull_request.title)])));
+      ]), append(tree_connectors(depth, is_last), toList([
+        div(toList([]), toList([text3(pull_request.title)])),
+        (() => {
+          if (show_branch) {
+            return div(toList([
+              styles(toList([
+                raw11("0.15rem 0 0 0"),
+                raw8(font_size_0),
+                raw9("400"),
+                raw5(gray_6),
+                ["font-family", font_mono]
+              ]))
+            ]), toList([text3(pull_request.head_ref_name)]));
+          } else {
+            return text3("");
+          }
+        })()
+      ])));
     })(),
     td(toList([
       styles(toList([raw14(size_3 + " " + size_4)]))
@@ -8471,7 +8488,7 @@ function pr_row(entry) {
     ]), prepend(review_badge(pull_request.review_decision, pull_request.draft), map2(pull_request.feedback, feedback_badge)))
   ]));
 }
-function pr_table(prs) {
+function pr_table(prs, show_branch) {
   let entries = build_and_flatten(prs);
   return table(toList([
     styles(toList([raw15("100%"), collapse]))
@@ -8487,10 +8504,12 @@ function pr_table(prs) {
         header_cell("Review")
       ]))
     ])),
-    tbody(toList([]), map2(entries, pr_row))
+    tbody(toList([]), map2(entries, (e) => {
+      return pr_row(e, show_branch);
+    }))
   ]));
 }
-function pr_section(title2, prs) {
+function pr_section(title2, prs, show_branch) {
   let count2 = length(prs);
   return div(toList([styles(toList([raw12(size_7)]))]), toList([
     section_header(title2, count2, prs),
@@ -8498,7 +8517,7 @@ function pr_section(title2, prs) {
       if (count2 === 0) {
         return empty_section_message();
       } else {
-        return pr_table(prs);
+        return pr_table(prs, show_branch);
       }
     })()
   ]));
@@ -8519,9 +8538,9 @@ function pr_sections(groups) {
       return p2.number !== prod_number;
     });
     return div(toList([]), toList([
-      pr_section("Created by Me", g.created_by_me),
-      pr_section("My Review Requested", g.review_requested),
-      pr_section("All Open PRs", all_open)
+      pr_section("Created by Me", g.created_by_me, true),
+      pr_section("My Review Requested", g.review_requested, false),
+      pr_section("All Open PRs", all_open, false)
     ]));
   } else {
     return div(toList([
@@ -8627,6 +8646,7 @@ var hidden = ["overflow", "hidden"];
 // build/dev/javascript/monks_of_style/monks/position.mjs
 var relative2 = ["position", "relative"];
 var absolute = ["position", "absolute"];
+var sticky = ["position", "sticky"];
 
 // build/dev/javascript/monks_of_style/monks/resize.mjs
 var vertical = ["resize", "vertical"];
@@ -19042,7 +19062,11 @@ function comment_display(comment) {
       ["font-family", font_system_ui],
       raw8(font_size_1),
       raw5(orange_9),
-      raw19("1.4")
+      raw19("1.4"),
+      sticky,
+      ["left", "0"],
+      ["width", "100cqi"],
+      border_box
     ]))
   ]), toList([text3(comment.body)]));
 }
@@ -19061,7 +19085,11 @@ function comment_input(text4, posting_comment) {
       raw17("3px solid " + yellow_5),
       flex,
       raw10(size_2),
-      flex_start
+      flex_start,
+      sticky,
+      ["left", "0"],
+      ["width", "100cqi"],
+      border_box
     ]))
   ]), toList([
     [
@@ -19275,7 +19303,11 @@ function github_comment_display(comment, commenting) {
       ["font-family", font_system_ui],
       raw8(font_size_1),
       raw5(blue_9),
-      raw19("1.4")
+      raw19("1.4"),
+      sticky,
+      ["left", "0"],
+      ["width", "100cqi"],
+      border_box
     ]))
   ]), toList([
     div(toList([
@@ -19375,6 +19407,7 @@ function diff_view(chunk, commenting, chunk_comments, github_comments) {
   return div(toList([
     styles(toList([
       ["overflow-x", "auto"],
+      ["container-type", "inline-size"],
       ["font-family", font_mono],
       raw8(font_size_1),
       raw19("1.5")

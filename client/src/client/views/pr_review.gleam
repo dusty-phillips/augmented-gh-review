@@ -912,6 +912,7 @@ fn diff_view(
     [
       attribute.styles([
         #("overflow-x", "auto"),
+        #("container-type", "inline-size"),
         #("font-family", fonts.font_mono),
         font_size.raw(fonts.font_size_1),
         line_height.raw("1.5"),
@@ -1226,6 +1227,10 @@ fn comment_display(comment: LineComment) -> Element(Msg) {
         font_size.raw(fonts.font_size_1),
         color.raw(colors.orange_9),
         line_height.raw("1.4"),
+        position.sticky,
+        #("left", "0"),
+        #("width", "100cqi"),
+        box_sizing.border_box,
       ]),
     ],
     [html.text(comment.body)],
@@ -1246,6 +1251,10 @@ fn comment_input(text: String, posting_comment: Bool) -> Element(Msg) {
         display.flex,
         gap.raw(sizes.size_2),
         align_items.flex_start,
+        position.sticky,
+        #("left", "0"),
+        #("width", "100cqi"),
+        box_sizing.border_box,
       ]),
     ],
     [
@@ -1348,6 +1357,10 @@ fn github_comment_display(
         font_size.raw(fonts.font_size_1),
         color.raw(colors.blue_9),
         line_height.raw("1.4"),
+        position.sticky,
+        #("left", "0"),
+        #("width", "100cqi"),
+        box_sizing.border_box,
       ]),
     ],
     [
