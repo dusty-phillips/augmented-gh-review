@@ -372,7 +372,10 @@ fn pr_table(prs: List(PullRequest), show_branch: Bool) -> Element(Msg) {
           [
             header_cell("#"),
             header_cell("Title"),
-            header_cell("Author"),
+            header_cell(case show_branch {
+              True -> "Reviewers"
+              False -> "Author"
+            }),
             header_cell("Checks"),
             header_cell("Review"),
           ],
@@ -472,27 +475,39 @@ fn pr_row(entry: FlatEntry, show_branch: Bool) -> Element(Msg) {
       },
       html.td(
         [attribute.styles([padding.raw(sizes.size_1 <> " " <> sizes.size_3)])],
-        [
-          html.text(pull_request.author),
-          case pull_request.reviewers {
-            [] -> html.text("")
-            reviewers ->
-              html.span(
-                [
-                  attribute.styles([
-                    margin.raw("0 0 0 " <> sizes.size_2),
-                    font_size.raw(fonts.font_size_0),
-                    color.raw(colors.gray_6),
-                  ]),
-                ],
-                [
-                  html.text(
-                    " → " <> string.join(reviewers, ", "),
-                  ),
-                ],
-              )
-          },
-        ],
+        case show_branch {
+          True -> [
+            case pull_request.reviewers {
+              [] ->
+                html.span(
+                  [attribute.styles([color.raw(colors.gray_5)])],
+                  [html.text("—")],
+                )
+              reviewers -> html.text(string.join(reviewers, ", "))
+            },
+          ]
+          False -> [
+            html.text(pull_request.author),
+            case pull_request.reviewers {
+              [] -> html.text("")
+              reviewers ->
+                html.span(
+                  [
+                    attribute.styles([
+                      margin.raw("0 0 0 " <> sizes.size_2),
+                      font_size.raw(fonts.font_size_0),
+                      color.raw(colors.gray_6),
+                    ]),
+                  ],
+                  [
+                    html.text(
+                      " → " <> string.join(reviewers, ", "),
+                    ),
+                  ],
+                )
+            },
+          ]
+        },
       ),
       html.td([attribute.styles([padding.raw(sizes.size_1 <> " " <> sizes.size_3)])], [
         checks_badge(pull_request.checks_status, pull_request.checks_url),

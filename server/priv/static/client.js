@@ -8454,24 +8454,42 @@ function pr_row(entry, show_branch) {
     })(),
     td(toList([
       styles(toList([raw14(size_1 + " " + size_3)]))
-    ]), toList([
-      text3(pull_request.author),
-      (() => {
-        let $ = pull_request.reviewers;
-        if ($ instanceof Empty) {
-          return text3("");
-        } else {
-          let reviewers = $;
-          return span(toList([
-            styles(toList([
-              raw11("0 0 0 " + size_2),
-              raw8(font_size_0),
-              raw5(gray_6)
-            ]))
-          ]), toList([text3(" → " + join(reviewers, ", "))]));
-        }
-      })()
-    ])),
+    ]), (() => {
+      if (show_branch) {
+        return toList([
+          (() => {
+            let $ = pull_request.reviewers;
+            if ($ instanceof Empty) {
+              return span(toList([
+                styles(toList([raw5(gray_5)]))
+              ]), toList([text3("—")]));
+            } else {
+              let reviewers = $;
+              return text3(join(reviewers, ", "));
+            }
+          })()
+        ]);
+      } else {
+        return toList([
+          text3(pull_request.author),
+          (() => {
+            let $ = pull_request.reviewers;
+            if ($ instanceof Empty) {
+              return text3("");
+            } else {
+              let reviewers = $;
+              return span(toList([
+                styles(toList([
+                  raw11("0 0 0 " + size_2),
+                  raw8(font_size_0),
+                  raw5(gray_6)
+                ]))
+              ]), toList([text3(" → " + join(reviewers, ", "))]));
+            }
+          })()
+        ]);
+      }
+    })()),
     td(toList([
       styles(toList([raw14(size_1 + " " + size_3)]))
     ]), toList([
@@ -8500,7 +8518,13 @@ function pr_table(prs, show_branch) {
       ]), toList([
         header_cell("#"),
         header_cell("Title"),
-        header_cell("Author"),
+        header_cell((() => {
+          if (show_branch) {
+            return "Reviewers";
+          } else {
+            return "Author";
+          }
+        })()),
         header_cell("Checks"),
         header_cell("Review")
       ]))
