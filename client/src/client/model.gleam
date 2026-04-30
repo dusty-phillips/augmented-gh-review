@@ -9,6 +9,27 @@ import shared/pr.{
 pub type View {
   Dashboard
   PrReview
+  PrFeedback
+}
+
+pub type FeedbackState {
+  FeedbackState(
+    selected_comment_id: option.Option(Int),
+    expand_up: Int,
+    expand_down: Int,
+    whole_file: Bool,
+  )
+}
+
+pub const feedback_default_radius = 15
+
+pub fn initial_feedback_state() -> FeedbackState {
+  FeedbackState(
+    selected_comment_id: option.None,
+    expand_up: 0,
+    expand_down: 0,
+    whole_file: False,
+  )
 }
 
 pub type CommentingState {
@@ -47,13 +68,24 @@ pub type Model {
     description_open: Bool,
     review: ReviewState,
     hide_bot_comments: Bool,
+    feedback: FeedbackState,
   )
 }
 
 pub type Msg {
   GotPrs(Result(PrGroups, rsvp.Error))
+  RefreshedPrs(Result(PrGroups, rsvp.Error))
   GotPrDetail(Result(PrDetail, rsvp.Error))
   SelectPr(Int)
+  SelectPrForFeedback(Int)
+  SelectFeedbackComment(Int)
+  ExpandFeedbackUp
+  ExpandFeedbackDown
+  ShowWholeFile
+  NextFeedback
+  PrevFeedback
+  SwitchToAnalysis
+  SwitchToFeedback
   SetRepo(String)
   BackToDashboard
   FetchPrs

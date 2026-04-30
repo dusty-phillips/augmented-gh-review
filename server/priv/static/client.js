@@ -311,6 +311,9 @@ var Option$Some$0 = (value) => value[0];
 
 class None extends CustomType {
 }
+function is_none(option) {
+  return option instanceof None;
+}
 function to_result(option, e) {
   if (option instanceof Some) {
     let a = option[0];
@@ -667,6 +670,11 @@ function hashbit(hash, shift) {
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/dict.mjs
+function to_list(dict) {
+  return fold(dict, toList([]), (acc, key, value) => {
+    return prepend([key, value], acc);
+  });
+}
 function from_list_loop(loop$transient, loop$list) {
   while (true) {
     let transient = loop$transient;
@@ -685,6 +693,11 @@ function from_list_loop(loop$transient, loop$list) {
 function from_list(list) {
   return from_list_loop(toTransient(make()), list);
 }
+function keys(dict) {
+  return fold(dict, toList([]), (acc, key, _) => {
+    return prepend(key, acc);
+  });
+}
 function upsert(dict, key, fun) {
   let $ = get(dict, key);
   if ($ instanceof Ok) {
@@ -693,16 +706,6 @@ function upsert(dict, key, fun) {
   } else {
     return insert(dict, key, fun(new None));
   }
-}
-function to_list(dict) {
-  return fold(dict, toList([]), (acc, key, value) => {
-    return prepend([key, value], acc);
-  });
-}
-function keys(dict) {
-  return fold(dict, toList([]), (acc, key, _) => {
-    return prepend(key, acc);
-  });
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/list.mjs
@@ -969,6 +972,25 @@ function fold2(loop$list, loop$initial, loop$fun) {
     }
   }
 }
+function find(loop$list, loop$is_desired) {
+  while (true) {
+    let list = loop$list;
+    let is_desired = loop$is_desired;
+    if (list instanceof Empty) {
+      return new Error(undefined);
+    } else {
+      let first$1 = list.head;
+      let rest$1 = list.tail;
+      let $ = is_desired(first$1);
+      if ($) {
+        return new Ok(first$1);
+      } else {
+        loop$list = rest$1;
+        loop$is_desired = is_desired;
+      }
+    }
+  }
+}
 function find_map(loop$list, loop$fun) {
   while (true) {
     let list = loop$list;
@@ -1029,6 +1051,160 @@ function zip_loop(loop$one, loop$other, loop$acc) {
 }
 function zip(list, other) {
   return zip_loop(list, other, toList([]));
+}
+function merge_descendings(loop$list1, loop$list2, loop$compare, loop$acc) {
+  while (true) {
+    let list1 = loop$list1;
+    let list2 = loop$list2;
+    let compare3 = loop$compare;
+    let acc = loop$acc;
+    if (list1 instanceof Empty) {
+      let list = list2;
+      return reverse_and_prepend(list, acc);
+    } else if (list2 instanceof Empty) {
+      let list = list1;
+      return reverse_and_prepend(list, acc);
+    } else {
+      let first1 = list1.head;
+      let rest1 = list1.tail;
+      let first2 = list2.head;
+      let rest2 = list2.tail;
+      let $ = compare3(first1, first2);
+      if ($ instanceof Lt) {
+        loop$list1 = list1;
+        loop$list2 = rest2;
+        loop$compare = compare3;
+        loop$acc = prepend(first2, acc);
+      } else if ($ instanceof Eq) {
+        loop$list1 = rest1;
+        loop$list2 = list2;
+        loop$compare = compare3;
+        loop$acc = prepend(first1, acc);
+      } else {
+        loop$list1 = rest1;
+        loop$list2 = list2;
+        loop$compare = compare3;
+        loop$acc = prepend(first1, acc);
+      }
+    }
+  }
+}
+function merge_descending_pairs(loop$sequences, loop$compare, loop$acc) {
+  while (true) {
+    let sequences = loop$sequences;
+    let compare3 = loop$compare;
+    let acc = loop$acc;
+    if (sequences instanceof Empty) {
+      return reverse(acc);
+    } else {
+      let $ = sequences.tail;
+      if ($ instanceof Empty) {
+        let sequence = sequences.head;
+        return reverse(prepend(reverse(sequence), acc));
+      } else {
+        let descending1 = sequences.head;
+        let descending2 = $.head;
+        let rest$1 = $.tail;
+        let ascending = merge_descendings(descending1, descending2, compare3, toList([]));
+        loop$sequences = rest$1;
+        loop$compare = compare3;
+        loop$acc = prepend(ascending, acc);
+      }
+    }
+  }
+}
+function merge_ascendings(loop$list1, loop$list2, loop$compare, loop$acc) {
+  while (true) {
+    let list1 = loop$list1;
+    let list2 = loop$list2;
+    let compare3 = loop$compare;
+    let acc = loop$acc;
+    if (list1 instanceof Empty) {
+      let list = list2;
+      return reverse_and_prepend(list, acc);
+    } else if (list2 instanceof Empty) {
+      let list = list1;
+      return reverse_and_prepend(list, acc);
+    } else {
+      let first1 = list1.head;
+      let rest1 = list1.tail;
+      let first2 = list2.head;
+      let rest2 = list2.tail;
+      let $ = compare3(first1, first2);
+      if ($ instanceof Lt) {
+        loop$list1 = rest1;
+        loop$list2 = list2;
+        loop$compare = compare3;
+        loop$acc = prepend(first1, acc);
+      } else if ($ instanceof Eq) {
+        loop$list1 = list1;
+        loop$list2 = rest2;
+        loop$compare = compare3;
+        loop$acc = prepend(first2, acc);
+      } else {
+        loop$list1 = list1;
+        loop$list2 = rest2;
+        loop$compare = compare3;
+        loop$acc = prepend(first2, acc);
+      }
+    }
+  }
+}
+function merge_ascending_pairs(loop$sequences, loop$compare, loop$acc) {
+  while (true) {
+    let sequences = loop$sequences;
+    let compare3 = loop$compare;
+    let acc = loop$acc;
+    if (sequences instanceof Empty) {
+      return reverse(acc);
+    } else {
+      let $ = sequences.tail;
+      if ($ instanceof Empty) {
+        let sequence = sequences.head;
+        return reverse(prepend(reverse(sequence), acc));
+      } else {
+        let ascending1 = sequences.head;
+        let ascending2 = $.head;
+        let rest$1 = $.tail;
+        let descending = merge_ascendings(ascending1, ascending2, compare3, toList([]));
+        loop$sequences = rest$1;
+        loop$compare = compare3;
+        loop$acc = prepend(descending, acc);
+      }
+    }
+  }
+}
+function merge_all(loop$sequences, loop$direction, loop$compare) {
+  while (true) {
+    let sequences = loop$sequences;
+    let direction = loop$direction;
+    let compare3 = loop$compare;
+    if (sequences instanceof Empty) {
+      return sequences;
+    } else if (direction instanceof Ascending) {
+      let $ = sequences.tail;
+      if ($ instanceof Empty) {
+        let sequence = sequences.head;
+        return sequence;
+      } else {
+        let sequences$1 = merge_ascending_pairs(sequences, compare3, toList([]));
+        loop$sequences = sequences$1;
+        loop$direction = new Descending;
+        loop$compare = compare3;
+      }
+    } else {
+      let $ = sequences.tail;
+      if ($ instanceof Empty) {
+        let sequence = sequences.head;
+        return reverse(sequence);
+      } else {
+        let sequences$1 = merge_descending_pairs(sequences, compare3, toList([]));
+        loop$sequences = sequences$1;
+        loop$direction = new Ascending;
+        loop$compare = compare3;
+      }
+    }
+  }
 }
 function sequences(loop$list, loop$compare, loop$growing, loop$direction, loop$prev, loop$acc) {
   while (true) {
@@ -1166,160 +1342,6 @@ function sequences(loop$list, loop$compare, loop$growing, loop$direction, loop$p
     }
   }
 }
-function merge_ascendings(loop$list1, loop$list2, loop$compare, loop$acc) {
-  while (true) {
-    let list1 = loop$list1;
-    let list2 = loop$list2;
-    let compare3 = loop$compare;
-    let acc = loop$acc;
-    if (list1 instanceof Empty) {
-      let list = list2;
-      return reverse_and_prepend(list, acc);
-    } else if (list2 instanceof Empty) {
-      let list = list1;
-      return reverse_and_prepend(list, acc);
-    } else {
-      let first1 = list1.head;
-      let rest1 = list1.tail;
-      let first2 = list2.head;
-      let rest2 = list2.tail;
-      let $ = compare3(first1, first2);
-      if ($ instanceof Lt) {
-        loop$list1 = rest1;
-        loop$list2 = list2;
-        loop$compare = compare3;
-        loop$acc = prepend(first1, acc);
-      } else if ($ instanceof Eq) {
-        loop$list1 = list1;
-        loop$list2 = rest2;
-        loop$compare = compare3;
-        loop$acc = prepend(first2, acc);
-      } else {
-        loop$list1 = list1;
-        loop$list2 = rest2;
-        loop$compare = compare3;
-        loop$acc = prepend(first2, acc);
-      }
-    }
-  }
-}
-function merge_ascending_pairs(loop$sequences, loop$compare, loop$acc) {
-  while (true) {
-    let sequences2 = loop$sequences;
-    let compare3 = loop$compare;
-    let acc = loop$acc;
-    if (sequences2 instanceof Empty) {
-      return reverse(acc);
-    } else {
-      let $ = sequences2.tail;
-      if ($ instanceof Empty) {
-        let sequence = sequences2.head;
-        return reverse(prepend(reverse(sequence), acc));
-      } else {
-        let ascending1 = sequences2.head;
-        let ascending2 = $.head;
-        let rest$1 = $.tail;
-        let descending = merge_ascendings(ascending1, ascending2, compare3, toList([]));
-        loop$sequences = rest$1;
-        loop$compare = compare3;
-        loop$acc = prepend(descending, acc);
-      }
-    }
-  }
-}
-function merge_descendings(loop$list1, loop$list2, loop$compare, loop$acc) {
-  while (true) {
-    let list1 = loop$list1;
-    let list2 = loop$list2;
-    let compare3 = loop$compare;
-    let acc = loop$acc;
-    if (list1 instanceof Empty) {
-      let list = list2;
-      return reverse_and_prepend(list, acc);
-    } else if (list2 instanceof Empty) {
-      let list = list1;
-      return reverse_and_prepend(list, acc);
-    } else {
-      let first1 = list1.head;
-      let rest1 = list1.tail;
-      let first2 = list2.head;
-      let rest2 = list2.tail;
-      let $ = compare3(first1, first2);
-      if ($ instanceof Lt) {
-        loop$list1 = list1;
-        loop$list2 = rest2;
-        loop$compare = compare3;
-        loop$acc = prepend(first2, acc);
-      } else if ($ instanceof Eq) {
-        loop$list1 = rest1;
-        loop$list2 = list2;
-        loop$compare = compare3;
-        loop$acc = prepend(first1, acc);
-      } else {
-        loop$list1 = rest1;
-        loop$list2 = list2;
-        loop$compare = compare3;
-        loop$acc = prepend(first1, acc);
-      }
-    }
-  }
-}
-function merge_descending_pairs(loop$sequences, loop$compare, loop$acc) {
-  while (true) {
-    let sequences2 = loop$sequences;
-    let compare3 = loop$compare;
-    let acc = loop$acc;
-    if (sequences2 instanceof Empty) {
-      return reverse(acc);
-    } else {
-      let $ = sequences2.tail;
-      if ($ instanceof Empty) {
-        let sequence = sequences2.head;
-        return reverse(prepend(reverse(sequence), acc));
-      } else {
-        let descending1 = sequences2.head;
-        let descending2 = $.head;
-        let rest$1 = $.tail;
-        let ascending = merge_descendings(descending1, descending2, compare3, toList([]));
-        loop$sequences = rest$1;
-        loop$compare = compare3;
-        loop$acc = prepend(ascending, acc);
-      }
-    }
-  }
-}
-function merge_all(loop$sequences, loop$direction, loop$compare) {
-  while (true) {
-    let sequences2 = loop$sequences;
-    let direction = loop$direction;
-    let compare3 = loop$compare;
-    if (sequences2 instanceof Empty) {
-      return sequences2;
-    } else if (direction instanceof Ascending) {
-      let $ = sequences2.tail;
-      if ($ instanceof Empty) {
-        let sequence = sequences2.head;
-        return sequence;
-      } else {
-        let sequences$1 = merge_ascending_pairs(sequences2, compare3, toList([]));
-        loop$sequences = sequences$1;
-        loop$direction = new Descending;
-        loop$compare = compare3;
-      }
-    } else {
-      let $ = sequences2.tail;
-      if ($ instanceof Empty) {
-        let sequence = sequences2.head;
-        return reverse(sequence);
-      } else {
-        let sequences$1 = merge_descending_pairs(sequences2, compare3, toList([]));
-        loop$sequences = sequences$1;
-        loop$direction = new Ascending;
-        loop$compare = compare3;
-      }
-    }
-  }
-}
 function sort(list, compare3) {
   if (list instanceof Empty) {
     return list;
@@ -1436,9 +1458,9 @@ class Decoder extends CustomType {
     this.function = function$;
   }
 }
-var bool = /* @__PURE__ */ new Decoder(decode_bool);
 var int2 = /* @__PURE__ */ new Decoder(decode_int);
 var string2 = /* @__PURE__ */ new Decoder(decode_string);
+var bool = /* @__PURE__ */ new Decoder(decode_bool);
 function run(data2, decoder) {
   let $ = decoder.function(data2);
   let maybe_invalid_data;
@@ -1451,10 +1473,21 @@ function run(data2, decoder) {
     return new Error(errors);
   }
 }
-function success(data2) {
-  return new Decoder((_) => {
-    return [data2, toList([])];
-  });
+function run_dynamic_function(data2, name, f) {
+  let $ = f(data2);
+  if ($ instanceof Ok) {
+    let data$1 = $[0];
+    return [data$1, toList([])];
+  } else {
+    let placeholder = $[0];
+    return [
+      placeholder,
+      toList([new DecodeError(name, classify_dynamic(data2), toList([]))])
+    ];
+  }
+}
+function decode_int(data2) {
+  return run_dynamic_function(data2, "Int", int);
 }
 function map3(decoder, transformer) {
   return new Decoder((d) => {
@@ -1465,6 +1498,9 @@ function map3(decoder, transformer) {
     errors = $[1];
     return [transformer(data2), errors];
   });
+}
+function decode_string(data2) {
+  return run_dynamic_function(data2, "String", string);
 }
 function run_decoders(loop$data, loop$failure, loop$decoders) {
   while (true) {
@@ -1505,50 +1541,6 @@ function one_of(first2, alternatives) {
     }
   });
 }
-function decode_error(expected, found) {
-  return toList([
-    new DecodeError(expected, classify_dynamic(found), toList([]))
-  ]);
-}
-function run_dynamic_function(data2, name, f) {
-  let $ = f(data2);
-  if ($ instanceof Ok) {
-    let data$1 = $[0];
-    return [data$1, toList([])];
-  } else {
-    let placeholder = $[0];
-    return [
-      placeholder,
-      toList([new DecodeError(name, classify_dynamic(data2), toList([]))])
-    ];
-  }
-}
-function decode_bool(data2) {
-  let $ = isEqual(identity(true), data2);
-  if ($) {
-    return [true, toList([])];
-  } else {
-    let $1 = isEqual(identity(false), data2);
-    if ($1) {
-      return [false, toList([])];
-    } else {
-      return [false, decode_error("Bool", data2)];
-    }
-  }
-}
-function decode_int(data2) {
-  return run_dynamic_function(data2, "Int", int);
-}
-function decode_string(data2) {
-  return run_dynamic_function(data2, "String", string);
-}
-function list2(inner) {
-  return new Decoder((data2) => {
-    return list(data2, inner.function, (p, k) => {
-      return push_path(p, toList([k]));
-    }, 0, toList([]));
-  });
-}
 function push_path(layer, path) {
   let decoder = one_of(string2, toList([
     (() => {
@@ -1570,6 +1562,13 @@ function push_path(layer, path) {
     return new DecodeError(error.expected, error.found, append(path$1, error.path));
   });
   return [layer[0], errors];
+}
+function list2(inner) {
+  return new Decoder((data2) => {
+    return list(data2, inner.function, (p, k) => {
+      return push_path(p, toList([k]));
+    }, 0, toList([]));
+  });
 }
 function index3(loop$path, loop$position, loop$inner, loop$data, loop$handle_miss) {
   while (true) {
@@ -1636,6 +1635,16 @@ function subfield(field_path, field_decoder, next) {
     return [out$1, append(errors1, errors2)];
   });
 }
+function success(data2) {
+  return new Decoder((_) => {
+    return [data2, toList([])];
+  });
+}
+function decode_error(expected, found) {
+  return toList([
+    new DecodeError(expected, classify_dynamic(found), toList([]))
+  ]);
+}
 function field(field_name, field_decoder, next) {
   return subfield(toList([field_name]), field_decoder, next);
 }
@@ -1673,6 +1682,19 @@ function optional_field(key, default$, field_decoder, next) {
     errors2 = $2[1];
     return [out$1, append(errors1, errors2)];
   });
+}
+function decode_bool(data2) {
+  let $ = isEqual(identity(true), data2);
+  if ($) {
+    return [true, toList([])];
+  } else {
+    let $1 = isEqual(identity(false), data2);
+    if ($1) {
+      return [false, toList([])];
+    } else {
+      return [false, decode_error("Bool", data2)];
+    }
+  }
 }
 
 // build/dev/javascript/gleam_stdlib/gleam_stdlib.mjs
@@ -2123,6 +2145,22 @@ function max(a, b) {
     return b;
   }
 }
+function compare2(a, b) {
+  let $ = a === b;
+  if ($) {
+    return new Eq;
+  } else {
+    let $1 = a < b;
+    if ($1) {
+      return new Lt;
+    } else {
+      return new Gt;
+    }
+  }
+}
+function is_even(x) {
+  return x % 2 === 0;
+}
 function range_loop(loop$current, loop$stop, loop$increment, loop$acc, loop$reducer) {
   while (true) {
     let current = loop$current;
@@ -2210,12 +2248,32 @@ function slice(string3, idx, len) {
     }
   }
 }
+function drop_start(string3, num_graphemes) {
+  let $ = num_graphemes <= 0;
+  if ($) {
+    return string3;
+  } else {
+    let prefix = string_grapheme_slice(string3, 0, num_graphemes);
+    let prefix_size = byte_size(prefix);
+    return string_byte_slice(string3, prefix_size, byte_size(string3) - prefix_size);
+  }
+}
 function drop_end(string3, num_graphemes) {
   let $ = num_graphemes <= 0;
   if ($) {
     return string3;
   } else {
     return slice(string3, 0, string_length(string3) - num_graphemes);
+  }
+}
+function split2(x, substring) {
+  if (substring === "") {
+    return graphemes(x);
+  } else {
+    let _pipe = x;
+    let _pipe$1 = identity(_pipe);
+    let _pipe$2 = split(_pipe$1, substring);
+    return map2(_pipe$2, identity);
   }
 }
 function concat_loop(loop$strings, loop$accumulator) {
@@ -2297,16 +2355,6 @@ function trim(string3) {
   let _pipe$1 = trim_start(_pipe);
   return trim_end(_pipe$1);
 }
-function split2(x, substring) {
-  if (substring === "") {
-    return graphemes(x);
-  } else {
-    let _pipe = x;
-    let _pipe$1 = identity(_pipe);
-    let _pipe$2 = split(_pipe$1, substring);
-    return map2(_pipe$2, identity);
-  }
-}
 function first2(string3) {
   let $ = pop_grapheme(string3);
   if ($ instanceof Ok) {
@@ -2320,16 +2368,6 @@ function inspect2(term) {
   let _pipe = term;
   let _pipe$1 = inspect(_pipe);
   return identity(_pipe$1);
-}
-function drop_start(string3, num_graphemes) {
-  let $ = num_graphemes <= 0;
-  if ($) {
-    return string3;
-  } else {
-    let prefix = string_grapheme_slice(string3, 0, num_graphemes);
-    let prefix_size = byte_size(prefix);
-    return string_byte_slice(string3, prefix_size, byte_size(string3) - prefix_size);
-  }
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/result.mjs
@@ -2542,9 +2580,6 @@ class Uri extends CustomType {
   }
 }
 var empty = /* @__PURE__ */ new Uri(/* @__PURE__ */ new None, /* @__PURE__ */ new None, /* @__PURE__ */ new None, /* @__PURE__ */ new None, "", /* @__PURE__ */ new None, /* @__PURE__ */ new None);
-function is_valid_host_within_brackets_char(char) {
-  return 48 >= char && char <= 57 || 65 >= char && char <= 90 || 97 >= char && char <= 122 || char === 58 || char === 46;
-}
 function parse_fragment(rest, pieces) {
   return new Ok(new Uri(pieces.scheme, pieces.userinfo, pieces.host, pieces.port, pieces.path, pieces.query, new Some(rest)));
 }
@@ -2554,7 +2589,7 @@ function parse_query_with_question_mark_loop(loop$original, loop$uri_string, loo
     let uri_string = loop$uri_string;
     let pieces = loop$pieces;
     let size2 = loop$size;
-    if (uri_string.startsWith("#")) {
+    if (uri_string.charCodeAt(0) === 35) {
       if (size2 === 0) {
         let rest = uri_string.slice(1);
         return parse_fragment(rest, pieces);
@@ -2586,12 +2621,13 @@ function parse_path_loop(loop$original, loop$uri_string, loop$pieces, loop$size)
     let uri_string = loop$uri_string;
     let pieces = loop$pieces;
     let size2 = loop$size;
-    if (uri_string.startsWith("?")) {
+    let $ = uri_string.charCodeAt(0);
+    if ($ === 63) {
       let rest = uri_string.slice(1);
       let path = string_codeunit_slice(original, 0, size2);
       let pieces$1 = new Uri(pieces.scheme, pieces.userinfo, pieces.host, pieces.port, path, pieces.query, pieces.fragment);
       return parse_query_with_question_mark(rest, pieces$1);
-    } else if (uri_string.startsWith("#")) {
+    } else if ($ === 35) {
       let rest = uri_string.slice(1);
       let path = string_codeunit_slice(original, 0, size2);
       let pieces$1 = new Uri(pieces.scheme, pieces.userinfo, pieces.host, pieces.port, path, pieces.query, pieces.fragment);
@@ -2599,9 +2635,9 @@ function parse_path_loop(loop$original, loop$uri_string, loop$pieces, loop$size)
     } else if (uri_string === "") {
       return new Ok(new Uri(pieces.scheme, pieces.userinfo, pieces.host, pieces.port, original, pieces.query, pieces.fragment));
     } else {
-      let $ = pop_codeunit(uri_string);
+      let $1 = pop_codeunit(uri_string);
       let rest;
-      rest = $[1];
+      rest = $1[1];
       loop$original = original;
       loop$uri_string = rest;
       loop$pieces = pieces;
@@ -2617,65 +2653,66 @@ function parse_port_loop(loop$uri_string, loop$pieces, loop$port) {
     let uri_string = loop$uri_string;
     let pieces = loop$pieces;
     let port = loop$port;
-    if (uri_string.startsWith("0")) {
+    let $ = uri_string.charCodeAt(0);
+    if ($ === 48) {
       let rest = uri_string.slice(1);
       loop$uri_string = rest;
       loop$pieces = pieces;
       loop$port = port * 10;
-    } else if (uri_string.startsWith("1")) {
+    } else if ($ === 49) {
       let rest = uri_string.slice(1);
       loop$uri_string = rest;
       loop$pieces = pieces;
       loop$port = port * 10 + 1;
-    } else if (uri_string.startsWith("2")) {
+    } else if ($ === 50) {
       let rest = uri_string.slice(1);
       loop$uri_string = rest;
       loop$pieces = pieces;
       loop$port = port * 10 + 2;
-    } else if (uri_string.startsWith("3")) {
+    } else if ($ === 51) {
       let rest = uri_string.slice(1);
       loop$uri_string = rest;
       loop$pieces = pieces;
       loop$port = port * 10 + 3;
-    } else if (uri_string.startsWith("4")) {
+    } else if ($ === 52) {
       let rest = uri_string.slice(1);
       loop$uri_string = rest;
       loop$pieces = pieces;
       loop$port = port * 10 + 4;
-    } else if (uri_string.startsWith("5")) {
+    } else if ($ === 53) {
       let rest = uri_string.slice(1);
       loop$uri_string = rest;
       loop$pieces = pieces;
       loop$port = port * 10 + 5;
-    } else if (uri_string.startsWith("6")) {
+    } else if ($ === 54) {
       let rest = uri_string.slice(1);
       loop$uri_string = rest;
       loop$pieces = pieces;
       loop$port = port * 10 + 6;
-    } else if (uri_string.startsWith("7")) {
+    } else if ($ === 55) {
       let rest = uri_string.slice(1);
       loop$uri_string = rest;
       loop$pieces = pieces;
       loop$port = port * 10 + 7;
-    } else if (uri_string.startsWith("8")) {
+    } else if ($ === 56) {
       let rest = uri_string.slice(1);
       loop$uri_string = rest;
       loop$pieces = pieces;
       loop$port = port * 10 + 8;
-    } else if (uri_string.startsWith("9")) {
+    } else if ($ === 57) {
       let rest = uri_string.slice(1);
       loop$uri_string = rest;
       loop$pieces = pieces;
       loop$port = port * 10 + 9;
-    } else if (uri_string.startsWith("?")) {
+    } else if ($ === 63) {
       let rest = uri_string.slice(1);
       let pieces$1 = new Uri(pieces.scheme, pieces.userinfo, pieces.host, new Some(port), pieces.path, pieces.query, pieces.fragment);
       return parse_query_with_question_mark(rest, pieces$1);
-    } else if (uri_string.startsWith("#")) {
+    } else if ($ === 35) {
       let rest = uri_string.slice(1);
       let pieces$1 = new Uri(pieces.scheme, pieces.userinfo, pieces.host, new Some(port), pieces.path, pieces.query, pieces.fragment);
       return parse_fragment(rest, pieces$1);
-    } else if (uri_string.startsWith("/")) {
+    } else if ($ === 47) {
       let pieces$1 = new Uri(pieces.scheme, pieces.userinfo, pieces.host, new Some(port), pieces.path, pieces.query, pieces.fragment);
       return parse_path(uri_string, pieces$1);
     } else if (uri_string === "") {
@@ -2686,6 +2723,7 @@ function parse_port_loop(loop$uri_string, loop$pieces, loop$port) {
   }
 }
 function parse_port(uri_string, pieces) {
+  let $ = uri_string.charCodeAt(0);
   if (uri_string.startsWith(":0")) {
     let rest = uri_string.slice(2);
     return parse_port_loop(rest, pieces, 0);
@@ -2720,23 +2758,23 @@ function parse_port(uri_string, pieces) {
     return new Ok(pieces);
   } else if (uri_string === "") {
     return new Ok(pieces);
-  } else if (uri_string.startsWith("?")) {
+  } else if ($ === 63) {
     let rest = uri_string.slice(1);
     return parse_query_with_question_mark(rest, pieces);
   } else if (uri_string.startsWith(":?")) {
     let rest = uri_string.slice(2);
     return parse_query_with_question_mark(rest, pieces);
-  } else if (uri_string.startsWith("#")) {
+  } else if ($ === 35) {
     let rest = uri_string.slice(1);
     return parse_fragment(rest, pieces);
   } else if (uri_string.startsWith(":#")) {
     let rest = uri_string.slice(2);
     return parse_fragment(rest, pieces);
-  } else if (uri_string.startsWith("/")) {
+  } else if ($ === 47) {
     return parse_path(uri_string, pieces);
-  } else if (uri_string.startsWith(":")) {
+  } else if ($ === 58) {
     let rest = uri_string.slice(1);
-    if (rest.startsWith("/")) {
+    if (rest.charCodeAt(0) === 47) {
       return parse_path(rest, pieces);
     } else {
       return new Error(undefined);
@@ -2751,30 +2789,31 @@ function parse_host_outside_of_brackets_loop(loop$original, loop$uri_string, loo
     let uri_string = loop$uri_string;
     let pieces = loop$pieces;
     let size2 = loop$size;
+    let $ = uri_string.charCodeAt(0);
     if (uri_string === "") {
       return new Ok(new Uri(pieces.scheme, pieces.userinfo, new Some(original), pieces.port, pieces.path, pieces.query, pieces.fragment));
-    } else if (uri_string.startsWith(":")) {
+    } else if ($ === 58) {
       let host = string_codeunit_slice(original, 0, size2);
       let pieces$1 = new Uri(pieces.scheme, pieces.userinfo, new Some(host), pieces.port, pieces.path, pieces.query, pieces.fragment);
       return parse_port(uri_string, pieces$1);
-    } else if (uri_string.startsWith("/")) {
+    } else if ($ === 47) {
       let host = string_codeunit_slice(original, 0, size2);
       let pieces$1 = new Uri(pieces.scheme, pieces.userinfo, new Some(host), pieces.port, pieces.path, pieces.query, pieces.fragment);
       return parse_path(uri_string, pieces$1);
-    } else if (uri_string.startsWith("?")) {
+    } else if ($ === 63) {
       let rest = uri_string.slice(1);
       let host = string_codeunit_slice(original, 0, size2);
       let pieces$1 = new Uri(pieces.scheme, pieces.userinfo, new Some(host), pieces.port, pieces.path, pieces.query, pieces.fragment);
       return parse_query_with_question_mark(rest, pieces$1);
-    } else if (uri_string.startsWith("#")) {
+    } else if ($ === 35) {
       let rest = uri_string.slice(1);
       let host = string_codeunit_slice(original, 0, size2);
       let pieces$1 = new Uri(pieces.scheme, pieces.userinfo, new Some(host), pieces.port, pieces.path, pieces.query, pieces.fragment);
       return parse_fragment(rest, pieces$1);
     } else {
-      let $ = pop_codeunit(uri_string);
+      let $1 = pop_codeunit(uri_string);
       let rest;
-      rest = $[1];
+      rest = $1[1];
       loop$original = original;
       loop$uri_string = rest;
       loop$pieces = pieces;
@@ -2782,15 +2821,22 @@ function parse_host_outside_of_brackets_loop(loop$original, loop$uri_string, loo
     }
   }
 }
+function parse_host_outside_of_brackets(uri_string, pieces) {
+  return parse_host_outside_of_brackets_loop(uri_string, uri_string, pieces, 0);
+}
+function is_valid_host_within_brackets_char(char) {
+  return 48 >= char && char <= 57 || 65 >= char && char <= 90 || 97 >= char && char <= 122 || char === 58 || char === 46;
+}
 function parse_host_within_brackets_loop(loop$original, loop$uri_string, loop$pieces, loop$size) {
   while (true) {
     let original = loop$original;
     let uri_string = loop$uri_string;
     let pieces = loop$pieces;
     let size2 = loop$size;
+    let $ = uri_string.charCodeAt(0);
     if (uri_string === "") {
       return new Ok(new Uri(pieces.scheme, pieces.userinfo, new Some(uri_string), pieces.port, pieces.path, pieces.query, pieces.fragment));
-    } else if (uri_string.startsWith("]")) {
+    } else if ($ === 93) {
       if (size2 === 0) {
         let rest = uri_string.slice(1);
         return parse_port(rest, pieces);
@@ -2800,7 +2846,7 @@ function parse_host_within_brackets_loop(loop$original, loop$uri_string, loop$pi
         let pieces$1 = new Uri(pieces.scheme, pieces.userinfo, new Some(host), pieces.port, pieces.path, pieces.query, pieces.fragment);
         return parse_port(rest, pieces$1);
       }
-    } else if (uri_string.startsWith("/")) {
+    } else if ($ === 47) {
       if (size2 === 0) {
         return parse_path(uri_string, pieces);
       } else {
@@ -2808,7 +2854,7 @@ function parse_host_within_brackets_loop(loop$original, loop$uri_string, loop$pi
         let pieces$1 = new Uri(pieces.scheme, pieces.userinfo, new Some(host), pieces.port, pieces.path, pieces.query, pieces.fragment);
         return parse_path(uri_string, pieces$1);
       }
-    } else if (uri_string.startsWith("?")) {
+    } else if ($ === 63) {
       if (size2 === 0) {
         let rest = uri_string.slice(1);
         return parse_query_with_question_mark(rest, pieces);
@@ -2818,7 +2864,7 @@ function parse_host_within_brackets_loop(loop$original, loop$uri_string, loop$pi
         let pieces$1 = new Uri(pieces.scheme, pieces.userinfo, new Some(host), pieces.port, pieces.path, pieces.query, pieces.fragment);
         return parse_query_with_question_mark(rest, pieces$1);
       }
-    } else if (uri_string.startsWith("#")) {
+    } else if ($ === 35) {
       if (size2 === 0) {
         let rest = uri_string.slice(1);
         return parse_fragment(rest, pieces);
@@ -2829,13 +2875,13 @@ function parse_host_within_brackets_loop(loop$original, loop$uri_string, loop$pi
         return parse_fragment(rest, pieces$1);
       }
     } else {
-      let $ = pop_codeunit(uri_string);
+      let $1 = pop_codeunit(uri_string);
       let char;
       let rest;
-      char = $[0];
-      rest = $[1];
-      let $1 = is_valid_host_within_brackets_char(char);
-      if ($1) {
+      char = $1[0];
+      rest = $1[1];
+      let $2 = is_valid_host_within_brackets_char(char);
+      if ($2) {
         loop$original = original;
         loop$uri_string = rest;
         loop$pieces = pieces;
@@ -2849,13 +2895,11 @@ function parse_host_within_brackets_loop(loop$original, loop$uri_string, loop$pi
 function parse_host_within_brackets(uri_string, pieces) {
   return parse_host_within_brackets_loop(uri_string, uri_string, pieces, 0);
 }
-function parse_host_outside_of_brackets(uri_string, pieces) {
-  return parse_host_outside_of_brackets_loop(uri_string, uri_string, pieces, 0);
-}
 function parse_host(uri_string, pieces) {
-  if (uri_string.startsWith("[")) {
+  let $ = uri_string.charCodeAt(0);
+  if ($ === 91) {
     return parse_host_within_brackets(uri_string, pieces);
-  } else if (uri_string.startsWith(":")) {
+  } else if ($ === 58) {
     let pieces$1 = new Uri(pieces.scheme, pieces.userinfo, new Some(""), pieces.port, pieces.path, pieces.query, pieces.fragment);
     return parse_port(uri_string, pieces$1);
   } else if (uri_string === "") {
@@ -2870,7 +2914,8 @@ function parse_userinfo_loop(loop$original, loop$uri_string, loop$pieces, loop$s
     let uri_string = loop$uri_string;
     let pieces = loop$pieces;
     let size2 = loop$size;
-    if (uri_string.startsWith("@")) {
+    let $ = uri_string.charCodeAt(0);
+    if ($ === 64) {
       if (size2 === 0) {
         let rest = uri_string.slice(1);
         return parse_host(rest, pieces);
@@ -2882,16 +2927,16 @@ function parse_userinfo_loop(loop$original, loop$uri_string, loop$pieces, loop$s
       }
     } else if (uri_string === "") {
       return parse_host(original, pieces);
-    } else if (uri_string.startsWith("/")) {
+    } else if ($ === 47) {
       return parse_host(original, pieces);
-    } else if (uri_string.startsWith("?")) {
+    } else if ($ === 63) {
       return parse_host(original, pieces);
-    } else if (uri_string.startsWith("#")) {
+    } else if ($ === 35) {
       return parse_host(original, pieces);
     } else {
-      let $ = pop_codeunit(uri_string);
+      let $1 = pop_codeunit(uri_string);
       let rest;
-      rest = $[1];
+      rest = $1[1];
       loop$original = original;
       loop$uri_string = rest;
       loop$pieces = pieces;
@@ -2918,7 +2963,8 @@ function parse_scheme_loop(loop$original, loop$uri_string, loop$pieces, loop$siz
     let uri_string = loop$uri_string;
     let pieces = loop$pieces;
     let size2 = loop$size;
-    if (uri_string.startsWith("/")) {
+    let $ = uri_string.charCodeAt(0);
+    if ($ === 47) {
       if (size2 === 0) {
         return parse_authority_with_slashes(uri_string, pieces);
       } else {
@@ -2926,7 +2972,7 @@ function parse_scheme_loop(loop$original, loop$uri_string, loop$pieces, loop$siz
         let pieces$1 = new Uri(new Some(lowercase(scheme)), pieces.userinfo, pieces.host, pieces.port, pieces.path, pieces.query, pieces.fragment);
         return parse_authority_with_slashes(uri_string, pieces$1);
       }
-    } else if (uri_string.startsWith("?")) {
+    } else if ($ === 63) {
       if (size2 === 0) {
         let rest = uri_string.slice(1);
         return parse_query_with_question_mark(rest, pieces);
@@ -2936,7 +2982,7 @@ function parse_scheme_loop(loop$original, loop$uri_string, loop$pieces, loop$siz
         let pieces$1 = new Uri(new Some(lowercase(scheme)), pieces.userinfo, pieces.host, pieces.port, pieces.path, pieces.query, pieces.fragment);
         return parse_query_with_question_mark(rest, pieces$1);
       }
-    } else if (uri_string.startsWith("#")) {
+    } else if ($ === 35) {
       if (size2 === 0) {
         let rest = uri_string.slice(1);
         return parse_fragment(rest, pieces);
@@ -2946,7 +2992,7 @@ function parse_scheme_loop(loop$original, loop$uri_string, loop$pieces, loop$siz
         let pieces$1 = new Uri(new Some(lowercase(scheme)), pieces.userinfo, pieces.host, pieces.port, pieces.path, pieces.query, pieces.fragment);
         return parse_fragment(rest, pieces$1);
       }
-    } else if (uri_string.startsWith(":")) {
+    } else if ($ === 58) {
       if (size2 === 0) {
         return new Error(undefined);
       } else {
@@ -2958,15 +3004,18 @@ function parse_scheme_loop(loop$original, loop$uri_string, loop$pieces, loop$siz
     } else if (uri_string === "") {
       return new Ok(new Uri(pieces.scheme, pieces.userinfo, pieces.host, pieces.port, original, pieces.query, pieces.fragment));
     } else {
-      let $ = pop_codeunit(uri_string);
+      let $1 = pop_codeunit(uri_string);
       let rest;
-      rest = $[1];
+      rest = $1[1];
       loop$original = original;
       loop$uri_string = rest;
       loop$pieces = pieces;
       loop$size = size2 + 1;
     }
   }
+}
+function parse2(uri_string) {
+  return parse_scheme_loop(uri_string, uri_string, empty, 0);
 }
 function to_string3(uri) {
   let _block;
@@ -3043,9 +3092,6 @@ function to_string3(uri) {
   }
   let parts$5 = _block$4;
   return concat2(parts$5);
-}
-function parse2(uri_string) {
-  return parse_scheme_loop(uri_string, uri_string, empty, 0);
 }
 // build/dev/javascript/gleam_stdlib/gleam/bool.mjs
 function guard(requirement, consequence, alternative) {
@@ -3172,6 +3218,15 @@ var never_kind = 0;
 var never = /* @__PURE__ */ new Never(never_kind);
 var always_kind = 2;
 var always = /* @__PURE__ */ new Always(always_kind);
+function attribute(name, value) {
+  return new Attribute(attribute_kind, name, value);
+}
+function property(name, value) {
+  return new Property(property_kind, name, value);
+}
+function event(name, handler, include, prevent_default, stop_propagation, debounce, throttle) {
+  return new Event2(event_kind, name, handler, include, prevent_default, stop_propagation, debounce, throttle);
+}
 function merge(loop$attributes, loop$merged) {
   while (true) {
     let attributes = loop$attributes;
@@ -3297,15 +3352,6 @@ function prepare(attributes) {
     }
   }
 }
-function attribute(name, value) {
-  return new Attribute(attribute_kind, name, value);
-}
-function property(name, value) {
-  return new Property(property_kind, name, value);
-}
-function event(name, handler, include, prevent_default, stop_propagation, debounce, throttle) {
-  return new Event2(event_kind, name, handler, include, prevent_default, stop_propagation, debounce, throttle);
-}
 
 // build/dev/javascript/lustre/lustre/attribute.mjs
 function attribute2(name, value) {
@@ -3420,12 +3466,6 @@ class Actions extends CustomType {
   }
 }
 var empty2 = /* @__PURE__ */ new Effect(/* @__PURE__ */ toList([]), /* @__PURE__ */ toList([]), /* @__PURE__ */ toList([]));
-function perform(effect, dispatch, emit, select, root, provide) {
-  let actions = new Actions(dispatch, emit, select, root, provide);
-  return each(effect.synchronous, (run2) => {
-    return run2(actions);
-  });
-}
 function none() {
   return empty2;
 }
@@ -3439,6 +3479,12 @@ function from2(effect) {
 function batch(effects) {
   return fold2(effects, empty2, (acc, eff) => {
     return new Effect(fold2(eff.synchronous, acc.synchronous, prepend2), fold2(eff.before_paint, acc.before_paint, prepend2), fold2(eff.after_paint, acc.after_paint, prepend2));
+  });
+}
+function perform(effect, dispatch, emit, select, root, provide) {
+  let actions = new Actions(dispatch, emit, select, root, provide);
+  return each(effect.synchronous, (run2) => {
+    return run2(actions);
   });
 }
 
@@ -3569,6 +3615,12 @@ var text_kind = 2;
 var unsafe_inner_html_kind = 3;
 var map_kind = 4;
 var memo_kind = 5;
+function fragment(key, children, keyed_children) {
+  return new Fragment(fragment_kind, key, children, keyed_children);
+}
+function element(key, namespace, tag, attributes, children, keyed_children, self_closing, void$) {
+  return new Element(element_kind, key, namespace, tag, prepare(attributes), children, keyed_children, self_closing, void$);
+}
 function is_void_html_element(tag, namespace) {
   if (namespace === "") {
     if (tag === "area") {
@@ -3606,31 +3658,6 @@ function is_void_html_element(tag, namespace) {
     return false;
   }
 }
-function to_keyed(key, node) {
-  if (node instanceof Fragment) {
-    return new Fragment(node.kind, key, node.children, node.keyed_children);
-  } else if (node instanceof Element) {
-    return new Element(node.kind, key, node.namespace, node.tag, node.attributes, node.children, node.keyed_children, node.self_closing, node.void);
-  } else if (node instanceof Text) {
-    return new Text(node.kind, key, node.content);
-  } else if (node instanceof UnsafeInnerHtml) {
-    return new UnsafeInnerHtml(node.kind, key, node.namespace, node.tag, node.attributes, node.inner_html);
-  } else if (node instanceof Map2) {
-    let child = node.child;
-    return new Map2(node.kind, key, node.mapper, to_keyed(key, child));
-  } else {
-    let view = node.view;
-    return new Memo(node.kind, key, node.dependencies, () => {
-      return to_keyed(key, view());
-    });
-  }
-}
-function fragment(key, children, keyed_children) {
-  return new Fragment(fragment_kind, key, children, keyed_children);
-}
-function element(key, namespace, tag, attributes, children, keyed_children, self_closing, void$) {
-  return new Element(element_kind, key, namespace, tag, prepare(attributes), children, keyed_children, self_closing, void$);
-}
 function text(key, content) {
   return new Text(text_kind, key, content);
 }
@@ -3649,6 +3676,25 @@ function map5(element2, mapper) {
 }
 function memo(key, dependencies, view) {
   return new Memo(memo_kind, key, dependencies, view);
+}
+function to_keyed(key, node) {
+  if (node instanceof Fragment) {
+    return new Fragment(node.kind, key, node.children, node.keyed_children);
+  } else if (node instanceof Element) {
+    return new Element(node.kind, key, node.namespace, node.tag, node.attributes, node.children, node.keyed_children, node.self_closing, node.void);
+  } else if (node instanceof Text) {
+    return new Text(node.kind, key, node.content);
+  } else if (node instanceof UnsafeInnerHtml) {
+    return new UnsafeInnerHtml(node.kind, key, node.namespace, node.tag, node.attributes, node.inner_html);
+  } else if (node instanceof Map2) {
+    let child = node.child;
+    return new Map2(node.kind, key, node.mapper, to_keyed(key, child));
+  } else {
+    let view = node.view;
+    return new Memo(node.kind, key, node.dependencies, () => {
+      return to_keyed(key, view());
+    });
+  }
 }
 
 // build/dev/javascript/lustre/lustre/element.mjs
@@ -3753,6 +3799,12 @@ function img(attrs) {
 function del(attrs, children) {
   return element2("del", attrs, children);
 }
+function col(attrs) {
+  return element2("col", attrs, empty_list);
+}
+function colgroup(attrs, children) {
+  return element2("colgroup", attrs, children);
+}
 function table(attrs, children) {
   return element2("table", attrs, children);
 }
@@ -3795,13 +3847,13 @@ var token = undefined;
 function new$2() {
   return new Set2(make());
 }
+function insert3(set, member) {
+  return new Set2(insert(set.dict, member, token));
+}
 function contains2(set, member) {
   let _pipe = set.dict;
   let _pipe$1 = get(_pipe, member);
   return is_ok(_pipe$1);
-}
-function insert3(set, member) {
-  return new Set2(insert(set.dict, member, token));
 }
 
 // build/dev/javascript/lustre/lustre/vdom/patch.mjs
@@ -4026,40 +4078,11 @@ class Subtree extends CustomType {
     this.parent = parent;
   }
 }
-var root = /* @__PURE__ */ new Root;
-var separator_element = "\t";
 var separator_subtree = "\r";
+var separator_element = "\t";
 var separator_event = `
 `;
-function do_matches(loop$path, loop$candidates) {
-  while (true) {
-    let path = loop$path;
-    let candidates = loop$candidates;
-    if (candidates instanceof Empty) {
-      return false;
-    } else {
-      let candidate = candidates.head;
-      let rest = candidates.tail;
-      let $ = starts_with(path, candidate);
-      if ($) {
-        return $;
-      } else {
-        loop$path = path;
-        loop$candidates = rest;
-      }
-    }
-  }
-}
-function add2(parent, index4, key) {
-  if (key === "") {
-    return new Index(index4, parent);
-  } else {
-    return new Key(key, parent);
-  }
-}
-function subtree(path) {
-  return new Subtree(path);
-}
+var root = /* @__PURE__ */ new Root;
 function finish_to_string(acc) {
   if (acc instanceof Empty) {
     return "";
@@ -4067,9 +4090,6 @@ function finish_to_string(acc) {
     let segments = acc.tail;
     return concat2(segments);
   }
-}
-function split_subtree_path(path) {
-  return split2(path, separator_subtree);
 }
 function do_to_string(loop$full, loop$path, loop$acc) {
   while (true) {
@@ -4108,11 +4128,27 @@ function do_to_string(loop$full, loop$path, loop$acc) {
     }
   }
 }
-function child(path) {
-  return do_to_string(false, path, empty_list);
-}
 function to_string5(path) {
   return do_to_string(true, path, empty_list);
+}
+function do_matches(loop$path, loop$candidates) {
+  while (true) {
+    let path = loop$path;
+    let candidates = loop$candidates;
+    if (candidates instanceof Empty) {
+      return false;
+    } else {
+      let candidate = candidates.head;
+      let rest = candidates.tail;
+      let $ = starts_with(path, candidate);
+      if ($) {
+        return $;
+      } else {
+        loop$path = path;
+        loop$candidates = rest;
+      }
+    }
+  }
 }
 function matches(path, candidates) {
   if (candidates instanceof Empty) {
@@ -4121,8 +4157,24 @@ function matches(path, candidates) {
     return do_matches(to_string5(path), candidates);
   }
 }
+function split_subtree_path(path) {
+  return split2(path, separator_subtree);
+}
+function add2(parent, index4, key) {
+  if (key === "") {
+    return new Index(index4, parent);
+  } else {
+    return new Key(key, parent);
+  }
+}
+function subtree(path) {
+  return new Subtree(path);
+}
 function event2(path, event3) {
   return do_to_string(false, path, prepend(separator_event, prepend(event3, empty_list)));
+}
+function child(path) {
+  return do_to_string(false, path, empty_list);
 }
 
 // build/dev/javascript/lustre/lustre/vdom/cache.mjs
@@ -4187,63 +4239,17 @@ function new_events() {
 function new$5() {
   return new Cache(new_events(), empty3(), empty3(), empty_list, empty_list);
 }
-function tick(cache) {
-  return new Cache(cache.events, empty3(), cache.vdoms, cache.next_dispatched_paths, empty_list);
-}
-function events(cache) {
-  return cache.events;
-}
-function update_events(cache, events2) {
-  return new Cache(events2, cache.vdoms, cache.old_vdoms, cache.dispatched_paths, cache.next_dispatched_paths);
-}
-function memos(cache) {
-  return cache.vdoms;
-}
-function get_old_memo(cache, old, new$6) {
-  return get_or_compute(cache.old_vdoms, old, new$6);
-}
-function keep_memo(cache, old, new$6) {
-  let node = get_or_compute(cache.old_vdoms, old, new$6);
-  let vdoms = insert2(cache.vdoms, new$6, node);
-  return new Cache(cache.events, vdoms, cache.old_vdoms, cache.dispatched_paths, cache.next_dispatched_paths);
-}
-function add_memo(cache, new$6, node) {
-  let vdoms = insert2(cache.vdoms, new$6, node);
-  return new Cache(cache.events, vdoms, cache.old_vdoms, cache.dispatched_paths, cache.next_dispatched_paths);
-}
-function get_subtree(events2, path, old_mapper) {
-  let child2 = get_or_compute(events2.children, path, () => {
-    return new Child(old_mapper, new_events());
-  });
-  return child2.events;
-}
-function update_subtree(parent, path, mapper, events2) {
-  let new_child = new Child(mapper, events2);
-  let children = insert2(parent.children, path, new_child);
-  return new Events(parent.handlers, children);
-}
 function do_add_event(handlers, path, name, handler) {
   return insert2(handlers, event2(path, name), handler);
 }
-function add_event(events2, path, name, handler) {
-  let handlers = do_add_event(events2.handlers, path, name, handler);
-  return new Events(handlers, events2.children);
-}
-function do_remove_event(handlers, path, name) {
-  return remove(handlers, event2(path, name));
-}
-function remove_event(events2, path, name) {
-  let handlers = do_remove_event(events2.handlers, path, name);
-  return new Events(handlers, events2.children);
-}
 function add_attributes(handlers, path, attributes) {
-  return fold2(attributes, handlers, (events2, attribute3) => {
+  return fold2(attributes, handlers, (events, attribute3) => {
     if (attribute3 instanceof Event2) {
       let name = attribute3.name;
       let handler = attribute3.handler;
-      return do_add_event(events2, path, name, handler);
+      return do_add_event(events, path, name, handler);
     } else {
-      return events2;
+      return events;
     }
   });
 }
@@ -4352,12 +4358,12 @@ function do_add_children(loop$handlers, loop$children, loop$vdoms, loop$parent, 
     }
   }
 }
-function add_children(cache, events2, path, child_index, nodes) {
+function add_children(cache, events, path, child_index, nodes) {
   let vdoms = cache.vdoms;
   let handlers;
   let children;
-  handlers = events2.handlers;
-  children = events2.children;
+  handlers = events.handlers;
+  children = events.children;
   let $ = do_add_children(handlers, children, vdoms, path, child_index, nodes);
   let handlers$1;
   let children$1;
@@ -4370,9 +4376,9 @@ function add_children(cache, events2, path, child_index, nodes) {
     new Events(handlers$1, children$1)
   ];
 }
-function add_child(cache, events2, parent, index4, child2) {
+function add_child(cache, events, parent, index4, child2) {
   let children = prepend(child2, empty_list);
-  return add_children(cache, events2, parent, index4, children);
+  return add_children(cache, events, parent, index4, children);
 }
 function from_node(root2) {
   let cache = new$5();
@@ -4382,6 +4388,52 @@ function from_node(root2) {
   cache$1 = $[0];
   events$1 = $[1];
   return new Cache(events$1, cache$1.vdoms, cache$1.old_vdoms, cache$1.dispatched_paths, cache$1.next_dispatched_paths);
+}
+function tick(cache) {
+  return new Cache(cache.events, empty3(), cache.vdoms, cache.next_dispatched_paths, empty_list);
+}
+function events(cache) {
+  return cache.events;
+}
+function update_events(cache, events2) {
+  return new Cache(events2, cache.vdoms, cache.old_vdoms, cache.dispatched_paths, cache.next_dispatched_paths);
+}
+function memos(cache) {
+  return cache.vdoms;
+}
+function get_old_memo(cache, old, new$6) {
+  return get_or_compute(cache.old_vdoms, old, new$6);
+}
+function keep_memo(cache, old, new$6) {
+  let node = get_or_compute(cache.old_vdoms, old, new$6);
+  let vdoms = insert2(cache.vdoms, new$6, node);
+  return new Cache(cache.events, vdoms, cache.old_vdoms, cache.dispatched_paths, cache.next_dispatched_paths);
+}
+function add_memo(cache, new$6, node) {
+  let vdoms = insert2(cache.vdoms, new$6, node);
+  return new Cache(cache.events, vdoms, cache.old_vdoms, cache.dispatched_paths, cache.next_dispatched_paths);
+}
+function get_subtree(events2, path, old_mapper) {
+  let child2 = get_or_compute(events2.children, path, () => {
+    return new Child(old_mapper, new_events());
+  });
+  return child2.events;
+}
+function update_subtree(parent, path, mapper, events2) {
+  let new_child = new Child(mapper, events2);
+  let children = insert2(parent.children, path, new_child);
+  return new Events(parent.handlers, children);
+}
+function add_event(events2, path, name, handler) {
+  let handlers = do_add_event(events2.handlers, path, name, handler);
+  return new Events(handlers, events2.children);
+}
+function do_remove_event(handlers, path, name) {
+  return remove(handlers, event2(path, name));
+}
+function remove_event(events2, path, name) {
+  let handlers = do_remove_event(events2.handlers, path, name);
+  return new Events(handlers, events2.children);
 }
 function remove_attributes(handlers, path, attributes) {
   return fold2(attributes, handlers, (events2, attribute3) => {
@@ -4503,19 +4555,6 @@ function replace_child(cache, events2, parent, child_index, prev, next) {
   let events$1 = remove_child(cache, events2, parent, child_index, prev);
   return add_child(cache, events$1, parent, child_index, next);
 }
-function dispatch(cache, event3) {
-  let next_dispatched_paths = prepend(event3.path, cache.next_dispatched_paths);
-  let cache$1 = new Cache(cache.events, cache.vdoms, cache.old_vdoms, cache.dispatched_paths, next_dispatched_paths);
-  if (event3 instanceof DecodedEvent) {
-    let handler = event3.handler;
-    return [cache$1, new Ok(handler)];
-  } else {
-    return [cache$1, error_nil];
-  }
-}
-function has_dispatched_events(cache, path) {
-  return matches(path, cache.dispatched_paths);
-}
 function get_handler(loop$events, loop$path, loop$mapper) {
   while (true) {
     let events2 = loop$events;
@@ -4569,11 +4608,24 @@ function decode2(cache, path, name, event3) {
     return new DispatchedEvent(path);
   }
 }
+function dispatch(cache, event3) {
+  let next_dispatched_paths = prepend(event3.path, cache.next_dispatched_paths);
+  let cache$1 = new Cache(cache.events, cache.vdoms, cache.old_vdoms, cache.dispatched_paths, next_dispatched_paths);
+  if (event3 instanceof DecodedEvent) {
+    let handler = event3.handler;
+    return [cache$1, new Ok(handler)];
+  } else {
+    return [cache$1, error_nil];
+  }
+}
 function handle(cache, path, name, event3) {
   let _pipe = decode2(cache, path, name, event3);
   return ((_capture) => {
     return dispatch(cache, _capture);
   })(_pipe);
+}
+function has_dispatched_events(cache, path) {
+  return matches(path, cache.dispatched_paths);
 }
 
 // build/dev/javascript/lustre/lustre/runtime/server/runtime.mjs
@@ -4736,17 +4788,6 @@ class AttributeChange extends CustomType {
     this.added = added;
     this.removed = removed;
     this.events = events2;
-  }
-}
-function is_controlled(cache, namespace, tag, path) {
-  if (tag === "input" && namespace === "") {
-    return has_dispatched_events(cache, path);
-  } else if (tag === "select" && namespace === "") {
-    return has_dispatched_events(cache, path);
-  } else if (tag === "textarea" && namespace === "") {
-    return has_dispatched_events(cache, path);
-  } else {
-    return false;
   }
 }
 function diff_attributes(loop$controlled, loop$path, loop$events, loop$old, loop$new, loop$added, loop$removed) {
@@ -4989,6 +5030,17 @@ function diff_attributes(loop$controlled, loop$path, loop$events, loop$old, loop
         loop$removed = removed;
       }
     }
+  }
+}
+function is_controlled(cache, namespace, tag, path) {
+  if (tag === "input" && namespace === "") {
+    return has_dispatched_events(cache, path);
+  } else if (tag === "select" && namespace === "") {
+    return has_dispatched_events(cache, path);
+  } else if (tag === "textarea" && namespace === "") {
+    return has_dispatched_events(cache, path);
+  } else {
+    return false;
   }
 }
 function do_diff(loop$old, loop$old_keyed, loop$new, loop$new_keyed, loop$moved, loop$moved_offset, loop$removed, loop$node_index, loop$patch_index, loop$changes, loop$children, loop$path, loop$cache, loop$events) {
@@ -7092,6 +7144,13 @@ class Handler2 extends CustomType {
     this.run = run2;
   }
 }
+function decode_json_body(response, decoder) {
+  let _pipe = response.body;
+  let _pipe$1 = parse(_pipe, decoder);
+  return map_error(_pipe$1, (var0) => {
+    return new JsonError(var0);
+  });
+}
 function expect_ok_response(handler) {
   return new Handler2((result) => {
     return handler(try$(result, (response) => {
@@ -7129,6 +7188,22 @@ function expect_json_response(handler) {
     }));
   });
 }
+function expect_json(decoder, handler) {
+  return expect_json_response((result) => {
+    let _pipe = result;
+    let _pipe$1 = try$(_pipe, (_capture) => {
+      return decode_json_body(_capture, decoder);
+    });
+    return handler(_pipe$1);
+  });
+}
+function reject(err, handler) {
+  return from2((dispatch2) => {
+    let _pipe = new Error(err);
+    let _pipe$1 = handler.run(_pipe);
+    return dispatch2(_pipe$1);
+  });
+}
 function do_send(request, handler) {
   return from2((dispatch2) => {
     let _pipe = send2(request);
@@ -7152,34 +7227,11 @@ function do_send(request, handler) {
 function send3(request, handler) {
   return do_send(request, handler);
 }
-function reject(err, handler) {
-  return from2((dispatch2) => {
-    let _pipe = new Error(err);
-    let _pipe$1 = handler.run(_pipe);
-    return dispatch2(_pipe$1);
-  });
-}
-function decode_json_body(response, decoder) {
-  let _pipe = response.body;
-  let _pipe$1 = parse(_pipe, decoder);
-  return map_error(_pipe$1, (var0) => {
-    return new JsonError(var0);
-  });
-}
-function expect_json(decoder, handler) {
-  return expect_json_response((result) => {
-    let _pipe = result;
-    let _pipe$1 = try$(_pipe, (_capture) => {
-      return decode_json_body(_capture, decoder);
-    });
-    return handler(_pipe$1);
-  });
-}
 function to_uri2(uri_string) {
   let _block;
   if (uri_string.startsWith("./")) {
     _block = from_relative_url(uri_string);
-  } else if (uri_string.startsWith("/")) {
+  } else if (uri_string.charCodeAt(0) === 47) {
     _block = from_relative_url(uri_string);
   } else {
     _block = parse2(uri_string);
@@ -7258,11 +7310,12 @@ class PrFile extends CustomType {
   }
 }
 class PrGroups extends CustomType {
-  constructor(created_by_me, review_requested, all_open, production_pr) {
+  constructor(created_by_me, review_requested, all_open, all_open_total, production_pr) {
     super();
     this.created_by_me = created_by_me;
     this.review_requested = review_requested;
     this.all_open = all_open;
+    this.all_open_total = all_open_total;
     this.production_pr = production_pr;
   }
 }
@@ -7306,7 +7359,7 @@ class AnalysisResult extends CustomType {
   }
 }
 class PrComment extends CustomType {
-  constructor(id2, author, body, path, line, created_at, in_reply_to_id) {
+  constructor(id2, author, body, path, line, created_at, in_reply_to_id, is_human, is_resolved) {
     super();
     this.id = id2;
     this.author = author;
@@ -7315,6 +7368,8 @@ class PrComment extends CustomType {
     this.line = line;
     this.created_at = created_at;
     this.in_reply_to_id = in_reply_to_id;
+    this.is_human = is_human;
+    this.is_resolved = is_resolved;
   }
 }
 function feedback_count_decoder() {
@@ -7357,10 +7412,12 @@ function pr_groups_decoder() {
   return field("created_by_me", list2(pull_request_decoder()), (created_by_me) => {
     return field("review_requested", list2(pull_request_decoder()), (review_requested) => {
       return field("all_open", list2(pull_request_decoder()), (all_open) => {
-        return field("production_pr", one_of(map3(pull_request_decoder(), (var0) => {
-          return new Some(var0);
-        }), toList([success(new None)])), (production_pr) => {
-          return success(new PrGroups(created_by_me, review_requested, all_open, production_pr));
+        return optional_field("all_open_total", 0, int2, (all_open_total) => {
+          return field("production_pr", one_of(map3(pull_request_decoder(), (var0) => {
+            return new Some(var0);
+          }), toList([success(new None)])), (production_pr) => {
+            return success(new PrGroups(created_by_me, review_requested, all_open, all_open_total, production_pr));
+          });
         });
       });
     });
@@ -7424,7 +7481,11 @@ function pr_comment_decoder() {
           return field("line", int2, (line) => {
             return field("created_at", string2, (created_at) => {
               return field("in_reply_to_id", int2, (in_reply_to_id) => {
-                return success(new PrComment(id2, author, body, path, line, created_at, in_reply_to_id));
+                return optional_field("is_human", true, bool, (is_human) => {
+                  return optional_field("is_resolved", false, bool, (is_resolved) => {
+                    return success(new PrComment(id2, author, body, path, line, created_at, in_reply_to_id, is_human, is_resolved));
+                  });
+                });
               });
             });
           });
@@ -7467,6 +7528,17 @@ function connect(url, onEvent, onError) {
 class Dashboard extends CustomType {
 }
 class PrReview extends CustomType {
+}
+class PrFeedback extends CustomType {
+}
+class FeedbackState extends CustomType {
+  constructor(selected_comment_id, expand_up, expand_down, whole_file) {
+    super();
+    this.selected_comment_id = selected_comment_id;
+    this.expand_up = expand_up;
+    this.expand_down = expand_down;
+    this.whole_file = whole_file;
+  }
 }
 class NotCommenting extends CustomType {
 }
@@ -7527,7 +7599,7 @@ class Analyzed extends CustomType {
   }
 }
 class Model extends CustomType {
-  constructor(repos, active_repo, pr_groups, selected_pr, loading, view2, error, analysis_state, current_chunk, comments, commenting, github_comments, description_open, review, hide_bot_comments) {
+  constructor(repos, active_repo, pr_groups, selected_pr, loading, view2, error, analysis_state, current_chunk, comments, commenting, github_comments, description_open, review, hide_bot_comments, feedback) {
     super();
     this.repos = repos;
     this.active_repo = active_repo;
@@ -7544,9 +7616,16 @@ class Model extends CustomType {
     this.description_open = description_open;
     this.review = review;
     this.hide_bot_comments = hide_bot_comments;
+    this.feedback = feedback;
   }
 }
 class GotPrs extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class RefreshedPrs extends CustomType {
   constructor($0) {
     super();
     this[0] = $0;
@@ -7563,6 +7642,32 @@ class SelectPr extends CustomType {
     super();
     this[0] = $0;
   }
+}
+class SelectPrForFeedback extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class SelectFeedbackComment extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
+class ExpandFeedbackUp extends CustomType {
+}
+class ExpandFeedbackDown extends CustomType {
+}
+class ShowWholeFile extends CustomType {
+}
+class NextFeedback extends CustomType {
+}
+class PrevFeedback extends CustomType {
+}
+class SwitchToAnalysis extends CustomType {
+}
+class SwitchToFeedback extends CustomType {
 }
 class SetRepo extends CustomType {
   constructor($0) {
@@ -7683,11 +7788,25 @@ class ReviewSubmitted extends CustomType {
 }
 class RefreshPrs extends CustomType {
 }
+var feedback_default_radius = 15;
+function initial_feedback_state() {
+  return new FeedbackState(new None, 0, 0, false);
+}
+
+// build/dev/javascript/client/client/scroll_ffi.mjs
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
 
 // build/dev/javascript/client/client/effects.mjs
 function fetch_prs(repo) {
   return get3("/api/prs?repo=" + repo, expect_json(pr_groups_decoder(), (var0) => {
     return new GotPrs(var0);
+  }));
+}
+function refresh_prs(repo) {
+  return get3("/api/prs?repo=" + repo, expect_json(pr_groups_decoder(), (var0) => {
+    return new RefreshedPrs(var0);
   }));
 }
 function fetch_pr_detail(repo, number) {
@@ -7739,6 +7858,11 @@ function submit_review(repo, number, event3, body) {
       return;
     }));
   }));
+}
+function scroll_to_top() {
+  return from2((_) => {
+    return scrollToTop();
+  });
 }
 function start_auto_refresh() {
   return from2((dispatch2) => {
@@ -7876,6 +8000,9 @@ var center2 = ["text-align", "center"];
 // build/dev/javascript/monks_of_style/monks/text_decoration.mjs
 var none5 = ["text-decoration", "none"];
 var underline = ["text-decoration", "underline"];
+function raw15(value2) {
+  return ["text-decoration", value2];
+}
 
 // build/dev/javascript/monks_of_style/monks/white_space.mjs
 var pre2 = ["white-space", "pre"];
@@ -7883,7 +8010,7 @@ var nowrap = ["white-space", "nowrap"];
 var pre_wrap = ["white-space", "pre-wrap"];
 
 // build/dev/javascript/monks_of_style/monks/width.mjs
-function raw15(value2) {
+function raw16(value2) {
   return ["width", value2];
 }
 
@@ -7912,10 +8039,12 @@ var violet_4 = "var(--violet-4)";
 var violet_6 = "var(--violet-6)";
 var violet_9 = "var(--violet-9)";
 var indigo_1 = "var(--indigo-1)";
+var indigo_3 = "var(--indigo-3)";
 var indigo_4 = "var(--indigo-4)";
 var indigo_6 = "var(--indigo-6)";
 var indigo_7 = "var(--indigo-7)";
 var indigo_9 = "var(--indigo-9)";
+var indigo_10 = "var(--indigo-10)";
 var indigo_12 = "var(--indigo-12)";
 var blue_1 = "var(--blue-1)";
 var blue_2 = "var(--blue-2)";
@@ -7925,6 +8054,7 @@ var blue_6 = "var(--blue-6)";
 var blue_7 = "var(--blue-7)";
 var blue_8 = "var(--blue-8)";
 var blue_9 = "var(--blue-9)";
+var green_1 = "var(--green-1)";
 var green_2 = "var(--green-2)";
 var green_7 = "var(--green-7)";
 var green_10 = "var(--green-10)";
@@ -7936,6 +8066,7 @@ var yellow_6 = "var(--yellow-6)";
 var yellow_7 = "var(--yellow-7)";
 var yellow_10 = "var(--yellow-10)";
 var orange_1 = "var(--orange-1)";
+var orange_6 = "var(--orange-6)";
 var orange_7 = "var(--orange-7)";
 var orange_9 = "var(--orange-9)";
 
@@ -8022,105 +8153,365 @@ function build_and_flatten(prs) {
 }
 
 // build/dev/javascript/client/client/views/dashboard.mjs
-function repo_selector(model) {
-  return div(toList([
+function feedback_badge(fc) {
+  return span(toList([
+    title(fc.author + ": " + to_string(fc.count) + " comment" + (() => {
+      let $ = fc.count;
+      if ($ === 1) {
+        return "";
+      } else {
+        return "s";
+      }
+    })()),
     styles(toList([
-      flex,
-      raw10(size_2),
-      raw12(size_5),
-      center
+      inline_flex,
+      center,
+      raw10("0.25rem"),
+      raw14("0.15rem " + size_2),
+      raw4(radius_2),
+      raw8(font_size_0),
+      nowrap,
+      raw(orange_1),
+      raw5(orange_9)
     ]))
   ]), toList([
-    label(toList([styles(toList([raw9("600")]))]), toList([text3("Repository:")])),
-    input(toList([
-      value(model.active_repo),
-      placeholder("owner/repo"),
-      on_input((var0) => {
-        return new SetRepo(var0);
-      }),
-      styles(toList([
-        raw14(size_2 + " " + size_3),
-        raw2("1px solid " + gray_4),
-        raw4(radius_2),
-        raw7("1"),
-        raw8(font_size_1)
-      ]))
-    ])),
-    button(toList([
-      on_click(new FetchPrs),
-      styles(toList([
-        raw14(size_2 + " " + size_4),
-        raw(indigo_6),
-        raw5("white"),
-        none4,
-        raw4(radius_2),
-        pointer,
-        raw8(font_size_1)
-      ]))
-    ]), toList([text3("Fetch PRs")]))
+    span(toList([
+      class$("material-symbols-outlined"),
+      styles(toList([raw8(font_size_0)]))
+    ]), toList([text3("chat_bubble")])),
+    text3(fc.author + " (" + to_string(fc.count) + ")")
   ]));
 }
-function production_pr_banner(pr_groups) {
-  if (pr_groups instanceof Some) {
-    let groups = pr_groups[0];
-    let $ = groups.production_pr;
-    if ($ instanceof Some) {
-      let prod_pr = $[0];
-      return a(toList([
-        href(prod_pr.url),
-        target("_blank"),
-        styles(toList([
-          flex,
-          center,
-          raw10(size_3),
-          raw14(size_3 + " " + size_4),
-          raw12(size_4),
-          raw(violet_1),
-          raw2("1px solid " + violet_4),
-          raw4(radius_2),
-          raw5(violet_9),
-          raw8(font_size_1),
-          raw9("500"),
-          none5,
-          pointer
-        ]))
-      ]), toList([
-        span(toList([
-          class$("material-symbols-outlined"),
-          styles(toList([raw8(font_size_3)]))
-        ]), toList([text3("rocket_launch")])),
-        text3(prod_pr.title),
-        span(toList([styles(toList([raw5(violet_6)]))]), toList([text3(" #" + to_string(prod_pr.number))]))
-      ]));
-    } else {
-      return text3("");
-    }
+function review_badge(decision, draft) {
+  let _block;
+  if (draft) {
+    _block = [blue_2, blue_9, "Draft"];
+  } else if (decision === "APPROVED") {
+    _block = [green_2, green_10, "Approved"];
+  } else if (decision === "CHANGES_REQUESTED") {
+    _block = [red_2, red_10, "Changes requested"];
+  } else if (decision === "REVIEW_REQUIRED") {
+    _block = [yellow_2, yellow_10, "Review required"];
+  } else if (decision === "") {
+    _block = [gray_1, gray_6, "No reviews"];
   } else {
-    return text3("");
+    let other = decision;
+    _block = [gray_2, gray_8, other];
+  }
+  let $ = _block;
+  let bg;
+  let fg;
+  let label2;
+  bg = $[0];
+  fg = $[1];
+  label2 = $[2];
+  return span(toList([
+    styles(toList([
+      raw14("0.25rem " + size_2),
+      raw4(radius_2),
+      raw8(font_size_0),
+      nowrap,
+      raw(bg),
+      raw5(fg)
+    ]))
+  ]), toList([text3(label2)]));
+}
+function checks_badge(status, checks_url) {
+  let _block;
+  if (status === "passing") {
+    _block = [green_7, "check_circle", "Checks passing"];
+  } else if (status === "failing") {
+    _block = [red_7, "cancel", "Checks failing"];
+  } else if (status === "pending") {
+    _block = [yellow_7, "schedule", "Checks pending"];
+  } else {
+    _block = [gray_5, "help", "Checks unknown"];
+  }
+  let $ = _block;
+  let badge_color;
+  let icon;
+  let title2;
+  badge_color = $[0];
+  icon = $[1];
+  title2 = $[2];
+  let icon_el = span(toList([
+    class$("material-symbols-outlined"),
+    title(title2),
+    styles(toList([raw8(font_size_2), raw5(badge_color)]))
+  ]), toList([text3(icon)]));
+  if (checks_url === "") {
+    return icon_el;
+  } else {
+    let url = checks_url;
+    return a(toList([
+      href(url),
+      target("_blank"),
+      title("View failing check"),
+      styles(toList([inline_flex, none5])),
+      (() => {
+        let _pipe = on_click(new FetchPrs);
+        return stop_propagation(_pipe);
+      })()
+    ]), toList([icon_el]));
   }
 }
-function error_banner(message2) {
-  return div(toList([
-    styles(toList([
-      raw14(size_3 + " " + size_4),
-      raw12(size_4),
-      raw(red_1),
-      raw2("1px solid " + red_4),
-      raw4(radius_2),
-      raw5(red_10),
-      raw8(font_size_0)
-    ]))
-  ]), toList([text3(message2)]));
+function tree_connectors(depth, is_last) {
+  if (depth === 0) {
+    return toList([]);
+  } else {
+    let left2 = "calc(" + size_4 + " + " + to_string((depth - 1) * 20) + "px)";
+    let _block;
+    if (is_last) {
+      _block = "50%";
+    } else {
+      _block = "0";
+    }
+    let vert_bottom = _block;
+    return toList([
+      span(toList([
+        styles(toList([
+          ["position", "absolute"],
+          ["left", left2],
+          ["top", "-1px"],
+          ["bottom", vert_bottom],
+          ["width", "1px"],
+          raw(gray_4)
+        ]))
+      ]), toList([])),
+      span(toList([
+        styles(toList([
+          ["position", "absolute"],
+          ["left", left2],
+          ["top", "50%"],
+          ["width", "14px"],
+          ["height", "1px"],
+          raw(gray_4)
+        ]))
+      ]), toList([]))
+    ]);
+  }
 }
-function loading_indicator() {
+function pr_row(entry, show_branch) {
+  let pull_request;
+  let depth;
+  let is_last;
+  let in_stack;
+  pull_request = entry.pr;
+  depth = entry.depth;
+  is_last = entry.is_last;
+  in_stack = entry.in_stack;
+  let _block;
+  if (in_stack) {
+    _block = raw("rgba(99, 102, 241, 0.04)");
+  } else {
+    _block = raw("transparent");
+  }
+  let bg = _block;
+  let _block$1;
+  if (show_branch) {
+    _block$1 = new SelectPrForFeedback(pull_request.number);
+  } else {
+    _block$1 = new SelectPr(pull_request.number);
+  }
+  let click_msg = _block$1;
+  return tr(toList([
+    on_click(click_msg),
+    styles(toList([
+      pointer,
+      raw3("1px solid " + gray_2),
+      bg
+    ]))
+  ]), toList([
+    td(toList([
+      styles(toList([raw14(size_1 + " " + size_3)]))
+    ]), toList([
+      a(toList([
+        href(pull_request.url),
+        target("_blank"),
+        (() => {
+          let _pipe = on_click(new FetchPrs);
+          return stop_propagation(_pipe);
+        })(),
+        styles(toList([
+          raw5(indigo_6),
+          none5,
+          raw9("500")
+        ])),
+        class$("hover-underline")
+      ]), toList([text3("#" + to_string(pull_request.number))]))
+    ])),
+    (() => {
+      let _block$2;
+      if (depth === 0) {
+        _block$2 = size_3;
+      } else {
+        let d = depth;
+        _block$2 = "calc(" + size_3 + " + " + to_string(d * 20) + "px)";
+      }
+      let title_pad_left = _block$2;
+      return td(toList([
+        styles(toList([
+          raw14(size_1 + " " + size_3 + " " + size_1 + " " + title_pad_left),
+          raw9("500"),
+          ["position", "relative"],
+          ["overflow", "visible"]
+        ]))
+      ]), append(tree_connectors(depth, is_last), toList([
+        div(toList([]), toList([text3(pull_request.title)])),
+        (() => {
+          if (show_branch) {
+            return div(toList([
+              styles(toList([
+                raw11("0.15rem 0 0 0"),
+                raw8(font_size_0),
+                raw9("400"),
+                raw5(gray_6),
+                ["font-family", font_mono]
+              ]))
+            ]), toList([text3(pull_request.head_ref_name)]));
+          } else {
+            return text3("");
+          }
+        })()
+      ])));
+    })(),
+    td(toList([
+      styles(toList([
+        raw14(size_1 + " " + size_3),
+        flex,
+        center,
+        raw10(size_2),
+        ["flex-wrap", "wrap"]
+      ]))
+    ]), (() => {
+      if (show_branch) {
+        return prepend((() => {
+          let $ = pull_request.reviewers;
+          if ($ instanceof Empty) {
+            return span(toList([
+              styles(toList([raw5(gray_5)]))
+            ]), toList([text3("—")]));
+          } else {
+            let reviewers = $;
+            return text3(join(reviewers, ", "));
+          }
+        })(), map2(pull_request.feedback, feedback_badge));
+      } else {
+        return toList([
+          text3(pull_request.author),
+          (() => {
+            let $ = pull_request.reviewers;
+            if ($ instanceof Empty) {
+              return text3("");
+            } else {
+              let reviewers = $;
+              return span(toList([
+                styles(toList([
+                  raw11("0 0 0 " + size_2),
+                  raw8(font_size_0),
+                  raw5(gray_6)
+                ]))
+              ]), toList([text3(" → " + join(reviewers, ", "))]));
+            }
+          })()
+        ]);
+      }
+    })()),
+    td(toList([
+      styles(toList([raw14(size_1 + " " + size_3)]))
+    ]), toList([
+      checks_badge(pull_request.checks_status, pull_request.checks_url)
+    ])),
+    td(toList([
+      styles(toList([
+        raw14(size_1 + " " + size_3),
+        ["min-width", "8rem"],
+        flex,
+        center,
+        raw10(size_2),
+        ["flex-wrap", "wrap"]
+      ]))
+    ]), prepend(review_badge(pull_request.review_decision, pull_request.draft), (() => {
+      if (show_branch) {
+        return toList([]);
+      } else {
+        return map2(pull_request.feedback, feedback_badge);
+      }
+    })()))
+  ]));
+}
+function header_cell(label2) {
+  return th(toList([
+    styles(toList([
+      raw14(size_1 + " " + size_3),
+      raw3("2px solid " + gray_3),
+      raw9("600"),
+      ["vertical-align", "middle"]
+    ]))
+  ]), toList([text3(label2)]));
+}
+function pr_table(prs, show_branch) {
+  let entries = build_and_flatten(prs);
+  return table(toList([
+    styles(toList([
+      raw16("100%"),
+      collapse,
+      ["table-layout", "fixed"]
+    ]))
+  ]), toList([
+    colgroup(toList([]), toList([
+      col(toList([styles(toList([["width", "5rem"]]))])),
+      col(toList([])),
+      col(toList([styles(toList([["width", "20rem"]]))])),
+      col(toList([styles(toList([["width", "5rem"]]))])),
+      col(toList([styles(toList([["width", "14rem"]]))]))
+    ])),
+    thead(toList([]), toList([
+      tr(toList([
+        styles(toList([raw(gray_1), left]))
+      ]), toList([
+        header_cell("#"),
+        header_cell("Title"),
+        header_cell((() => {
+          if (show_branch) {
+            return "Reviewers";
+          } else {
+            return "Author";
+          }
+        })()),
+        header_cell("Checks"),
+        header_cell("Review")
+      ]))
+    ])),
+    tbody(toList([]), map2(entries, (e) => {
+      return pr_row(e, show_branch);
+    }))
+  ]));
+}
+function empty_section_message() {
   return div(toList([
     styles(toList([
+      raw14(size_5),
+      raw5(gray_5),
+      italic,
       center2,
-      raw14(size_9),
-      raw5(gray_6),
-      raw8(font_size_2)
+      raw2("1px dashed " + gray_3),
+      raw4(radius_2)
     ]))
-  ]), toList([text3("Loading pull requests...")]));
+  ]), toList([text3("No PRs")]));
+}
+function state_count_badge(bg, fg, label2, count2) {
+  return span(toList([
+    styles(toList([
+      raw14("0.15rem " + size_2),
+      raw4("10px"),
+      raw8(font_size_0),
+      raw9("500"),
+      nowrap,
+      raw(bg),
+      raw5(fg)
+    ]))
+  ]), toList([text3(label2 + " " + to_string(count2))]));
 }
 function count_by_state(prs) {
   let $ = fold2(prs, [0, 0, 0, 0, 0], (acc, p2) => {
@@ -8169,20 +8560,7 @@ function count_by_state(prs) {
     return entry[3] > 0;
   });
 }
-function state_count_badge(bg, fg, label2, count2) {
-  return span(toList([
-    styles(toList([
-      raw14("0.15rem " + size_2),
-      raw4("10px"),
-      raw8(font_size_0),
-      raw9("500"),
-      nowrap,
-      raw(bg),
-      raw5(fg)
-    ]))
-  ]), toList([text3(label2 + " " + to_string(count2))]));
-}
-function section_header(title2, count2, prs) {
+function section_header(title2, total, loaded, prs) {
   return div(toList([
     styles(toList([
       flex,
@@ -8209,337 +8587,34 @@ function section_header(title2, count2, prs) {
           raw8(font_size_0),
           raw9("600")
         ]))
-      ]), toList([text3(to_string(count2))]))
+      ]), toList([text3(to_string(total))])),
+      (() => {
+        let $ = total > loaded;
+        if ($) {
+          return span(toList([
+            styles(toList([
+              raw5(gray_6),
+              raw8(font_size_0)
+            ]))
+          ]), toList([
+            text3("(showing " + to_string(loaded) + ")")
+          ]));
+        } else {
+          return text3("");
+        }
+      })()
     ]),
     map2(count_by_state(prs), (entry) => {
       return state_count_badge(entry[0], entry[1], entry[2], entry[3]);
     })
   ])));
 }
-function empty_section_message() {
-  return div(toList([
-    styles(toList([
-      raw14(size_5),
-      raw5(gray_5),
-      italic,
-      center2,
-      raw2("1px dashed " + gray_3),
-      raw4(radius_2)
-    ]))
-  ]), toList([text3("No PRs")]));
-}
-function header_cell(label2) {
-  return th(toList([
-    styles(toList([
-      raw14(size_1 + " " + size_3),
-      raw3("2px solid " + gray_3),
-      raw9("600")
-    ]))
-  ]), toList([text3(label2)]));
-}
-function tree_connectors(depth, is_last) {
-  if (depth === 0) {
-    return toList([]);
-  } else {
-    let left2 = "calc(" + size_4 + " + " + to_string((depth - 1) * 20) + "px)";
-    let _block;
-    if (is_last) {
-      _block = "50%";
-    } else {
-      _block = "0";
-    }
-    let vert_bottom = _block;
-    return toList([
-      span(toList([
-        styles(toList([
-          ["position", "absolute"],
-          ["left", left2],
-          ["top", "-1px"],
-          ["bottom", vert_bottom],
-          ["width", "1px"],
-          raw(gray_4)
-        ]))
-      ]), toList([])),
-      span(toList([
-        styles(toList([
-          ["position", "absolute"],
-          ["left", left2],
-          ["top", "50%"],
-          ["width", "14px"],
-          ["height", "1px"],
-          raw(gray_4)
-        ]))
-      ]), toList([]))
-    ]);
-  }
-}
-function review_badge(decision, draft) {
-  let _block;
-  if (draft) {
-    _block = [blue_2, blue_9, "Draft"];
-  } else if (decision === "APPROVED") {
-    _block = [green_2, green_10, "Approved"];
-  } else if (decision === "CHANGES_REQUESTED") {
-    _block = [red_2, red_10, "Changes requested"];
-  } else if (decision === "REVIEW_REQUIRED") {
-    _block = [yellow_2, yellow_10, "Review required"];
-  } else if (decision === "") {
-    _block = [gray_1, gray_6, "No reviews"];
-  } else {
-    let other = decision;
-    _block = [gray_2, gray_8, other];
-  }
-  let $ = _block;
-  let bg;
-  let fg;
-  let label2;
-  bg = $[0];
-  fg = $[1];
-  label2 = $[2];
-  return span(toList([
-    styles(toList([
-      raw14("0.25rem " + size_2),
-      raw4(radius_2),
-      raw8(font_size_0),
-      nowrap,
-      raw(bg),
-      raw5(fg)
-    ]))
-  ]), toList([text3(label2)]));
-}
-function feedback_badge(fc) {
-  return span(toList([
-    title(fc.author + ": " + to_string(fc.count) + " comment" + (() => {
-      let $ = fc.count;
-      if ($ === 1) {
-        return "";
-      } else {
-        return "s";
-      }
-    })()),
-    styles(toList([
-      inline_flex,
-      center,
-      raw10("0.25rem"),
-      raw14("0.15rem " + size_2),
-      raw4(radius_2),
-      raw8(font_size_0),
-      nowrap,
-      raw(orange_1),
-      raw5(orange_9)
-    ]))
-  ]), toList([
-    span(toList([
-      class$("material-symbols-outlined"),
-      styles(toList([raw8(font_size_0)]))
-    ]), toList([text3("chat_bubble")])),
-    text3(fc.author + " (" + to_string(fc.count) + ")")
-  ]));
-}
-function checks_badge(status, checks_url) {
-  let _block;
-  if (status === "passing") {
-    _block = [green_7, "check_circle", "Checks passing"];
-  } else if (status === "failing") {
-    _block = [red_7, "cancel", "Checks failing"];
-  } else if (status === "pending") {
-    _block = [yellow_7, "schedule", "Checks pending"];
-  } else {
-    _block = [gray_5, "help", "Checks unknown"];
-  }
-  let $ = _block;
-  let badge_color;
-  let icon;
-  let title2;
-  badge_color = $[0];
-  icon = $[1];
-  title2 = $[2];
-  let icon_el = span(toList([
-    class$("material-symbols-outlined"),
-    title(title2),
-    styles(toList([raw8(font_size_2), raw5(badge_color)]))
-  ]), toList([text3(icon)]));
-  if (checks_url === "") {
-    return icon_el;
-  } else {
-    let url = checks_url;
-    return a(toList([
-      href(url),
-      target("_blank"),
-      title("View failing check"),
-      styles(toList([inline_flex, none5])),
-      (() => {
-        let _pipe = on_click(new FetchPrs);
-        return stop_propagation(_pipe);
-      })()
-    ]), toList([icon_el]));
-  }
-}
-function pr_row(entry, show_branch) {
-  let pull_request;
-  let depth;
-  let is_last;
-  let in_stack;
-  pull_request = entry.pr;
-  depth = entry.depth;
-  is_last = entry.is_last;
-  in_stack = entry.in_stack;
-  let _block;
-  if (in_stack) {
-    _block = raw("rgba(99, 102, 241, 0.04)");
-  } else {
-    _block = raw("transparent");
-  }
-  let bg = _block;
-  return tr(toList([
-    on_click(new SelectPr(pull_request.number)),
-    styles(toList([
-      pointer,
-      raw3("1px solid " + gray_2),
-      bg
-    ]))
-  ]), toList([
-    td(toList([
-      styles(toList([raw14(size_1 + " " + size_3)]))
-    ]), toList([
-      a(toList([
-        href(pull_request.url),
-        target("_blank"),
-        (() => {
-          let _pipe = on_click(new FetchPrs);
-          return stop_propagation(_pipe);
-        })(),
-        styles(toList([
-          raw5(indigo_6),
-          none5,
-          raw9("500")
-        ])),
-        class$("hover-underline")
-      ]), toList([text3("#" + to_string(pull_request.number))]))
-    ])),
-    (() => {
-      let _block$1;
-      if (depth === 0) {
-        _block$1 = size_3;
-      } else {
-        let d = depth;
-        _block$1 = "calc(" + size_3 + " + " + to_string(d * 20) + "px)";
-      }
-      let title_pad_left = _block$1;
-      return td(toList([
-        styles(toList([
-          raw14(size_1 + " " + size_3 + " " + size_1 + " " + title_pad_left),
-          raw9("500"),
-          ["position", "relative"],
-          ["overflow", "visible"]
-        ]))
-      ]), append(tree_connectors(depth, is_last), toList([
-        div(toList([]), toList([text3(pull_request.title)])),
-        (() => {
-          if (show_branch) {
-            return div(toList([
-              styles(toList([
-                raw11("0.15rem 0 0 0"),
-                raw8(font_size_0),
-                raw9("400"),
-                raw5(gray_6),
-                ["font-family", font_mono]
-              ]))
-            ]), toList([text3(pull_request.head_ref_name)]));
-          } else {
-            return text3("");
-          }
-        })()
-      ])));
-    })(),
-    td(toList([
-      styles(toList([raw14(size_1 + " " + size_3)]))
-    ]), (() => {
-      if (show_branch) {
-        return toList([
-          (() => {
-            let $ = pull_request.reviewers;
-            if ($ instanceof Empty) {
-              return span(toList([
-                styles(toList([raw5(gray_5)]))
-              ]), toList([text3("—")]));
-            } else {
-              let reviewers = $;
-              return text3(join(reviewers, ", "));
-            }
-          })()
-        ]);
-      } else {
-        return toList([
-          text3(pull_request.author),
-          (() => {
-            let $ = pull_request.reviewers;
-            if ($ instanceof Empty) {
-              return text3("");
-            } else {
-              let reviewers = $;
-              return span(toList([
-                styles(toList([
-                  raw11("0 0 0 " + size_2),
-                  raw8(font_size_0),
-                  raw5(gray_6)
-                ]))
-              ]), toList([text3(" → " + join(reviewers, ", "))]));
-            }
-          })()
-        ]);
-      }
-    })()),
-    td(toList([
-      styles(toList([raw14(size_1 + " " + size_3)]))
-    ]), toList([
-      checks_badge(pull_request.checks_status, pull_request.checks_url)
-    ])),
-    td(toList([
-      styles(toList([
-        raw14(size_1 + " " + size_3),
-        ["min-width", "8rem"],
-        flex,
-        center,
-        raw10(size_2),
-        ["flex-wrap", "wrap"]
-      ]))
-    ]), prepend(review_badge(pull_request.review_decision, pull_request.draft), map2(pull_request.feedback, feedback_badge)))
-  ]));
-}
-function pr_table(prs, show_branch) {
-  let entries = build_and_flatten(prs);
-  return table(toList([
-    styles(toList([raw15("100%"), collapse]))
-  ]), toList([
-    thead(toList([]), toList([
-      tr(toList([
-        styles(toList([raw(gray_1), left]))
-      ]), toList([
-        header_cell("#"),
-        header_cell("Title"),
-        header_cell((() => {
-          if (show_branch) {
-            return "Reviewers";
-          } else {
-            return "Author";
-          }
-        })()),
-        header_cell("Checks"),
-        header_cell("Review")
-      ]))
-    ])),
-    tbody(toList([]), map2(entries, (e) => {
-      return pr_row(e, show_branch);
-    }))
-  ]));
-}
-function pr_section(title2, prs, show_branch) {
-  let count2 = length(prs);
+function pr_section(title2, prs, show_branch, total) {
+  let loaded = length(prs);
   return div(toList([styles(toList([raw12(size_7)]))]), toList([
-    section_header(title2, count2, prs),
+    section_header(title2, total, loaded, prs),
     (() => {
-      if (count2 === 0) {
+      if (loaded === 0) {
         return empty_section_message();
       } else {
         return pr_table(prs, show_branch);
@@ -8562,10 +8637,23 @@ function pr_sections(groups) {
     let all_open = filter(g.all_open, (p2) => {
       return p2.number !== prod_number;
     });
+    let all_open_loaded = length(all_open);
+    let _block$1;
+    let $1 = g.all_open_total > 0;
+    if ($1) {
+      if (prod_number === -1) {
+        _block$1 = g.all_open_total;
+      } else {
+        _block$1 = g.all_open_total - 1;
+      }
+    } else {
+      _block$1 = all_open_loaded;
+    }
+    let all_open_total = _block$1;
     return div(toList([]), toList([
-      pr_section("Created by Me", g.created_by_me, true),
-      pr_section("My Review Requested", g.review_requested, false),
-      pr_section("All Open PRs", all_open, false)
+      pr_section("Created by Me", g.created_by_me, true, length(g.created_by_me)),
+      pr_section("My Review Requested", g.review_requested, false, length(g.review_requested)),
+      pr_section("All Open PRs", all_open, false, all_open_total)
     ]));
   } else {
     return div(toList([
@@ -8576,6 +8664,106 @@ function pr_sections(groups) {
       ]))
     ]), toList([text3("No pull requests found. Click Fetch PRs to load.")]));
   }
+}
+function loading_indicator() {
+  return div(toList([
+    styles(toList([
+      center2,
+      raw14(size_9),
+      raw5(gray_6),
+      raw8(font_size_2)
+    ]))
+  ]), toList([text3("Loading pull requests...")]));
+}
+function error_banner(message2) {
+  return div(toList([
+    styles(toList([
+      raw14(size_3 + " " + size_4),
+      raw12(size_4),
+      raw(red_1),
+      raw2("1px solid " + red_4),
+      raw4(radius_2),
+      raw5(red_10),
+      raw8(font_size_0)
+    ]))
+  ]), toList([text3(message2)]));
+}
+function production_pr_banner(pr_groups) {
+  if (pr_groups instanceof Some) {
+    let groups = pr_groups[0];
+    let $ = groups.production_pr;
+    if ($ instanceof Some) {
+      let prod_pr = $[0];
+      return a(toList([
+        href(prod_pr.url),
+        target("_blank"),
+        styles(toList([
+          flex,
+          center,
+          raw10(size_3),
+          raw14(size_3 + " " + size_4),
+          raw12(size_4),
+          raw(violet_1),
+          raw2("1px solid " + violet_4),
+          raw4(radius_2),
+          raw5(violet_9),
+          raw8(font_size_1),
+          raw9("500"),
+          none5,
+          pointer
+        ]))
+      ]), toList([
+        span(toList([
+          class$("material-symbols-outlined"),
+          styles(toList([raw8(font_size_3)]))
+        ]), toList([text3("rocket_launch")])),
+        text3(prod_pr.title),
+        span(toList([styles(toList([raw5(violet_6)]))]), toList([text3(" #" + to_string(prod_pr.number))]))
+      ]));
+    } else {
+      return text3("");
+    }
+  } else {
+    return text3("");
+  }
+}
+function repo_selector(model) {
+  return div(toList([
+    styles(toList([
+      flex,
+      raw10(size_2),
+      raw12(size_5),
+      center
+    ]))
+  ]), toList([
+    label(toList([styles(toList([raw9("600")]))]), toList([text3("Repository:")])),
+    input(toList([
+      value(model.active_repo),
+      placeholder("owner/repo"),
+      on_input((var0) => {
+        return new SetRepo(var0);
+      }),
+      styles(toList([
+        raw14(size_2 + " " + size_3),
+        raw2("1px solid " + gray_4),
+        raw4(radius_2),
+        raw7("1"),
+        raw8(font_size_1)
+      ]))
+    ])),
+    button(toList([
+      on_click(new FetchPrs),
+      styles(toList([
+        raw14(size_2 + " " + size_4),
+        raw(indigo_6),
+        raw5("white"),
+        none4,
+        raw4(radius_2),
+        pointer,
+        raw8(font_size_1)
+      ]))
+    ]), toList([text3("Fetch PRs")]))
+  ]));
 }
 function view2(model) {
   return div(toList([
@@ -8614,75 +8802,61 @@ function view2(model) {
   ]));
 }
 
-// build/dev/javascript/monks_of_style/monks/animation.mjs
-function raw16(value2) {
-  return ["animation", value2];
-}
-
 // build/dev/javascript/monks_of_style/monks/border_left.mjs
 function raw17(value2) {
   return ["border-left", value2];
 }
 
-// build/dev/javascript/monks_of_style/monks/box_sizing.mjs
-var border_box = ["box-sizing", "border-box"];
+// build/dev/javascript/monks_of_style/monks/border_top.mjs
+function raw18(value2) {
+  return ["border-top", value2];
+}
 
 // build/dev/javascript/monks_of_style/monks/flex_direction.mjs
 var column = ["flex-direction", "column"];
 
 // build/dev/javascript/monks_of_style/monks/flex_shrink.mjs
-function raw18(value2) {
+function raw19(value2) {
   return ["flex-shrink", value2];
 }
 
-// build/dev/javascript/monks_of_style/monks/flex_wrap.mjs
-var wrap = ["flex-wrap", "wrap"];
+// build/dev/javascript/monks_of_style/monks/height.mjs
+function raw20(value2) {
+  return ["height", value2];
+}
 
 // build/dev/javascript/monks_of_style/monks/justify_content.mjs
 var space_between = ["justify-content", "space-between"];
 var center3 = ["justify-content", "center"];
 
+// build/dev/javascript/monks_of_style/monks/letter_spacing.mjs
+function raw21(value2) {
+  return ["letter-spacing", value2];
+}
+
 // build/dev/javascript/monks_of_style/monks/line_height.mjs
-function raw19(value2) {
+function raw22(value2) {
   return ["line-height", value2];
 }
 
 // build/dev/javascript/monks_of_style/monks/margin_top.mjs
-function raw20(value2) {
+function raw23(value2) {
   return ["margin-top", value2];
 }
 
-// build/dev/javascript/monks_of_style/monks/min_height.mjs
-function raw21(value2) {
-  return ["min-height", value2];
-}
-
 // build/dev/javascript/monks_of_style/monks/min_width.mjs
-function raw22(value2) {
+function raw24(value2) {
   return ["min-width", value2];
 }
 
-// build/dev/javascript/monks_of_style/monks/outline.mjs
-var none6 = ["outline", "none"];
-
 // build/dev/javascript/monks_of_style/monks/overflow.mjs
 var hidden = ["overflow", "hidden"];
-
-// build/dev/javascript/monks_of_style/monks/position.mjs
-var relative2 = ["position", "relative"];
-var absolute = ["position", "absolute"];
-var sticky = ["position", "sticky"];
-
-// build/dev/javascript/monks_of_style/monks/resize.mjs
-var vertical = ["resize", "vertical"];
-
-// build/dev/javascript/monks_of_style/monks/transition.mjs
-function raw23(value2) {
-  return ["transition", value2];
+function raw25(value2) {
+  return ["overflow", value2];
 }
 
-// build/dev/javascript/monks_of_style/monks/user_select.mjs
-var none7 = ["user-select", "none"];
+// build/dev/javascript/monks_of_style/monks/text_transform.mjs
+var uppercase2 = ["text-transform", "uppercase"];
 
 // build/dev/javascript/monks_of_style/monks/word_break.mjs
 var break_word = ["word-break", "break-word"];
@@ -9012,7 +9186,7 @@ function charIndexToByteOffset(text4, charIndex) {
   const prefix = text4.slice(0, charIndex);
   return encoder.encode(prefix).length;
 }
-function find2(regex, text4, byteOffset) {
+function find3(regex, text4, byteOffset) {
   const charIndex = byteOffsetToCharIndex(text4, byteOffset);
   const cloned = new RegExp(regex.source, regex.flags);
   cloned.lastIndex = charIndex;
@@ -9058,111 +9232,6 @@ class TokenNode extends CustomType {
     super();
     this[0] = $0;
   }
-}
-function map_token_name(name, value2) {
-  if (name === "keyword") {
-    return new Keyword(value2);
-  } else if (name === "string") {
-    return new String2(value2);
-  } else if (name === "number") {
-    return new Number2(value2);
-  } else if (name === "comment") {
-    return new Comment(value2);
-  } else if (name === "function") {
-    return new Function2(value2);
-  } else if (name === "operator") {
-    return new Operator(value2);
-  } else if (name === "punctuation") {
-    return new Punctuation(value2);
-  } else if (name === "type") {
-    return new Type(value2);
-  } else if (name === "module") {
-    return new Module(value2);
-  } else if (name === "variable") {
-    return new Variable(value2);
-  } else if (name === "constant") {
-    return new Constant(value2);
-  } else if (name === "builtin") {
-    return new Builtin(value2);
-  } else if (name === "tag") {
-    return new Tag(value2);
-  } else if (name === "attribute") {
-    return new Attribute2(value2);
-  } else if (name === "selector") {
-    return new Selector(value2);
-  } else if (name === "property") {
-    return new Property2(value2);
-  } else if (name === "regex") {
-    return new Regex(value2);
-  } else {
-    let unknown = name;
-    return new Custom(unknown, value2);
-  }
-}
-function compile_rules(rules) {
-  return filter_map(rules, (r) => {
-    let $ = compile3(r.pattern);
-    if ($ instanceof Ok) {
-      let compiled = $[0];
-      return new Ok(new CompiledRule(r.token, compiled, r.greedy, r.inside));
-    } else {
-      return new Error(undefined);
-    }
-  });
-}
-function walk_greedy_span(loop$nodes, loop$match_end) {
-  while (true) {
-    let nodes = loop$nodes;
-    let match_end = loop$match_end;
-    if (nodes instanceof Empty) {
-      return [true, toList([])];
-    } else {
-      let $ = nodes.head;
-      if ($ instanceof TextNode) {
-        let rest = nodes.tail;
-        let text4 = $.text;
-        let node_start = $.byte_start;
-        let node_len = $.byte_len;
-        let node_end = node_start + node_len;
-        let $1 = match_end <= node_end;
-        if ($1) {
-          let after_len = node_end - match_end;
-          let _block;
-          let $2 = after_len > 0;
-          if ($2) {
-            let after_text = byte_slice(text4, match_end - node_start, after_len);
-            _block = prepend(new TextNode(after_text, match_end, after_len), rest);
-          } else {
-            _block = rest;
-          }
-          let after_nodes = _block;
-          return [true, after_nodes];
-        } else {
-          loop$nodes = rest;
-          loop$match_end = match_end;
-        }
-      } else {
-        let rest = nodes.tail;
-        loop$nodes = rest;
-        loop$match_end = match_end;
-      }
-    }
-  }
-}
-function flatten_nodes(nodes) {
-  return flat_map(nodes, (node) => {
-    if (node instanceof TextNode) {
-      let text4 = node.text;
-      if (text4 === "") {
-        return toList([]);
-      } else {
-        return toList([new Other(text4)]);
-      }
-    } else {
-      let tokens = node[0];
-      return tokens;
-    }
-  });
 }
 function collapse_loop(loop$tokens, loop$acc) {
   while (true) {
@@ -9211,6 +9280,111 @@ function collapse_adjacent(tokens) {
   let _pipe = collapse_loop(tokens, toList([]));
   return reverse(_pipe);
 }
+function flatten_nodes(nodes) {
+  return flat_map(nodes, (node) => {
+    if (node instanceof TextNode) {
+      let text4 = node.text;
+      if (text4 === "") {
+        return toList([]);
+      } else {
+        return toList([new Other(text4)]);
+      }
+    } else {
+      let tokens = node[0];
+      return tokens;
+    }
+  });
+}
+function map_token_name(name, value2) {
+  if (name === "keyword") {
+    return new Keyword(value2);
+  } else if (name === "string") {
+    return new String2(value2);
+  } else if (name === "number") {
+    return new Number2(value2);
+  } else if (name === "comment") {
+    return new Comment(value2);
+  } else if (name === "function") {
+    return new Function2(value2);
+  } else if (name === "operator") {
+    return new Operator(value2);
+  } else if (name === "punctuation") {
+    return new Punctuation(value2);
+  } else if (name === "type") {
+    return new Type(value2);
+  } else if (name === "module") {
+    return new Module(value2);
+  } else if (name === "variable") {
+    return new Variable(value2);
+  } else if (name === "constant") {
+    return new Constant(value2);
+  } else if (name === "builtin") {
+    return new Builtin(value2);
+  } else if (name === "tag") {
+    return new Tag(value2);
+  } else if (name === "attribute") {
+    return new Attribute2(value2);
+  } else if (name === "selector") {
+    return new Selector(value2);
+  } else if (name === "property") {
+    return new Property2(value2);
+  } else if (name === "regex") {
+    return new Regex(value2);
+  } else {
+    let unknown = name;
+    return new Custom(unknown, value2);
+  }
+}
+function walk_greedy_span(loop$nodes, loop$match_end) {
+  while (true) {
+    let nodes = loop$nodes;
+    let match_end = loop$match_end;
+    if (nodes instanceof Empty) {
+      return [true, toList([])];
+    } else {
+      let $ = nodes.head;
+      if ($ instanceof TextNode) {
+        let rest = nodes.tail;
+        let text4 = $.text;
+        let node_start = $.byte_start;
+        let node_len = $.byte_len;
+        let node_end = node_start + node_len;
+        let $1 = match_end <= node_end;
+        if ($1) {
+          let after_len = node_end - match_end;
+          let _block;
+          let $2 = after_len > 0;
+          if ($2) {
+            let after_text = byte_slice(text4, match_end - node_start, after_len);
+            _block = prepend(new TextNode(after_text, match_end, after_len), rest);
+          } else {
+            _block = rest;
+          }
+          let after_nodes = _block;
+          return [true, after_nodes];
+        } else {
+          loop$nodes = rest;
+          loop$match_end = match_end;
+        }
+      } else {
+        let rest = nodes.tail;
+        loop$nodes = rest;
+        loop$match_end = match_end;
+      }
+    }
+  }
+}
+function compile_rules(rules) {
+  return filter_map(rules, (r) => {
+    let $ = compile3(r.pattern);
+    if ($ instanceof Ok) {
+      let compiled = $[0];
+      return new Ok(new CompiledRule(r.token, compiled, r.greedy, r.inside));
+    } else {
+      return new Error(undefined);
+    }
+  });
+}
 function resolve_inside(matched_text, token_name, inside, lookup2) {
   if (inside instanceof Some) {
     let $ = inside[0];
@@ -9226,58 +9400,8 @@ function resolve_inside(matched_text, token_name, inside, lookup2) {
     return toList([map_token_name(token_name, matched_text)]);
   }
 }
-function tokenize(source, rules, lookup2) {
-  let compiled = compile_rules(rules);
-  let source_len = byte_length(source);
-  let nodes = toList([new TextNode(source, 0, source_len)]);
-  let final_nodes = match_grammar(source, nodes, compiled, lookup2);
-  let _pipe = flatten_nodes(final_nodes);
-  return collapse_adjacent(_pipe);
-}
-function match_grammar(original, nodes, rules, lookup2) {
-  return fold2(rules, nodes, (current_nodes, rule2) => {
-    return apply_rule(original, current_nodes, rule2, lookup2);
-  });
-}
-function apply_rule(original, nodes, rule2, lookup2) {
-  return apply_rule_loop(original, nodes, rule2, lookup2, toList([]));
-}
-function apply_rule_loop(loop$original, loop$nodes, loop$rule, loop$lookup, loop$acc) {
-  while (true) {
-    let original = loop$original;
-    let nodes = loop$nodes;
-    let rule2 = loop$rule;
-    let lookup2 = loop$lookup;
-    let acc = loop$acc;
-    if (nodes instanceof Empty) {
-      return reverse(acc);
-    } else {
-      let $ = nodes.head;
-      if ($ instanceof TextNode) {
-        let rest = nodes.tail;
-        let text4 = $.text;
-        let start5 = $.byte_start;
-        let len = $.byte_len;
-        let $1 = rule2.greedy;
-        if ($1) {
-          return apply_greedy(original, text4, start5, len, rest, rule2, lookup2, acc);
-        } else {
-          return apply_non_greedy(original, text4, start5, len, rest, rule2, lookup2, acc);
-        }
-      } else {
-        let node = $;
-        let rest = nodes.tail;
-        loop$original = original;
-        loop$nodes = rest;
-        loop$rule = rule2;
-        loop$lookup = lookup2;
-        loop$acc = prepend(node, acc);
-      }
-    }
-  }
-}
 function apply_non_greedy(original, text4, start5, len, rest, rule2, lookup2, acc) {
-  let $ = find2(rule2.regex, text4, 0);
+  let $ = find3(rule2.regex, text4, 0);
   if ($ instanceof Ok) {
     let rel_start = $[0][0];
     let matched = $[0][1];
@@ -9314,7 +9438,7 @@ function apply_non_greedy(original, text4, start5, len, rest, rule2, lookup2, ac
   }
 }
 function apply_greedy(original, text4, start5, len, rest, rule2, lookup2, acc) {
-  let $ = find2(rule2.regex, original, start5);
+  let $ = find3(rule2.regex, original, start5);
   if ($ instanceof Ok) {
     let match_start = $[0][0];
     let matched = $[0][1];
@@ -9373,6 +9497,56 @@ function apply_greedy(original, text4, start5, len, rest, rule2, lookup2, acc) {
   } else {
     return append(reverse(prepend(new TextNode(text4, start5, len), acc)), rest);
   }
+}
+function apply_rule_loop(loop$original, loop$nodes, loop$rule, loop$lookup, loop$acc) {
+  while (true) {
+    let original = loop$original;
+    let nodes = loop$nodes;
+    let rule2 = loop$rule;
+    let lookup2 = loop$lookup;
+    let acc = loop$acc;
+    if (nodes instanceof Empty) {
+      return reverse(acc);
+    } else {
+      let $ = nodes.head;
+      if ($ instanceof TextNode) {
+        let rest = nodes.tail;
+        let text4 = $.text;
+        let start5 = $.byte_start;
+        let len = $.byte_len;
+        let $1 = rule2.greedy;
+        if ($1) {
+          return apply_greedy(original, text4, start5, len, rest, rule2, lookup2, acc);
+        } else {
+          return apply_non_greedy(original, text4, start5, len, rest, rule2, lookup2, acc);
+        }
+      } else {
+        let node = $;
+        let rest = nodes.tail;
+        loop$original = original;
+        loop$nodes = rest;
+        loop$rule = rule2;
+        loop$lookup = lookup2;
+        loop$acc = prepend(node, acc);
+      }
+    }
+  }
+}
+function apply_rule(original, nodes, rule2, lookup2) {
+  return apply_rule_loop(original, nodes, rule2, lookup2, toList([]));
+}
+function match_grammar(original, nodes, rules, lookup2) {
+  return fold2(rules, nodes, (current_nodes, rule2) => {
+    return apply_rule(original, current_nodes, rule2, lookup2);
+  });
+}
+function tokenize(source, rules, lookup2) {
+  let compiled = compile_rules(rules);
+  let source_len = byte_length(source);
+  let nodes = toList([new TextNode(source, 0, source_len)]);
+  let final_nodes = match_grammar(source, nodes, compiled, lookup2);
+  let _pipe = flatten_nodes(final_nodes);
+  return collapse_adjacent(_pipe);
 }
 
 // build/dev/javascript/smalto/smalto/languages/bash.mjs
@@ -11109,18 +11283,6 @@ function languages() {
 }
 
 // build/dev/javascript/smalto/smalto.mjs
-function resolve_grammar(g) {
-  let langs = languages();
-  return resolve2(g, (parent_name) => {
-    let $ = get(langs, parent_name);
-    if ($ instanceof Ok) {
-      let parent = $[0];
-      return parent;
-    } else {
-      return new Grammar(parent_name, new None, toList([]));
-    }
-  });
-}
 function lookup2() {
   let langs = languages();
   return (name2) => {
@@ -11140,6 +11302,18 @@ function lookup2() {
       return toList([]);
     }
   };
+}
+function resolve_grammar(g) {
+  let langs = languages();
+  return resolve2(g, (parent_name) => {
+    let $ = get(langs, parent_name);
+    if ($ instanceof Ok) {
+      let parent = $[0];
+      return parent;
+    } else {
+      return new Grammar(parent_name, new None, toList([]));
+    }
+  });
 }
 function to_tokens(code2, grammar32) {
   let resolved_rules = resolve_grammar(grammar32);
@@ -11168,6 +11342,42 @@ class Config3 extends CustomType {
     this.regex = regex;
     this.custom = custom;
   }
+}
+function default_custom_renderer(name2, value3) {
+  if (name2 === "important") {
+    return span(toList([
+      style("font-weight", "bold"),
+      style("color", "#b8860b")
+    ]), toList([text2(value3)]));
+  } else if (name2 === "bold") {
+    return span(toList([style("font-weight", "bold")]), toList([text2(value3)]));
+  } else if (name2 === "italic") {
+    return span(toList([style("font-style", "italic")]), toList([text2(value3)]));
+  } else if (name2 === "strike") {
+    return span(toList([style("text-decoration", "line-through")]), toList([text2(value3)]));
+  } else if (name2 === "code") {
+    return span(toList([style("color", "#008000")]), toList([text2(value3)]));
+  } else if (name2 === "url") {
+    return span(toList([
+      style("text-decoration", "underline"),
+      style("color", "#008b8b")
+    ]), toList([text2(value3)]));
+  } else {
+    return text2(value3);
+  }
+}
+function colored_span(color) {
+  return (value3) => {
+    return span(toList([style("color", color)]), toList([text2(value3)]));
+  };
+}
+function default_config2() {
+  return new Config3(colored_span("#b8860b"), colored_span("#008000"), colored_span("#008000"), (value3) => {
+    return span(toList([
+      style("color", "#808080"),
+      style("font-style", "italic")
+    ]), toList([text2(value3)]));
+  }, colored_span("#0000ff"), colored_span("#800080"), colored_span("#808080"), colored_span("#008b8b"), colored_span("#008b8b"), colored_span("#ffd700"), colored_span("#ff00ff"), colored_span("#1e90ff"), colored_span("#ff0000"), colored_span("#b8860b"), colored_span("#008b8b"), colored_span("#b8860b"), colored_span("#008000"), default_custom_renderer);
 }
 function token_to_element(tok, config2) {
   if (tok instanceof Keyword) {
@@ -11237,42 +11447,6 @@ function to_lustre(tokens, config2) {
   return map2(tokens, (_capture) => {
     return token_to_element(_capture, config2);
   });
-}
-function colored_span(color) {
-  return (value3) => {
-    return span(toList([style("color", color)]), toList([text2(value3)]));
-  };
-}
-function default_custom_renderer(name2, value3) {
-  if (name2 === "important") {
-    return span(toList([
-      style("font-weight", "bold"),
-      style("color", "#b8860b")
-    ]), toList([text2(value3)]));
-  } else if (name2 === "bold") {
-    return span(toList([style("font-weight", "bold")]), toList([text2(value3)]));
-  } else if (name2 === "italic") {
-    return span(toList([style("font-style", "italic")]), toList([text2(value3)]));
-  } else if (name2 === "strike") {
-    return span(toList([style("text-decoration", "line-through")]), toList([text2(value3)]));
-  } else if (name2 === "code") {
-    return span(toList([style("color", "#008000")]), toList([text2(value3)]));
-  } else if (name2 === "url") {
-    return span(toList([
-      style("text-decoration", "underline"),
-      style("color", "#008b8b")
-    ]), toList([text2(value3)]));
-  } else {
-    return text2(value3);
-  }
-}
-function default_config2() {
-  return new Config3(colored_span("#b8860b"), colored_span("#008000"), colored_span("#008000"), (value3) => {
-    return span(toList([
-      style("color", "#808080"),
-      style("font-style", "italic")
-    ]), toList([text2(value3)]));
-  }, colored_span("#0000ff"), colored_span("#800080"), colored_span("#808080"), colored_span("#008b8b"), colored_span("#008b8b"), colored_span("#ffd700"), colored_span("#ff00ff"), colored_span("#1e90ff"), colored_span("#ff0000"), colored_span("#b8860b"), colored_span("#008b8b"), colored_span("#b8860b"), colored_span("#008000"), default_custom_renderer);
 }
 
 // build/dev/javascript/client/client/highlight.mjs
@@ -11518,18 +11692,18 @@ class Code extends CustomType {
 class Empty2 extends CustomType {
 }
 class Heading extends CustomType {
-  constructor(level, id2, raw24, inlines) {
+  constructor(level, id2, raw26, inlines) {
     super();
     this.level = level;
     this.id = id2;
-    this.raw = raw24;
+    this.raw = raw26;
     this.inlines = inlines;
   }
 }
 class HtmlBlock extends CustomType {
-  constructor(raw24) {
+  constructor(raw26) {
     super();
-    this.raw = raw24;
+    this.raw = raw26;
   }
 }
 class Newline extends CustomType {
@@ -11543,9 +11717,9 @@ class OrderedList extends CustomType {
   }
 }
 class Paragraph extends CustomType {
-  constructor(raw24, inlines) {
+  constructor(raw26, inlines) {
     super();
-    this.raw = raw24;
+    this.raw = raw26;
     this.inlines = inlines;
   }
 }
@@ -11559,10 +11733,10 @@ class Table extends CustomType {
 class ThematicBreak extends CustomType {
 }
 class THead extends CustomType {
-  constructor(align, raw24, inlines) {
+  constructor(align, raw26, inlines) {
     super();
     this.align = align;
-    this.raw = raw24;
+    this.raw = raw26;
     this.inlines = inlines;
   }
 }
@@ -11573,9 +11747,9 @@ class Right extends CustomType {
 class Center extends CustomType {
 }
 class Cell extends CustomType {
-  constructor(raw24, inlines) {
+  constructor(raw26, inlines) {
     super();
-    this.raw = raw24;
+    this.raw = raw26;
     this.inlines = inlines;
   }
 }
@@ -11751,7 +11925,7 @@ function new$8(options) {
   return new Document(options, toList([]), make(), make());
 }
 function new_destination(uri) {
-  if (uri.startsWith("#")) {
+  if (uri.charCodeAt(0) === 35) {
     let anchor = uri.slice(1);
     return new Anchor(anchor);
   } else {
@@ -11769,15 +11943,15 @@ function casefold(s) {
   return s.toLowerCase().toUpperCase().toLowerCase();
 }
 // build/dev/javascript/casefold/casefold.mjs
-var ascii_lowercase = "abcdefghijklmnopqrstuvwxyz";
-var ascii_uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-var ascii_letters = ascii_lowercase + ascii_uppercase;
 var digits = "0123456789";
+var ascii_uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+var ascii_lowercase = "abcdefghijklmnopqrstuvwxyz";
+var ascii_letters = ascii_lowercase + ascii_uppercase;
+var alnum = ascii_letters + digits;
 var ascii_punctuation = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~.";
 var ascii_whitespace = ` 	
 \r\f\v`;
 var ascii_printable = digits + ascii_letters + ascii_punctuation + ascii_whitespace;
-var alnum = ascii_letters + digits;
 
 // build/dev/javascript/mork/mork/internal/util.mjs
 var FILEPATH2 = "src/mork/internal/util.gleam";
@@ -11791,29 +11965,30 @@ function check3(cond, yes, nope) {
 function do_expand_tabs_indent(loop$s, loop$col) {
   while (true) {
     let s = loop$s;
-    let col = loop$col;
+    let col2 = loop$col;
+    let $ = s.charCodeAt(0);
     if (s.startsWith("    ")) {
       let rest = s.slice(4);
       loop$s = rest;
-      loop$col = col + 4;
+      loop$col = col2 + 4;
     } else if (s.startsWith("   ")) {
       let rest = s.slice(3);
       loop$s = rest;
-      loop$col = col + 3;
+      loop$col = col2 + 3;
     } else if (s.startsWith("  ")) {
       let rest = s.slice(2);
       loop$s = rest;
-      loop$col = col + 2;
-    } else if (s.startsWith(" ")) {
+      loop$col = col2 + 2;
+    } else if ($ === 32) {
       let rest = s.slice(1);
       loop$s = rest;
-      loop$col = col + 1;
-    } else if (s.startsWith("\t")) {
+      loop$col = col2 + 1;
+    } else if ($ === 9) {
       let rest = s.slice(1);
       loop$s = rest;
-      loop$col = col + (4 - col % 4);
+      loop$col = col2 + (4 - col2 % 4);
     } else {
-      return [s, col];
+      return [s, col2];
     }
   }
 }
@@ -11832,102 +12007,105 @@ function expand_tabs_indent(s) {
 function expand_tabs_blockquote(loop$s, loop$col) {
   while (true) {
     let s = loop$s;
-    let col = loop$col;
-    if (s.startsWith(" ")) {
+    let col2 = loop$col;
+    let $ = s.charCodeAt(0);
+    if ($ === 32) {
       let rest = s.slice(1);
       loop$s = rest;
-      loop$col = col + 1;
-    } else if (s.startsWith(">")) {
+      loop$col = col2 + 1;
+    } else if ($ === 62) {
       let rest = s.slice(1);
-      let $ = do_expand_tabs_indent(rest, col + 1);
+      let $1 = do_expand_tabs_indent(rest, col2 + 1);
       let body;
       let indent;
-      body = $[0];
-      indent = $[1];
-      return repeat(" ", indent - col - 1) + body;
-    } else if (s.startsWith("\t")) {
+      body = $1[0];
+      indent = $1[1];
+      return repeat(" ", indent - col2 - 1) + body;
+    } else if ($ === 9) {
       let rest = s.slice(1);
       loop$s = rest;
-      loop$col = col + (4 - col % 4);
+      loop$col = col2 + (4 - col2 % 4);
     } else {
-      return repeat(" ", col + 1) + s;
+      return repeat(" ", col2 + 1) + s;
     }
   }
 }
 function expand_tabs_postmarker(loop$rest, loop$col, loop$acc) {
   while (true) {
     let rest = loop$rest;
-    let col = loop$col;
+    let col2 = loop$col;
     let acc = loop$acc;
-    if (rest.startsWith("\t")) {
+    let $ = rest.charCodeAt(0);
+    if ($ === 9) {
       let rest$1 = rest.slice(1);
-      let newcol = col + (4 - col % 4);
+      let newcol = col2 + (4 - col2 % 4);
       loop$rest = rest$1;
       loop$col = newcol;
-      loop$acc = acc + repeat(" ", newcol - col);
-    } else if (rest.startsWith(" ")) {
+      loop$acc = acc + repeat(" ", newcol - col2);
+    } else if ($ === 32) {
       let ch = " ";
       let rest$1 = rest.slice(1);
       loop$rest = rest$1;
-      loop$col = col + 1;
+      loop$col = col2 + 1;
       loop$acc = acc + ch;
     } else {
       return acc + rest;
     }
   }
 }
-function expand_tabs_premarker(rest, marker, col, acc) {
+function expand_tabs_premarker(rest, marker, col2, acc) {
   return lazy_guard(starts_with(rest, marker), () => {
-    return expand_tabs_postmarker(drop_start(rest, 1), col + 1, acc + marker);
+    return expand_tabs_postmarker(drop_start(rest, 1), col2 + 1, acc + marker);
   }, () => {
-    if (rest.startsWith("\t")) {
+    let $ = rest.charCodeAt(0);
+    if ($ === 9) {
       let rest$1 = rest.slice(1);
-      let newcol = col + (4 - col % 4);
-      return expand_tabs_premarker(rest$1, marker, newcol, acc + repeat(" ", newcol - col));
-    } else if (rest.startsWith("0")) {
+      let newcol = col2 + (4 - col2 % 4);
+      return expand_tabs_premarker(rest$1, marker, newcol, acc + repeat(" ", newcol - col2));
+    } else if ($ === 48) {
       let ch = "0";
       let rest$1 = rest.slice(1);
-      return expand_tabs_premarker(rest$1, marker, col + 1, acc + ch);
-    } else if (rest.startsWith("1")) {
+      return expand_tabs_premarker(rest$1, marker, col2 + 1, acc + ch);
+    } else if ($ === 49) {
       let ch = "1";
       let rest$1 = rest.slice(1);
-      return expand_tabs_premarker(rest$1, marker, col + 1, acc + ch);
-    } else if (rest.startsWith("2")) {
+      return expand_tabs_premarker(rest$1, marker, col2 + 1, acc + ch);
+    } else if ($ === 50) {
       let ch = "2";
       let rest$1 = rest.slice(1);
-      return expand_tabs_premarker(rest$1, marker, col + 1, acc + ch);
-    } else if (rest.startsWith("3")) {
+      return expand_tabs_premarker(rest$1, marker, col2 + 1, acc + ch);
+    } else if ($ === 51) {
       let ch = "3";
       let rest$1 = rest.slice(1);
-      return expand_tabs_premarker(rest$1, marker, col + 1, acc + ch);
-    } else if (rest.startsWith("4")) {
+      return expand_tabs_premarker(rest$1, marker, col2 + 1, acc + ch);
+    } else if ($ === 52) {
       let ch = "4";
       let rest$1 = rest.slice(1);
-      return expand_tabs_premarker(rest$1, marker, col + 1, acc + ch);
-    } else if (rest.startsWith("5")) {
+      return expand_tabs_premarker(rest$1, marker, col2 + 1, acc + ch);
+    } else if ($ === 53) {
       let ch = "5";
       let rest$1 = rest.slice(1);
-      return expand_tabs_premarker(rest$1, marker, col + 1, acc + ch);
-    } else if (rest.startsWith("6")) {
+      return expand_tabs_premarker(rest$1, marker, col2 + 1, acc + ch);
+    } else if ($ === 54) {
       let ch = "6";
       let rest$1 = rest.slice(1);
-      return expand_tabs_premarker(rest$1, marker, col + 1, acc + ch);
-    } else if (rest.startsWith("7")) {
+      return expand_tabs_premarker(rest$1, marker, col2 + 1, acc + ch);
+    } else if ($ === 55) {
       let ch = "7";
       let rest$1 = rest.slice(1);
-      return expand_tabs_premarker(rest$1, marker, col + 1, acc + ch);
-    } else if (rest.startsWith("8")) {
+      return expand_tabs_premarker(rest$1, marker, col2 + 1, acc + ch);
+    } else if ($ === 56) {
       let ch = "8";
       let rest$1 = rest.slice(1);
-      return expand_tabs_premarker(rest$1, marker, col + 1, acc + ch);
-    } else if (rest.startsWith("9")) {
+      return expand_tabs_premarker(rest$1, marker, col2 + 1, acc + ch);
+    } else if ($ === 57) {
       let ch = "9";
       let rest$1 = rest.slice(1);
-      return expand_tabs_premarker(rest$1, marker, col + 1, acc + ch);
-    } else if (rest.startsWith(" ")) {
+      return expand_tabs_premarker(rest$1, marker, col2 + 1, acc + ch);
+    } else if ($ === 32) {
       let ch = " ";
       let rest$1 = rest.slice(1);
-      return expand_tabs_premarker(rest$1, marker, col + 1, acc + ch);
+      return expand_tabs_premarker(rest$1, marker, col2 + 1, acc + ch);
     } else {
       return acc + rest;
     }
@@ -11940,11 +12118,12 @@ function do_find_indent(loop$line, loop$depth) {
   while (true) {
     let line = loop$line;
     let depth = loop$depth;
-    if (line.startsWith(" ")) {
+    let $ = line.charCodeAt(0);
+    if ($ === 32) {
       let rest = line.slice(1);
       loop$line = rest;
       loop$depth = depth + 1;
-    } else if (line.startsWith("\t")) {
+    } else if ($ === 9) {
       let rest = line.slice(1);
       loop$line = rest;
       loop$depth = depth + (4 - depth % 4);
@@ -11960,48 +12139,112 @@ function has_ordinal_marker(loop$line, loop$marker) {
   while (true) {
     let line = loop$line;
     let marker = loop$marker;
-    if (line.startsWith("0")) {
+    let $ = line.charCodeAt(0);
+    if ($ === 48) {
       let line$1 = line.slice(1);
       loop$line = line$1;
       loop$marker = marker;
-    } else if (line.startsWith("1")) {
+    } else if ($ === 49) {
       let line$1 = line.slice(1);
       loop$line = line$1;
       loop$marker = marker;
-    } else if (line.startsWith("2")) {
+    } else if ($ === 50) {
       let line$1 = line.slice(1);
       loop$line = line$1;
       loop$marker = marker;
-    } else if (line.startsWith("3")) {
+    } else if ($ === 51) {
       let line$1 = line.slice(1);
       loop$line = line$1;
       loop$marker = marker;
-    } else if (line.startsWith("4")) {
+    } else if ($ === 52) {
       let line$1 = line.slice(1);
       loop$line = line$1;
       loop$marker = marker;
-    } else if (line.startsWith("5")) {
+    } else if ($ === 53) {
       let line$1 = line.slice(1);
       loop$line = line$1;
       loop$marker = marker;
-    } else if (line.startsWith("6")) {
+    } else if ($ === 54) {
       let line$1 = line.slice(1);
       loop$line = line$1;
       loop$marker = marker;
-    } else if (line.startsWith("7")) {
+    } else if ($ === 55) {
       let line$1 = line.slice(1);
       loop$line = line$1;
       loop$marker = marker;
-    } else if (line.startsWith("8")) {
+    } else if ($ === 56) {
       let line$1 = line.slice(1);
       loop$line = line$1;
       loop$marker = marker;
-    } else if (line.startsWith("9")) {
+    } else if ($ === 57) {
       let line$1 = line.slice(1);
       loop$line = line$1;
       loop$marker = marker;
     } else {
       return starts_with(line, marker);
+    }
+  }
+}
+function drop_3_spaces(line) {
+  if (line.startsWith("   ")) {
+    let line$1 = line.slice(3);
+    return line$1;
+  } else if (line.startsWith("  ")) {
+    let line$1 = line.slice(2);
+    return line$1;
+  } else if (line.charCodeAt(0) === 32) {
+    let line$1 = line.slice(1);
+    return line$1;
+  } else {
+    let line$1 = line;
+    return line$1;
+  }
+}
+function has_list_marker(line, marker) {
+  let line$1 = drop_3_spaces(line);
+  if (marker === "-") {
+    let ch = marker;
+    return starts_with(line$1, ch);
+  } else if (marker === "+") {
+    let ch = marker;
+    return starts_with(line$1, ch);
+  } else if (marker === "*") {
+    let ch = marker;
+    return starts_with(line$1, ch);
+  } else {
+    let $ = line$1.charCodeAt(0);
+    if ($ === 48) {
+      let line$2 = line$1.slice(1);
+      return has_ordinal_marker(line$2, marker);
+    } else if ($ === 49) {
+      let line$2 = line$1.slice(1);
+      return has_ordinal_marker(line$2, marker);
+    } else if ($ === 50) {
+      let line$2 = line$1.slice(1);
+      return has_ordinal_marker(line$2, marker);
+    } else if ($ === 51) {
+      let line$2 = line$1.slice(1);
+      return has_ordinal_marker(line$2, marker);
+    } else if ($ === 52) {
+      let line$2 = line$1.slice(1);
+      return has_ordinal_marker(line$2, marker);
+    } else if ($ === 53) {
+      let line$2 = line$1.slice(1);
+      return has_ordinal_marker(line$2, marker);
+    } else if ($ === 54) {
+      let line$2 = line$1.slice(1);
+      return has_ordinal_marker(line$2, marker);
+    } else if ($ === 55) {
+      let line$2 = line$1.slice(1);
+      return has_ordinal_marker(line$2, marker);
+    } else if ($ === 56) {
+      let line$2 = line$1.slice(1);
+      return has_ordinal_marker(line$2, marker);
+    } else if ($ === 57) {
+      let line$2 = line$1.slice(1);
+      return has_ordinal_marker(line$2, marker);
+    } else {
+      return false;
     }
   }
 }
@@ -12016,7 +12259,7 @@ function drop_indent(line, count2) {
 }
 function drop_blockquote_marker(line) {
   let $ = expand_tabs_blockquote(line, 0);
-  if ($.startsWith(" ")) {
+  if ($.charCodeAt(0) === 32) {
     let line$1 = $.slice(1);
     return line$1;
   } else {
@@ -12024,7 +12267,7 @@ function drop_blockquote_marker(line) {
   }
 }
 function has_blockquote_marker(line) {
-  if (line.startsWith(">")) {
+  if (line.charCodeAt(0) === 62) {
     return true;
   } else if (line.startsWith(" >")) {
     return true;
@@ -12053,73 +12296,11 @@ function clear_marker(line, marker, indent) {
   let line$1 = expand_tabs_listitem(line, marker);
   return repeat(" ", indent) + drop_start(line$1, indent);
 }
-function drop_3_spaces(line) {
-  if (line.startsWith("   ")) {
-    let line$1 = line.slice(3);
-    return line$1;
-  } else if (line.startsWith("  ")) {
-    let line$1 = line.slice(2);
-    return line$1;
-  } else if (line.startsWith(" ")) {
-    let line$1 = line.slice(1);
-    return line$1;
-  } else {
-    let line$1 = line;
-    return line$1;
-  }
-}
-function has_list_marker(line, marker) {
-  let line$1 = drop_3_spaces(line);
-  if (marker === "-") {
-    let ch = marker;
-    return starts_with(line$1, ch);
-  } else if (marker === "+") {
-    let ch = marker;
-    return starts_with(line$1, ch);
-  } else if (marker === "*") {
-    let ch = marker;
-    return starts_with(line$1, ch);
-  } else {
-    if (line$1.startsWith("0")) {
-      let line$2 = line$1.slice(1);
-      return has_ordinal_marker(line$2, marker);
-    } else if (line$1.startsWith("1")) {
-      let line$2 = line$1.slice(1);
-      return has_ordinal_marker(line$2, marker);
-    } else if (line$1.startsWith("2")) {
-      let line$2 = line$1.slice(1);
-      return has_ordinal_marker(line$2, marker);
-    } else if (line$1.startsWith("3")) {
-      let line$2 = line$1.slice(1);
-      return has_ordinal_marker(line$2, marker);
-    } else if (line$1.startsWith("4")) {
-      let line$2 = line$1.slice(1);
-      return has_ordinal_marker(line$2, marker);
-    } else if (line$1.startsWith("5")) {
-      let line$2 = line$1.slice(1);
-      return has_ordinal_marker(line$2, marker);
-    } else if (line$1.startsWith("6")) {
-      let line$2 = line$1.slice(1);
-      return has_ordinal_marker(line$2, marker);
-    } else if (line$1.startsWith("7")) {
-      let line$2 = line$1.slice(1);
-      return has_ordinal_marker(line$2, marker);
-    } else if (line$1.startsWith("8")) {
-      let line$2 = line$1.slice(1);
-      return has_ordinal_marker(line$2, marker);
-    } else if (line$1.startsWith("9")) {
-      let line$2 = line$1.slice(1);
-      return has_ordinal_marker(line$2, marker);
-    } else {
-      return false;
-    }
-  }
-}
 function count_spaces(loop$line, loop$acc) {
   while (true) {
     let line = loop$line;
     let acc = loop$acc;
-    if (line.startsWith(" ")) {
+    if (line.charCodeAt(0) === 32) {
       let line$1 = line.slice(1);
       loop$line = line$1;
       loop$acc = acc + 1;
@@ -12160,17 +12341,18 @@ function do_gobble_link_label(loop$sp, loop$rest, loop$acc) {
     if (s === "") {
       return [body, ""];
     } else if (s === "\\") {
-      if (r.startsWith("\\")) {
+      let $1 = r.charCodeAt(0);
+      if ($1 === 92) {
         let rest$1 = r.slice(1);
         loop$sp = sp;
         loop$rest = rest$1;
         loop$acc = body + "\\";
-      } else if (r.startsWith("]")) {
+      } else if ($1 === 93) {
         let rest$1 = r.slice(1);
         loop$sp = sp;
         loop$rest = rest$1;
         loop$acc = body + "]";
-      } else if (r.startsWith("[")) {
+      } else if ($1 === 91) {
         let rest$1 = r.slice(1);
         loop$sp = sp;
         loop$rest = rest$1;
@@ -12201,10 +12383,11 @@ function gobble_link_label(sp, rest) {
 function gobble_hspace(loop$in) {
   while (true) {
     let in$ = loop$in;
-    if (in$.startsWith(" ")) {
+    let $ = in$.charCodeAt(0);
+    if ($ === 32) {
       let in$1 = in$.slice(1);
       loop$in = in$1;
-    } else if (in$.startsWith("\t")) {
+    } else if ($ === 9) {
       let in$1 = in$.slice(1);
       loop$in = in$1;
     } else {
@@ -12241,7 +12424,8 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
 `) {
       return value3(new_destination(body), r);
     } else if (s === "\\") {
-      if (r.startsWith("!")) {
+      let $1 = r.charCodeAt(0);
+      if ($1 === 33) {
         let ch = "!";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12249,7 +12433,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("#")) {
+      } else if ($1 === 35) {
         let ch = "#";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12257,7 +12441,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("$")) {
+      } else if ($1 === 36) {
         let ch = "$";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12265,7 +12449,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("%")) {
+      } else if ($1 === 37) {
         let ch = "%";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12273,7 +12457,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("&")) {
+      } else if ($1 === 38) {
         let ch = "&";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12281,7 +12465,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("'")) {
+      } else if ($1 === 39) {
         let ch = "'";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12289,7 +12473,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("(")) {
+      } else if ($1 === 40) {
         let ch = "(";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12297,7 +12481,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith(")")) {
+      } else if ($1 === 41) {
         let ch = ")";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12305,7 +12489,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("*")) {
+      } else if ($1 === 42) {
         let ch = "*";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12313,7 +12497,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("+")) {
+      } else if ($1 === 43) {
         let ch = "+";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12321,7 +12505,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith(",")) {
+      } else if ($1 === 44) {
         let ch = ",";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12329,7 +12513,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("-")) {
+      } else if ($1 === 45) {
         let ch = "-";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12337,7 +12521,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith(".")) {
+      } else if ($1 === 46) {
         let ch = ".";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12345,7 +12529,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("/")) {
+      } else if ($1 === 47) {
         let ch = "/";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12353,7 +12537,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith(":")) {
+      } else if ($1 === 58) {
         let ch = ":";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12361,7 +12545,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith(";")) {
+      } else if ($1 === 59) {
         let ch = ";";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12369,7 +12553,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("=")) {
+      } else if ($1 === 61) {
         let ch = "=";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12377,7 +12561,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("?")) {
+      } else if ($1 === 63) {
         let ch = "?";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12385,7 +12569,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("@")) {
+      } else if ($1 === 64) {
         let ch = "@";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12393,7 +12577,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("[")) {
+      } else if ($1 === 91) {
         let ch = "[";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12401,7 +12585,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("\\")) {
+      } else if ($1 === 92) {
         let ch = "\\";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12409,7 +12593,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("]")) {
+      } else if ($1 === 93) {
         let ch = "]";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12417,7 +12601,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("^")) {
+      } else if ($1 === 94) {
         let ch = "^";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12425,7 +12609,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("_")) {
+      } else if ($1 === 95) {
         let ch = "_";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12433,7 +12617,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("`")) {
+      } else if ($1 === 96) {
         let ch = "`";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12441,7 +12625,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("{")) {
+      } else if ($1 === 123) {
         let ch = "{";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12449,7 +12633,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("|")) {
+      } else if ($1 === 124) {
         let ch = "|";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12457,7 +12641,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("}")) {
+      } else if ($1 === 125) {
         let ch = "}";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12465,7 +12649,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("~")) {
+      } else if ($1 === 126) {
         let ch = "~";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12473,7 +12657,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith('"')) {
+      } else if ($1 === 34) {
         let ch = '"';
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12481,7 +12665,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("<")) {
+      } else if ($1 === 60) {
         let ch = "<";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12489,7 +12673,7 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
         loop$acc = body + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith(">")) {
+      } else if ($1 === 62) {
         let ch = ">";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12544,7 +12728,8 @@ function do_parse_link_dest(loop$sp, loop$in, loop$acc, loop$stack, loop$value) 
   }
 }
 function try_pop(ch, in$, value3) {
-  if (in$.startsWith("<")) {
+  let $ = in$.charCodeAt(0);
+  if ($ === 60) {
     let first3 = "<";
     if (ch === first3) {
       let rest = in$.slice(1);
@@ -12552,7 +12737,7 @@ function try_pop(ch, in$, value3) {
     } else {
       return new Error(undefined);
     }
-  } else if (in$.startsWith(">")) {
+  } else if ($ === 62) {
     let first3 = ">";
     if (ch === first3) {
       let rest = in$.slice(1);
@@ -12560,7 +12745,7 @@ function try_pop(ch, in$, value3) {
     } else {
       return new Error(undefined);
     }
-  } else if (in$.startsWith("[")) {
+  } else if ($ === 91) {
     let first3 = "[";
     if (ch === first3) {
       let rest = in$.slice(1);
@@ -12568,7 +12753,7 @@ function try_pop(ch, in$, value3) {
     } else {
       return new Error(undefined);
     }
-  } else if (in$.startsWith("]")) {
+  } else if ($ === 93) {
     let first3 = "]";
     if (ch === first3) {
       let rest = in$.slice(1);
@@ -12659,10 +12844,11 @@ function parse_link_dest(in$, sp_link_dest, sp_link_dest_tag, value3) {
 function is_blank(loop$line) {
   while (true) {
     let line = loop$line;
-    if (line.startsWith(" ")) {
+    let $ = line.charCodeAt(0);
+    if ($ === 32) {
       let line$1 = line.slice(1);
       loop$line = line$1;
-    } else if (line.startsWith("\t")) {
+    } else if ($ === 9) {
       let line$1 = line.slice(1);
       loop$line = line$1;
     } else if (line === "") {
@@ -12675,16 +12861,16 @@ function is_blank(loop$line) {
 function is_blankn(loop$line) {
   while (true) {
     let line = loop$line;
-    if (line.startsWith(" ")) {
+    let $ = line.charCodeAt(0);
+    if ($ === 32) {
       let line$1 = line.slice(1);
       loop$line = line$1;
-    } else if (line.startsWith("\t")) {
+    } else if ($ === 9) {
       let line$1 = line.slice(1);
       loop$line = line$1;
     } else if (line === "") {
       return true;
-    } else if (line.startsWith(`
-`)) {
+    } else if ($ === 10) {
       return true;
     } else {
       return false;
@@ -12707,7 +12893,8 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
     s = $[1];
     r = $[2];
     if (s === "\\") {
-      if (r.startsWith("!")) {
+      let $1 = r.charCodeAt(0);
+      if ($1 === 33) {
         let ch = "!";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12716,7 +12903,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("#")) {
+      } else if ($1 === 35) {
         let ch = "#";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12725,7 +12912,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("$")) {
+      } else if ($1 === 36) {
         let ch = "$";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12734,7 +12921,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("%")) {
+      } else if ($1 === 37) {
         let ch = "%";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12743,7 +12930,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("&")) {
+      } else if ($1 === 38) {
         let rest = r.slice(1);
         loop$sp = sp;
         loop$in = rest;
@@ -12751,7 +12938,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + "&amp;";
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("'")) {
+      } else if ($1 === 39) {
         let ch = "'";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12760,7 +12947,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("(")) {
+      } else if ($1 === 40) {
         let ch = "(";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12769,7 +12956,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith(")")) {
+      } else if ($1 === 41) {
         let ch = ")";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12778,7 +12965,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("*")) {
+      } else if ($1 === 42) {
         let ch = "*";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12787,7 +12974,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("+")) {
+      } else if ($1 === 43) {
         let ch = "+";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12796,7 +12983,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith(",")) {
+      } else if ($1 === 44) {
         let ch = ",";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12805,7 +12992,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("-")) {
+      } else if ($1 === 45) {
         let ch = "-";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12814,7 +13001,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith(".")) {
+      } else if ($1 === 46) {
         let ch = ".";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12823,7 +13010,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("/")) {
+      } else if ($1 === 47) {
         let ch = "/";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12832,7 +13019,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith(":")) {
+      } else if ($1 === 58) {
         let ch = ":";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12841,7 +13028,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith(";")) {
+      } else if ($1 === 59) {
         let ch = ";";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12850,7 +13037,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("<")) {
+      } else if ($1 === 60) {
         let rest = r.slice(1);
         loop$sp = sp;
         loop$in = rest;
@@ -12858,7 +13045,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + "&lt;";
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("=")) {
+      } else if ($1 === 61) {
         let ch = "=";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12867,7 +13054,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith(">")) {
+      } else if ($1 === 62) {
         let rest = r.slice(1);
         loop$sp = sp;
         loop$in = rest;
@@ -12875,7 +13062,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + "&gt;";
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("?")) {
+      } else if ($1 === 63) {
         let ch = "?";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12884,7 +13071,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("@")) {
+      } else if ($1 === 64) {
         let ch = "@";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12893,7 +13080,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("[")) {
+      } else if ($1 === 91) {
         let ch = "[";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12902,7 +13089,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith('"')) {
+      } else if ($1 === 34) {
         let rest = r.slice(1);
         loop$sp = sp;
         loop$in = rest;
@@ -12910,7 +13097,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + "&quot;";
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("\\")) {
+      } else if ($1 === 92) {
         let ch = "\\";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12919,7 +13106,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("]")) {
+      } else if ($1 === 93) {
         let ch = "]";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12928,7 +13115,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("^")) {
+      } else if ($1 === 94) {
         let ch = "^";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12937,7 +13124,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("_")) {
+      } else if ($1 === 95) {
         let ch = "_";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12946,7 +13133,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("`")) {
+      } else if ($1 === 96) {
         let ch = "`";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12955,7 +13142,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("{")) {
+      } else if ($1 === 123) {
         let ch = "{";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12964,7 +13151,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("|")) {
+      } else if ($1 === 124) {
         let ch = "|";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12973,7 +13160,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("}")) {
+      } else if ($1 === 125) {
         let ch = "}";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -12982,7 +13169,7 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
         loop$acc = acc + l + ch;
         loop$stack = stack;
         loop$value = value3;
-      } else if (r.startsWith("~")) {
+      } else if ($1 === 126) {
         let ch = "~";
         let rest = r.slice(1);
         loop$sp = sp;
@@ -13062,17 +13249,18 @@ function do_parse_link_title(loop$sp, loop$in, loop$brace, loop$acc, loop$stack,
   }
 }
 function parse_link_title(in$, sp_link_title, value3) {
-  if (in$.startsWith(")")) {
+  let $ = in$.charCodeAt(0);
+  if ($ === 41) {
     return value3(new None, in$);
-  } else if (in$.startsWith('"')) {
+  } else if ($ === 34) {
     let ch = '"';
     let rest = in$.slice(1);
     return do_parse_link_title(sp_link_title, rest, ch, "", toList([]), value3);
-  } else if (in$.startsWith("'")) {
+  } else if ($ === 39) {
     let ch = "'";
     let rest = in$.slice(1);
     return do_parse_link_title(sp_link_title, rest, ch, "", toList([]), value3);
-  } else if (in$.startsWith("(")) {
+  } else if ($ === 40) {
     let ch = "(";
     let rest = in$.slice(1);
     return do_parse_link_title(sp_link_title, rest, ch, "", toList([]), value3);
@@ -13092,50 +13280,6 @@ function parse_ordinal(ord) {
     });
   });
 }
-function calc_post_item_width(idx, post2) {
-  let _block;
-  if (post2 === "") {
-    _block = 1;
-  } else if (post2.startsWith(" ")) {
-    let $ = expand_tabs_indent(post2);
-    let expanded;
-    expanded = $[0];
-    let $1 = count_spaces(expanded, 0);
-    {
-      let sp = $1;
-      if (sp > 4) {
-        _block = 1;
-      } else {
-        _block = $1;
-      }
-    }
-  } else if (post2.startsWith("\t")) {
-    let $ = expand_tabs_indent(post2);
-    let expanded;
-    expanded = $[0];
-    let $1 = count_spaces(expanded, 0);
-    {
-      let sp = $1;
-      if (sp > 4) {
-        _block = 1;
-      } else {
-        _block = $1;
-      }
-    }
-  } else {
-    _block = 0;
-  }
-  let postcount = _block;
-  let _block$1;
-  if (postcount === 0) {
-    _block$1 = postcount;
-  } else {
-    let n = postcount;
-    _block$1 = idx + n;
-  }
-  let ret = _block$1;
-  return ret;
-}
 function do_countdrop_spaces(loop$line, loop$spaces, loop$count) {
   while (true) {
     let line = loop$line;
@@ -13145,7 +13289,7 @@ function do_countdrop_spaces(loop$line, loop$spaces, loop$count) {
     if ($) {
       return [count2, line];
     } else {
-      if (line.startsWith(" ")) {
+      if (line.charCodeAt(0) === 32) {
         let rest = line.slice(1);
         loop$line = rest;
         loop$spaces = spaces - 1;
@@ -13163,26 +13307,27 @@ function is_empty_list(sp_dot_paren, line) {
   let $ = countdrop_3_spaces(line);
   let line$1;
   line$1 = $[1];
-  if (line$1.startsWith("-")) {
+  let $1 = line$1.charCodeAt(0);
+  if ($1 === 45) {
     let rest = line$1.slice(1);
     return is_blank(rest);
-  } else if (line$1.startsWith("+")) {
+  } else if ($1 === 43) {
     let rest = line$1.slice(1);
     return is_blank(rest);
-  } else if (line$1.startsWith("*")) {
+  } else if ($1 === 42) {
     let rest = line$1.slice(1);
     return is_blank(rest);
   } else {
-    let $1 = split5(sp_dot_paren, line$1);
+    let $2 = split5(sp_dot_paren, line$1);
     let ord;
     let marker;
     let rest;
-    ord = $1[0];
-    marker = $1[1];
-    rest = $1[2];
+    ord = $2[0];
+    marker = $2[1];
+    rest = $2[2];
     return guard(marker !== "." && marker !== ")", false, () => {
-      let $2 = parse_ordinal(ord);
-      if ($2 instanceof Ok) {
+      let $3 = parse_ordinal(ord);
+      if ($3 instanceof Ok) {
         return is_blank(rest);
       } else {
         return false;
@@ -13190,17 +13335,63 @@ function is_empty_list(sp_dot_paren, line) {
     });
   }
 }
+function calc_post_item_width(idx, post2) {
+  let _block;
+  let $ = post2.charCodeAt(0);
+  if (post2 === "") {
+    _block = 1;
+  } else if ($ === 32) {
+    let $1 = expand_tabs_indent(post2);
+    let expanded;
+    expanded = $1[0];
+    let $2 = count_spaces(expanded, 0);
+    {
+      let sp = $2;
+      if (sp > 4) {
+        _block = 1;
+      } else {
+        _block = $2;
+      }
+    }
+  } else if ($ === 9) {
+    let $1 = expand_tabs_indent(post2);
+    let expanded;
+    expanded = $1[0];
+    let $2 = count_spaces(expanded, 0);
+    {
+      let sp = $2;
+      if (sp > 4) {
+        _block = 1;
+      } else {
+        _block = $2;
+      }
+    }
+  } else {
+    _block = 0;
+  }
+  let postcount = _block;
+  let _block$1;
+  if (postcount === 0) {
+    _block$1 = postcount;
+  } else {
+    let n = postcount;
+    _block$1 = idx + n;
+  }
+  let ret = _block$1;
+  return ret;
+}
 function parse_bullet_item(line) {
   let $ = countdrop_3_spaces(line);
   let idx;
   let line$1;
   idx = $[0];
   line$1 = $[1];
-  if (line$1.startsWith("-")) {
+  let $1 = line$1.charCodeAt(0);
+  if ($1 === 45) {
     let marker = "-";
     let rest = line$1.slice(1);
-    let $1 = is_blank(rest);
-    if ($1) {
+    let $2 = is_blank(rest);
+    if ($2) {
       return new Ok([marker, idx + 2]);
     } else {
       let indent = calc_post_item_width(idx + 1, rest);
@@ -13208,11 +13399,11 @@ function parse_bullet_item(line) {
         return new Ok([marker, indent]);
       });
     }
-  } else if (line$1.startsWith("+")) {
+  } else if ($1 === 43) {
     let marker = "+";
     let rest = line$1.slice(1);
-    let $1 = is_blank(rest);
-    if ($1) {
+    let $2 = is_blank(rest);
+    if ($2) {
       return new Ok([marker, idx + 2]);
     } else {
       let indent = calc_post_item_width(idx + 1, rest);
@@ -13220,11 +13411,11 @@ function parse_bullet_item(line) {
         return new Ok([marker, indent]);
       });
     }
-  } else if (line$1.startsWith("*")) {
+  } else if ($1 === 42) {
     let marker = "*";
     let rest = line$1.slice(1);
-    let $1 = is_blank(rest);
-    if ($1) {
+    let $2 = is_blank(rest);
+    if ($2) {
       return new Ok([marker, idx + 2]);
     } else {
       let indent = calc_post_item_width(idx + 1, rest);
@@ -13269,7 +13460,7 @@ function take_star_run(loop$in, loop$acc) {
   while (true) {
     let in$ = loop$in;
     let acc = loop$acc;
-    if (in$.startsWith("*")) {
+    if (in$.charCodeAt(0) === 42) {
       let in$1 = in$.slice(1);
       loop$in = in$1;
       loop$acc = acc + 1;
@@ -13282,7 +13473,7 @@ function take_unds_run(loop$in, loop$acc) {
   while (true) {
     let in$ = loop$in;
     let acc = loop$acc;
-    if (in$.startsWith("_")) {
+    if (in$.charCodeAt(0) === 95) {
       let in$1 = in$.slice(1);
       loop$in = in$1;
       loop$acc = acc + 1;
@@ -13295,7 +13486,7 @@ function take_quot_run(loop$in, loop$acc) {
   while (true) {
     let in$ = loop$in;
     let acc = loop$acc;
-    if (in$.startsWith("`")) {
+    if (in$.charCodeAt(0) === 96) {
       let in$1 = in$.slice(1);
       loop$in = in$1;
       loop$acc = acc + 1;
@@ -13308,7 +13499,7 @@ function take_tilde_run(loop$in, loop$acc) {
   while (true) {
     let in$ = loop$in;
     let acc = loop$acc;
-    if (in$.startsWith("~")) {
+    if (in$.charCodeAt(0) === 126) {
       let in$1 = in$.slice(1);
       loop$in = in$1;
       loop$acc = acc + 1;
@@ -13326,19 +13517,20 @@ function take_fence_run(in$, fence) {
     throw makeError("panic", FILEPATH2, "mork/internal/util", 746, "take_fence_run", "take_fence_run bad fence: " + fence, {});
   }
 }
-function hr_eat_and_count_star(loop$line, loop$count) {
+function hr_eat_and_count_unds(loop$line, loop$count) {
   while (true) {
     let line = loop$line;
     let count2 = loop$count;
-    if (line.startsWith("*")) {
+    let $ = line.charCodeAt(0);
+    if ($ === 95) {
       let line$1 = line.slice(1);
       loop$line = line$1;
       loop$count = count2 + 1;
-    } else if (line.startsWith(" ")) {
+    } else if ($ === 32) {
       let line$1 = line.slice(1);
       loop$line = line$1;
       loop$count = count2;
-    } else if (line.startsWith("\t")) {
+    } else if ($ === 9) {
       let line$1 = line.slice(1);
       loop$line = line$1;
       loop$count = count2;
@@ -13353,15 +13545,16 @@ function hr_eat_and_count_dash(loop$line, loop$count) {
   while (true) {
     let line = loop$line;
     let count2 = loop$count;
-    if (line.startsWith("-")) {
+    let $ = line.charCodeAt(0);
+    if ($ === 45) {
       let line$1 = line.slice(1);
       loop$line = line$1;
       loop$count = count2 + 1;
-    } else if (line.startsWith(" ")) {
+    } else if ($ === 32) {
       let line$1 = line.slice(1);
       loop$line = line$1;
       loop$count = count2;
-    } else if (line.startsWith("\t")) {
+    } else if ($ === 9) {
       let line$1 = line.slice(1);
       loop$line = line$1;
       loop$count = count2;
@@ -13372,19 +13565,20 @@ function hr_eat_and_count_dash(loop$line, loop$count) {
     }
   }
 }
-function hr_eat_and_count_unds(loop$line, loop$count) {
+function hr_eat_and_count_star(loop$line, loop$count) {
   while (true) {
     let line = loop$line;
     let count2 = loop$count;
-    if (line.startsWith("_")) {
+    let $ = line.charCodeAt(0);
+    if ($ === 42) {
       let line$1 = line.slice(1);
       loop$line = line$1;
       loop$count = count2 + 1;
-    } else if (line.startsWith(" ")) {
+    } else if ($ === 32) {
       let line$1 = line.slice(1);
       loop$line = line$1;
       loop$count = count2;
-    } else if (line.startsWith("\t")) {
+    } else if ($ === 9) {
       let line$1 = line.slice(1);
       loop$line = line$1;
       loop$count = count2;
@@ -13398,13 +13592,14 @@ function hr_eat_and_count_unds(loop$line, loop$count) {
 function match_hr(line) {
   let line$1 = drop_3_spaces(line);
   let _block;
-  if (line$1.startsWith("*")) {
+  let $ = line$1.charCodeAt(0);
+  if ($ === 42) {
     let line$2 = line$1.slice(1);
     _block = hr_eat_and_count_star(line$2, 1);
-  } else if (line$1.startsWith("-")) {
+  } else if ($ === 45) {
     let line$2 = line$1.slice(1);
     _block = hr_eat_and_count_dash(line$2, 1);
-  } else if (line$1.startsWith("_")) {
+  } else if ($ === 95) {
     let line$2 = line$1.slice(1);
     _block = hr_eat_and_count_unds(line$2, 1);
   } else {
@@ -13459,15 +13654,15 @@ class Cache2 extends CustomType {
     this.sp_pipe = sp_pipe;
   }
 }
-var punctuation = "[!\"#$%&'()*+,\\-./:;<=>?@\\[\\]\\\\^_`{|}~\\p{P}\\p{S}]";
-var tag_name = "[A-Za-z][A-Za-z0-9-]*";
-var attribute_name = "[a-zA-Z_:][a-zA-Z0-9:._-]*";
-var unquoted_value = "[^\"'=<>`\\x00-\\x20]+";
-var singlequoted_value = "'[^']*'";
 var doublequoted_value = '"[^"]*"';
+var singlequoted_value = "'[^']*'";
+var unquoted_value = "[^\"'=<>`\\x00-\\x20]+";
 var attribute_value = "(?:" + unquoted_value + "|" + singlequoted_value + "|" + doublequoted_value + ")";
 var attribute_value_spec = "(?:" + "\\s*=" + "\\s*" + attribute_value + ")";
+var attribute_name = "[a-zA-Z_:][a-zA-Z0-9:._-]*";
 var attribute3 = "(?:" + "\\s+" + attribute_name + attribute_value_spec + "?)";
+var tag_name = "[A-Za-z][A-Za-z0-9-]*";
+var punctuation = "[!\"#$%&'()*+,\\-./:;<=>?@\\[\\]\\\\^_`{|}~\\p{P}\\p{S}]";
 function re_from_string(re) {
   let $ = from_string(re);
   let re$1;
@@ -13500,80 +13695,6 @@ function re_from_string_i(re) {
     });
   }
   return re$1;
-}
-function make_is_html_block_start(is_a_html_tag) {
-  let re2 = re_from_string("^[A-Za-z]");
-  let re1 = re_from_string_i("^(?:pre|script|style|textarea)(?:(?:[ \\t>]$)|$)");
-  let re3 = re_from_string_i("^\\/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h1|h2|h3|h4|h5|h6|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:(?:[ \\t>])|$|\\/>)");
-  return (line, inc_type_7) => {
-    if (line.startsWith("<")) {
-      let line2 = line.slice(1);
-      if (line2.startsWith("!")) {
-        let line2$1 = line2.slice(1);
-        return starts_with(line2$1, "--") || starts_with(line2$1, "[CDATA[") || check2(re2, line2$1);
-      } else if (line2.startsWith("?")) {
-        return true;
-      } else {
-        return check2(re1, line2) || check2(re3, line2) || (() => {
-          if (inc_type_7) {
-            return is_a_html_tag(line, true, false);
-          } else {
-            return inc_type_7;
-          }
-        })();
-      }
-    } else if (line.startsWith(" <")) {
-      let line2 = line.slice(2);
-      if (line2.startsWith("!")) {
-        let line2$1 = line2.slice(1);
-        return starts_with(line2$1, "--") || starts_with(line2$1, "[CDATA[") || check2(re2, line2$1);
-      } else if (line2.startsWith("?")) {
-        return true;
-      } else {
-        return check2(re1, line2) || check2(re3, line2) || (() => {
-          if (inc_type_7) {
-            return is_a_html_tag(line, true, false);
-          } else {
-            return inc_type_7;
-          }
-        })();
-      }
-    } else if (line.startsWith("  <")) {
-      let line2 = line.slice(3);
-      if (line2.startsWith("!")) {
-        let line2$1 = line2.slice(1);
-        return starts_with(line2$1, "--") || starts_with(line2$1, "[CDATA[") || check2(re2, line2$1);
-      } else if (line2.startsWith("?")) {
-        return true;
-      } else {
-        return check2(re1, line2) || check2(re3, line2) || (() => {
-          if (inc_type_7) {
-            return is_a_html_tag(line, true, false);
-          } else {
-            return inc_type_7;
-          }
-        })();
-      }
-    } else if (line.startsWith("   <")) {
-      let line2 = line.slice(4);
-      if (line2.startsWith("!")) {
-        let line2$1 = line2.slice(1);
-        return starts_with(line2$1, "--") || starts_with(line2$1, "[CDATA[") || check2(re2, line2$1);
-      } else if (line2.startsWith("?")) {
-        return true;
-      } else {
-        return check2(re1, line2) || check2(re3, line2) || (() => {
-          if (inc_type_7) {
-            return is_a_html_tag(line, true, false);
-          } else {
-            return inc_type_7;
-          }
-        })();
-      }
-    } else {
-      return false;
-    }
-  };
 }
 function make_is_paragraph_continuation_text(is_html_block, sp_dot_paren) {
   let $ = from_string("^(\\*[ \\t]*){3,}[ \\t\\*]*$");
@@ -13683,7 +13804,7 @@ function make_is_paragraph_continuation_text(is_html_block, sp_dot_paren) {
           return true;
         }
       }
-    } else if (line.startsWith(" ")) {
+    } else if (line.charCodeAt(0) === 32) {
       let line$1 = line.slice(1);
       let $6 = is_blank(line$1) || check2(re_hr_1, line$1) || check2(re_hr_2, line$1) || check2(re_hr_3, line$1) || check2(re_fenced, line$1) || check2(re_list_1, line$1) || check2(re_h_atx, line$1) || is_html_block(line$1, false);
       if ($6) {
@@ -13711,6 +13832,84 @@ function make_is_paragraph_continuation_text(is_html_block, sp_dot_paren) {
           return true;
         }
       }
+    }
+  };
+}
+function make_is_html_block_start(is_a_html_tag) {
+  let re2 = re_from_string("^[A-Za-z]");
+  let re1 = re_from_string_i("^(?:pre|script|style|textarea)(?:(?:[ \\t>]$)|$)");
+  let re3 = re_from_string_i("^\\/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h1|h2|h3|h4|h5|h6|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:(?:[ \\t>])|$|\\/>)");
+  return (line, inc_type_7) => {
+    if (line.charCodeAt(0) === 60) {
+      let line2 = line.slice(1);
+      let $ = line2.charCodeAt(0);
+      if ($ === 33) {
+        let line2$1 = line2.slice(1);
+        return starts_with(line2$1, "--") || starts_with(line2$1, "[CDATA[") || check2(re2, line2$1);
+      } else if ($ === 63) {
+        return true;
+      } else {
+        return check2(re1, line2) || check2(re3, line2) || (() => {
+          if (inc_type_7) {
+            return is_a_html_tag(line, true, false);
+          } else {
+            return inc_type_7;
+          }
+        })();
+      }
+    } else if (line.startsWith(" <")) {
+      let line2 = line.slice(2);
+      let $ = line2.charCodeAt(0);
+      if ($ === 33) {
+        let line2$1 = line2.slice(1);
+        return starts_with(line2$1, "--") || starts_with(line2$1, "[CDATA[") || check2(re2, line2$1);
+      } else if ($ === 63) {
+        return true;
+      } else {
+        return check2(re1, line2) || check2(re3, line2) || (() => {
+          if (inc_type_7) {
+            return is_a_html_tag(line, true, false);
+          } else {
+            return inc_type_7;
+          }
+        })();
+      }
+    } else if (line.startsWith("  <")) {
+      let line2 = line.slice(3);
+      let $ = line2.charCodeAt(0);
+      if ($ === 33) {
+        let line2$1 = line2.slice(1);
+        return starts_with(line2$1, "--") || starts_with(line2$1, "[CDATA[") || check2(re2, line2$1);
+      } else if ($ === 63) {
+        return true;
+      } else {
+        return check2(re1, line2) || check2(re3, line2) || (() => {
+          if (inc_type_7) {
+            return is_a_html_tag(line, true, false);
+          } else {
+            return inc_type_7;
+          }
+        })();
+      }
+    } else if (line.startsWith("   <")) {
+      let line2 = line.slice(4);
+      let $ = line2.charCodeAt(0);
+      if ($ === 33) {
+        let line2$1 = line2.slice(1);
+        return starts_with(line2$1, "--") || starts_with(line2$1, "[CDATA[") || check2(re2, line2$1);
+      } else if ($ === 63) {
+        return true;
+      } else {
+        return check2(re1, line2) || check2(re3, line2) || (() => {
+          if (inc_type_7) {
+            return is_a_html_tag(line, true, false);
+          } else {
+            return inc_type_7;
+          }
+        })();
+      }
+    } else {
+      return false;
     }
   };
 }
@@ -14049,19 +14248,20 @@ function do_merge_until_unescaped_end_bracket(loop$in, loop$sp, loop$acc, loop$s
         }
       }
     } else if (s === "\\") {
-      if (r.startsWith("\\")) {
+      let $1 = r.charCodeAt(0);
+      if ($1 === 92) {
         let r$1 = r.slice(1);
         loop$in = r$1;
         loop$sp = sp;
         loop$acc = body + "\\\\";
         loop$stack = stack;
-      } else if (r.startsWith("[")) {
+      } else if ($1 === 91) {
         let r$1 = r.slice(1);
         loop$in = r$1;
         loop$sp = sp;
         loop$acc = body + "\\[";
         loop$stack = stack;
-      } else if (r.startsWith("]")) {
+      } else if ($1 === 93) {
         let r$1 = r.slice(1);
         loop$in = r$1;
         loop$sp = sp;
@@ -14131,11 +14331,11 @@ function advance_line_with_blocks(ctx, blocks) {
     return new Document(_record.options, blocks, _record.links, _record.footnotes);
   })(), ctx.nest);
 }
-function with_state(ctx, raw24) {
-  return new Context(ctx.cache, new_state(raw24, ctx.cache.sp_line), ctx.stack, ctx.doc, ctx.nest);
+function with_state(ctx, raw26) {
+  return new Context(ctx.cache, new_state(raw26, ctx.cache.sp_line), ctx.stack, ctx.doc, ctx.nest);
 }
-function with_state_reset_blocks(ctx, raw24) {
-  return new Context(ctx.cache, new_state(raw24, ctx.cache.sp_line), toList([]), (() => {
+function with_state_reset_blocks(ctx, raw26) {
+  return new Context(ctx.cache, new_state(raw26, ctx.cache.sp_line), toList([]), (() => {
     let _record = ctx.doc;
     return new Document(_record.options, toList([]), _record.links, _record.footnotes);
   })(), toList([]));
@@ -14166,159 +14366,358 @@ function try_parse_blank(ctx, cont) {
     return cont();
   }
 }
-function try_parse_thematic_break(ctx, cont) {
-  return lazy_guard(!match_hr(ctx.state.pos), cont, () => {
-    return advance_line_with_blocks(ctx, prepend(new ThematicBreak, ctx.doc.blocks));
-  });
-}
-function take_hashes(loop$input, loop$acc) {
-  while (true) {
-    let input2 = loop$input;
-    let acc = loop$acc;
-    if (input2.startsWith("#")) {
-      let input$1 = input2.slice(1);
-      loop$input = input$1;
-      loop$acc = acc + 1;
-    } else {
-      return [acc, input2];
-    }
-  }
-}
-function take_hspaces(loop$tail, loop$rest) {
-  while (true) {
-    let tail = loop$tail;
-    let rest = loop$rest;
-    if (tail.startsWith(" ")) {
-      let tail$1 = tail.slice(1);
-      loop$tail = tail$1;
-      loop$rest = rest;
-    } else if (tail.startsWith("\t")) {
-      let tail$1 = tail.slice(1);
-      loop$tail = tail$1;
-      loop$rest = rest;
-    } else {
-      return rest(tail);
-    }
-  }
-}
-function take_hspaces1(tail, cont, rest) {
-  if (tail.startsWith(" ")) {
-    let tail$1 = tail.slice(1);
-    return take_hspaces(tail$1, rest);
-  } else if (tail.startsWith("\t")) {
-    let tail$1 = tail.slice(1);
-    return take_hspaces(tail$1, rest);
-  } else if (tail === "") {
-    return rest(tail);
-  } else {
-    return cont();
-  }
-}
-function do_heading_id(loop$text, loop$acc) {
-  while (true) {
-    let text4 = loop$text;
-    let acc = loop$acc;
-    let $ = pop_grapheme(text4);
-    if ($ instanceof Ok) {
-      let ch = $[0][0];
-      let rest = $[0][1];
-      let $1 = contains_string("abcdefghijklmnopqrstuvwxyz0123456789", lowercase(ch));
-      if ($1) {
-        loop$text = rest;
-        loop$acc = acc + ch;
-      } else {
-        if (ch === " ") {
-          loop$text = rest;
-          loop$acc = acc + "-";
-        } else if (ch === "-") {
-          loop$text = rest;
-          loop$acc = acc + "-";
-        } else if (ch === "_") {
-          loop$text = rest;
-          loop$acc = acc + "-";
-        } else {
-          loop$text = rest;
-          loop$acc = acc;
-        }
-      }
-    } else {
-      return acc;
-    }
-  }
-}
-function heading_id(re, text4) {
-  let $ = scan2(re, text4);
-  if ($ instanceof Empty) {
-    return do_heading_id(text4, "");
-  } else {
-    let $1 = $.tail;
-    if ($1 instanceof Empty) {
-      let $2 = $.head.submatches;
-      if ($2 instanceof Empty) {
-        return do_heading_id(text4, "");
-      } else {
-        let $3 = $2.head;
-        if ($3 instanceof Some) {
-          let $4 = $2.tail;
-          if ($4 instanceof Empty) {
-            let text$1 = $3[0];
-            return text$1;
-          } else {
-            return do_heading_id(text4, "");
-          }
-        } else {
-          return do_heading_id(text4, "");
-        }
-      }
-    } else {
-      return do_heading_id(text4, "");
-    }
-  }
-}
-function try_parse_atx_heading(ctx, rest, cont) {
-  let $ = take_hashes(rest, 1);
-  let num;
-  let rest$1;
-  num = $[0];
-  rest$1 = $[1];
-  return lazy_guard(num > 6, cont, () => {
-    return take_hspaces1(rest$1, cont, (rest2) => {
-      let rest$12 = replace3(ctx.cache.atx_heading_tail, rest2, "");
-      let _block;
-      let $1 = check2(ctx.cache.atx_heading_empty, rest$12);
-      if ($1) {
-        _block = "";
-      } else {
-        _block = rest$12;
-      }
-      let rest$2 = _block;
-      let _block$1;
-      let $2 = ctx.doc.options.heading_ids;
-      if ($2) {
-        _block$1 = heading_id(ctx.cache.atx_heading_id, rest$2);
-      } else {
-        _block$1 = "";
-      }
-      let id2 = _block$1;
-      let _block$2;
-      let $3 = ctx.doc.options.heading_ids;
-      if ($3) {
-        _block$2 = replace3(ctx.cache.atx_heading_id, rest$2, "");
-      } else {
-        _block$2 = rest$2;
-      }
-      let rest$3 = _block$2;
-      return advance_line_with_blocks(ctx, prepend(new Heading(num, id2, rest$3, toList([])), ctx.doc.blocks));
+function setext_underline(ctx, line) {
+  return guard(check2(ctx.cache.setext_h1, line), new SetextH1, () => {
+    return guard(check2(ctx.cache.setext_h2, line), new SetextH2, () => {
+      return new SetextNot;
     });
   });
 }
-function try_or(res, when_err, when_ok) {
-  if (res instanceof Ok) {
-    let v = res[0];
-    return when_ok(v);
+function is_blockquote_line(line) {
+  let line$1 = drop_3_spaces(line);
+  if (line$1.charCodeAt(0) === 62) {
+    return true;
   } else {
-    return when_err();
+    return false;
   }
+}
+function do_take_lines(loop$ctx, loop$cond, loop$acc) {
+  while (true) {
+    let ctx = loop$ctx;
+    let cond = loop$cond;
+    let acc = loop$acc;
+    let $ = at_eof(ctx.state);
+    if ($) {
+      return [ctx, acc];
+    } else {
+      let $1 = cond(ctx.state.pos);
+      if ($1 instanceof Some) {
+        let line = $1[0];
+        loop$ctx = advance_line2(ctx);
+        loop$cond = cond;
+        loop$acc = prepend(line, acc);
+      } else {
+        return [ctx, acc];
+      }
+    }
+  }
+}
+function take_lines(ctx, cond) {
+  let $ = do_take_lines(ctx, cond, toList([]));
+  let ctx$1;
+  let lines;
+  ctx$1 = $[0];
+  lines = $[1];
+  return [ctx$1, reverse(lines)];
+}
+function nest_indent(ctx) {
+  let $ = ctx.nest;
+  if ($ instanceof Empty) {
+    return 0;
+  } else {
+    let indent = $.head.indent;
+    return indent;
+  }
+}
+function take_first_paragraph_line(ctx, cont, when_ok) {
+  let line = ctx.state.pos;
+  let $ = is_blank(line);
+  if ($) {
+    return cont();
+  } else {
+    return when_ok(advance_line2(ctx), line);
+  }
+}
+function try_parse_paragraph(ctx, cont) {
+  return take_first_paragraph_line(ctx, cont, (ctx2, line) => {
+    let nest = nest_indent(ctx2);
+    let $ = take_lines(ctx2, (line2) => {
+      let undented = drop_indent(line2, nest);
+      let line_indent = find_indent(line2);
+      let $1 = !(is_blockquote_line(undented) || !(setext_underline(ctx2, undented) instanceof SetextNot) && (isEqual(ctx2.nest, toList([])) || ctx2.state.indent > 0)) && (is_empty_list(ctx2.cache.sp_dot_paren, line2) || nest > line_indent && line_indent > 3 || ctx2.cache.is_paragraph_continuation_text(undented));
+      if ($1) {
+        return new Some(undented);
+      } else {
+        return new None;
+      }
+    });
+    let ctx$1;
+    let lines;
+    ctx$1 = $[0];
+    lines = $[1];
+    let lines$1 = prepend(line, lines);
+    return lazy_guard(isEqual(lines$1, toList([])), cont, () => {
+      let raw26 = join(lines$1, `
+`);
+      return lazy_guard(!isEqual(ctx$1.nest, toList([])) && ctx$1.state.indent === 0, () => {
+        return update_blocks(ctx$1, prepend(new Paragraph(raw26, toList([])), ctx$1.doc.blocks));
+      }, () => {
+        let $1 = setext_underline(ctx$1, ctx$1.state.pos);
+        if ($1 instanceof SetextH1) {
+          return advance_line_with_blocks(ctx$1, prepend(new Heading(1, "", raw26, toList([])), ctx$1.doc.blocks));
+        } else if ($1 instanceof SetextH2) {
+          return advance_line_with_blocks(ctx$1, prepend(new Heading(2, "", raw26, toList([])), ctx$1.doc.blocks));
+        } else {
+          return update_blocks(ctx$1, prepend(new Paragraph(raw26, toList([])), ctx$1.doc.blocks));
+        }
+      });
+    });
+  });
+}
+function do_pipe_split(loop$pipe, loop$input, loop$acc, loop$res) {
+  while (true) {
+    let pipe = loop$pipe;
+    let input2 = loop$input;
+    let acc = loop$acc;
+    let res = loop$res;
+    let $ = split5(pipe, input2);
+    let l;
+    let s;
+    let r;
+    l = $[0];
+    s = $[1];
+    r = $[2];
+    let body = acc + l;
+    if (s === "|") {
+      loop$pipe = pipe;
+      loop$input = r;
+      loop$acc = "";
+      loop$res = prepend(body, res);
+    } else if (s === "\\|") {
+      loop$pipe = pipe;
+      loop$input = r;
+      loop$acc = body + "|";
+      loop$res = res;
+    } else if (s === "") {
+      return prepend(body, res);
+    } else {
+      throw makeError("panic", FILEPATH5, "mork/internal/blocks", 1144, "do_pipe_split", "unreachable", {});
+    }
+  }
+}
+function pipe_split(pipe, input2) {
+  let input$1 = trim(input2);
+  let _block;
+  let $ = starts_with(input$1, "|") && ends_with(input$1, "|");
+  if ($) {
+    _block = slice(input$1, 1, string_length(input$1) - 2);
+  } else {
+    _block = input$1;
+  }
+  let input$2 = _block;
+  let _pipe = do_pipe_split(pipe, input$2, "", toList([]));
+  return reverse(_pipe);
+}
+function parse_table_row(ctx, num_cols, row) {
+  let _block;
+  let _pipe = pipe_split(ctx.cache.sp_pipe, row);
+  _block = map2(_pipe, (_capture) => {
+    return new Cell(_capture, toList([]));
+  });
+  let cols = _block;
+  let $ = num_cols === length(cols);
+  if ($) {
+    return new Some(cols);
+  } else {
+    return new None;
+  }
+}
+function parse_header_row(pipe, header, num_cols, aligns) {
+  let cols = pipe_split(pipe, header);
+  let true_len = length(cols);
+  let $ = true_len === length(aligns) && true_len === num_cols;
+  if ($) {
+    return new Ok(map2(zip(cols, aligns), (data2) => {
+      let raw26;
+      let align;
+      raw26 = data2[0];
+      align = data2[1];
+      return new THead(align, raw26, toList([]));
+    }));
+  } else {
+    return new Error(undefined);
+  }
+}
+function column_alignment(spec) {
+  let spec$1 = trim(spec);
+  let $ = from_string("^:?-+:?$");
+  let re;
+  if ($ instanceof Ok) {
+    re = $[0];
+  } else {
+    throw makeError("let_assert", FILEPATH5, "mork/internal/blocks", 1091, "column_alignment", "Pattern match failed, no pattern matched the value.", {
+      value: $,
+      start: 30861,
+      end: 30911,
+      pattern_start: 30872,
+      pattern_end: 30878
+    });
+  }
+  let $1 = check2(re, spec$1);
+  if ($1) {
+    let l = starts_with(spec$1, ":");
+    let r = ends_with(spec$1, ":");
+    return new Ok((() => {
+      if (r) {
+        if (l === true) {
+          return new Center;
+        } else {
+          return new Right;
+        }
+      } else {
+        return new Left;
+      }
+    })());
+  } else {
+    return new Error(undefined);
+  }
+}
+function do_delim_row(loop$pipe, loop$input, loop$count, loop$res) {
+  while (true) {
+    let pipe = loop$pipe;
+    let input2 = loop$input;
+    let count2 = loop$count;
+    let res = loop$res;
+    let input$1 = gobble_hspace(input2);
+    let $ = split5(pipe, input$1);
+    let l;
+    let s;
+    let r;
+    l = $[0];
+    s = $[1];
+    r = $[2];
+    if (s === "\\|") {
+      return new Error(undefined);
+    } else if (s === "|") {
+      let $1 = l === "";
+      if ($1) {
+        if (res instanceof Empty) {
+          loop$pipe = pipe;
+          loop$input = r;
+          loop$count = count2;
+          loop$res = res;
+        } else {
+          loop$pipe = pipe;
+          loop$input = r;
+          loop$count = count2 + 1;
+          loop$res = prepend(new Left, res);
+        }
+      } else {
+        let $2 = column_alignment(l);
+        if ($2 instanceof Ok) {
+          let align = $2[0];
+          loop$pipe = pipe;
+          loop$input = r;
+          loop$count = count2 + 1;
+          loop$res = prepend(align, res);
+        } else {
+          return $2;
+        }
+      }
+    } else if (s === "") {
+      let $1 = l === "";
+      if ($1) {
+        return new Ok([count2, res]);
+      } else {
+        let $2 = column_alignment(l);
+        if ($2 instanceof Ok) {
+          let align = $2[0];
+          return new Ok([count2 + 1, prepend(align, res)]);
+        } else {
+          return $2;
+        }
+      }
+    } else {
+      throw makeError("panic", FILEPATH5, "mork/internal/blocks", 1085, "do_delim_row", "unreachable", {});
+    }
+  }
+}
+function parse_delim_row(pipe, s) {
+  let _pipe = do_delim_row(pipe, s, 0, toList([]));
+  return map4(_pipe, (v) => {
+    return [
+      v[0],
+      (() => {
+        let _pipe$1 = v[1];
+        return reverse(_pipe$1);
+      })()
+    ];
+  });
+}
+function maybe_delim_row(loop$s, loop$npipes) {
+  while (true) {
+    let s = loop$s;
+    let npipes = loop$npipes;
+    let $ = gobble_hspace(s);
+    let $1 = $.charCodeAt(0);
+    if ($1 === 124) {
+      let s$1 = $.slice(1);
+      loop$s = s$1;
+      loop$npipes = npipes + 1;
+    } else if ($1 === 45) {
+      let s$1 = $.slice(1);
+      loop$s = s$1;
+      loop$npipes = npipes;
+    } else if ($1 === 58) {
+      let s$1 = $.slice(1);
+      loop$s = s$1;
+      loop$npipes = npipes;
+    } else if ($1 === 32) {
+      let s$1 = $.slice(1);
+      loop$s = s$1;
+      loop$npipes = npipes;
+    } else if ($ === "") {
+      return npipes > 0;
+    } else {
+      return false;
+    }
+  }
+}
+function try_parse_table(ctx, abort) {
+  return lazy_guard(!ctx.doc.options.tables, abort, () => {
+    let pipe = ctx.cache.sp_pipe;
+    let delim_row = next_line(ctx.state);
+    let $ = maybe_delim_row(delim_row, 0);
+    if ($) {
+      let $1 = parse_delim_row(pipe, delim_row);
+      if ($1 instanceof Ok) {
+        let num_cols = $1[0][0];
+        let aligns = $1[0][1];
+        let $2 = parse_header_row(pipe, ctx.state.pos, num_cols, aligns);
+        if ($2 instanceof Ok) {
+          let header = $2[0];
+          let _block;
+          let _pipe = ctx;
+          let _pipe$1 = advance_line2(_pipe);
+          _block = advance_line2(_pipe$1);
+          let ctx$1 = _block;
+          let $3 = take_lines(ctx$1, (_capture) => {
+            return parse_table_row(ctx$1, num_cols, _capture);
+          });
+          let ctx$2;
+          let rows;
+          ctx$2 = $3[0];
+          rows = $3[1];
+          return update_blocks(ctx$2, prepend(new Table(header, rows), ctx$2.doc.blocks));
+        } else {
+          return abort();
+        }
+      } else {
+        return abort();
+      }
+    } else {
+      return abort();
+    }
+  });
+}
+function block_fallback(ctx) {
+  return try_parse_table(ctx, () => {
+    return try_parse_paragraph(ctx, () => {
+      return try_parse_blank(ctx, () => {
+        throw makeError("panic", FILEPATH5, "mork/internal/blocks", 63, "block_fallback", "try_parse_block could not parse: " + inspect2(ctx), {});
+      });
+    });
+  });
 }
 function are_separated(items) {
   if (items instanceof Empty) {
@@ -14339,6 +14738,107 @@ function calculate_list_pack(items) {
     return item.contains_blank;
   });
   return check3(contains3 || are_separated(items), new Loose, new Tight);
+}
+function block_contains_blank(block) {
+  return block instanceof Newline;
+}
+function item_contains_blank(blocks) {
+  return count(blocks, (block) => {
+    if (block instanceof Paragraph) {
+      return true;
+    } else {
+      return false;
+    }
+  }) > 1 || any(blocks, block_contains_blank);
+}
+function item_ends_with_blank(lines) {
+  let _block;
+  let _pipe = lines;
+  _block = reverse(_pipe);
+  let lines$1 = _block;
+  if (lines$1 instanceof Empty) {
+    return false;
+  } else {
+    let $ = lines$1.tail;
+    if ($ instanceof Empty) {
+      return false;
+    } else {
+      let head = lines$1.head;
+      return head === "";
+    }
+  }
+}
+function set_nest_listitem(ctx, indent) {
+  return new Context(ctx.cache, ctx.state, ctx.stack, ctx.doc, prepend(new NestItem(indent), ctx.nest));
+}
+function is_list_item(ctx, line) {
+  return guard(match_hr(line), false, () => {
+    let $ = parse_bullet_item(line);
+    if ($ instanceof Ok) {
+      return true;
+    } else {
+      let $1 = parse_ordinal_item(ctx.cache.sp_dot_paren, line);
+      if ($1 instanceof Ok) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  });
+}
+function list_item_line(ctx, line, indent, lazy) {
+  let line_indent = find_indent(line);
+  let nest = nest_indent(ctx);
+  return lazy_guard(is_blank(line), () => {
+    return new Some("");
+  }, () => {
+    return lazy_guard(!lazy && line_indent < nest + indent, () => {
+      return new None;
+    }, () => {
+      return lazy_guard(line_indent < indent && is_empty_list(ctx.cache.sp_dot_paren, line), () => {
+        return new None;
+      }, () => {
+        return lazy_guard(line_indent <= nest && is_list_item(ctx, line), () => {
+          return new None;
+        }, () => {
+          return guard(lazy && ctx.cache.is_paragraph_continuation_text(line), new Some(line), () => {
+            return lazy_guard(lazy && ctx.state.indent > 0 && !(setext_underline(ctx, line) instanceof SetextNot), () => {
+              return new Some(line);
+            }, () => {
+              let $ = line_indent >= indent;
+              if ($) {
+                return new Some(line);
+              } else {
+                return new None;
+              }
+            });
+          });
+        });
+      });
+    });
+  });
+}
+function do_take_lines_with_state(ctx, state, cond, acc) {
+  return guard(at_eof(ctx.state), [ctx, acc], () => {
+    let $ = cond(ctx.state.pos, state);
+    let $1 = $[0];
+    if ($1 instanceof Some) {
+      let state$1 = $[1];
+      let line = $1[0];
+      let ctx$1 = new Context(ctx.cache, advance_line(ctx.state), ctx.stack, ctx.doc, ctx.nest);
+      return do_take_lines_with_state(ctx$1, state$1, cond, prepend(line, acc));
+    } else {
+      return [ctx, acc];
+    }
+  });
+}
+function take_lines_with_state(ctx, state, cond) {
+  let $ = do_take_lines_with_state(ctx, state, cond, toList([]));
+  let ctx$1;
+  let lines;
+  ctx$1 = $[0];
+  lines = $[1];
+  return [ctx$1, reverse(lines)];
 }
 function list_item_indent(ctx, line, marker) {
   if (marker === ".") {
@@ -14395,59 +14895,12 @@ function list_item_line_start(ctx, marker, require_indent) {
     });
   });
 }
-function is_list_item(ctx, line) {
-  return guard(match_hr(line), false, () => {
-    let $ = parse_bullet_item(line);
-    if ($ instanceof Ok) {
-      return true;
-    } else {
-      let $1 = parse_ordinal_item(ctx.cache.sp_dot_paren, line);
-      if ($1 instanceof Ok) {
-        return true;
-      } else {
-        return false;
-      }
-    }
-  });
-}
-function item_ends_with_blank(lines) {
-  let _block;
-  let _pipe = lines;
-  _block = reverse(_pipe);
-  let lines$1 = _block;
-  if (lines$1 instanceof Empty) {
-    return false;
+function try_or(res, when_err, when_ok) {
+  if (res instanceof Ok) {
+    let v = res[0];
+    return when_ok(v);
   } else {
-    let $ = lines$1.tail;
-    if ($ instanceof Empty) {
-      return false;
-    } else {
-      let head = lines$1.head;
-      return head === "";
-    }
-  }
-}
-function block_contains_blank(block) {
-  return block instanceof Newline;
-}
-function item_contains_blank(blocks) {
-  return count(blocks, (block) => {
-    if (block instanceof Paragraph) {
-      return true;
-    } else {
-      return false;
-    }
-  }) > 1 || any(blocks, block_contains_blank);
-}
-function set_nest_listitem(ctx, indent) {
-  return new Context(ctx.cache, ctx.state, ctx.stack, ctx.doc, prepend(new NestItem(indent), ctx.nest));
-}
-function set_nest_blockquote(ctx) {
-  let $ = ctx.nest;
-  if ($ instanceof Empty) {
-    return new Context(ctx.cache, ctx.state, ctx.stack, ctx.doc, prepend(new NestItem(0), ctx.nest));
-  } else {
-    return ctx;
+    return when_err();
   }
 }
 function new_code_block(lang, lines) {
@@ -14500,150 +14953,204 @@ function do_indented(loop$ctx, loop$indent, loop$lines) {
     }
   }
 }
-function line_is_codeblock(line) {
-  let indent = find_indent(line);
-  return guard(indent >= 4, true, () => {
-    let line$1 = drop_3_spaces(line);
-    if (line$1.startsWith("`")) {
-      let line$2 = line$1.slice(1);
-      let $ = take_quot_run(line$2, 1);
-      let len;
-      let line$3;
-      len = $[0];
-      line$3 = $[1];
-      return guard(len < 3, false, () => {
-        return guard(contains_string(line$3, "`"), false, () => {
-          return true;
-        });
-      });
-    } else if (line$1.startsWith("~")) {
-      let line$2 = line$1.slice(1);
-      let $ = take_tilde_run(line$2, 1);
-      let len;
-      len = $[0];
-      return guard(len < 3, false, () => {
-        return true;
-      });
-    } else {
-      return false;
-    }
+function try_parse_indented_code(ctx, cont) {
+  let nest_indent$1 = nest_indent(ctx);
+  return lazy_guard(ctx.state.indent - nest_indent$1 < 4, cont, () => {
+    return do_indented(ctx, nest_indent$1, toList([]));
   });
 }
-function is_blockquote_line(line) {
-  let line$1 = drop_3_spaces(line);
-  if (line$1.startsWith(">")) {
-    return true;
+function try_parse_thematic_break(ctx, cont) {
+  return lazy_guard(!match_hr(ctx.state.pos), cont, () => {
+    return advance_line_with_blocks(ctx, prepend(new ThematicBreak, ctx.doc.blocks));
+  });
+}
+function set_link(doc, label2, dest, title2) {
+  let _block;
+  let _pipe = label2;
+  _block = casefold(_pipe);
+  let label$1 = _block;
+  let links = upsert(doc.links, label$1, (current) => {
+    if (current instanceof Some) {
+      let v = current[0];
+      return v;
+    } else {
+      return new LinkData(dest, title2);
+    }
+  });
+  return new Document(doc.options, doc.blocks, links, doc.footnotes);
+}
+function with_doc(ctx, doc) {
+  return new Context(ctx.cache, ctx.state, ctx.stack, doc, ctx.nest);
+}
+function starts_title(in$) {
+  return starts_with(in$, '"') || starts_with(in$, "'") || starts_with(in$, "(");
+}
+function next_line_if_blank2(ctx, in$) {
+  let $ = is_blank(in$);
+  if ($) {
+    let ctx$1 = advance_line2(ctx);
+    return [ctx$1, ctx$1.state.pos];
   } else {
-    return false;
+    return [ctx, in$];
   }
 }
-function setext_underline(ctx, line) {
-  return guard(check2(ctx.cache.setext_h1, line), new SetextH1, () => {
-    return guard(check2(ctx.cache.setext_h2, line), new SetextH2, () => {
-      return new SetextNot;
-    });
-  });
-}
-function do_take_lines(loop$ctx, loop$cond, loop$acc) {
-  while (true) {
-    let ctx = loop$ctx;
-    let cond = loop$cond;
-    let acc = loop$acc;
-    let $ = at_eof(ctx.state);
-    if ($) {
-      return [ctx, acc];
-    } else {
-      let $1 = cond(ctx.state.pos);
-      if ($1 instanceof Some) {
-        let line = $1[0];
-        loop$ctx = advance_line2(ctx);
-        loop$cond = cond;
-        loop$acc = prepend(line, acc);
-      } else {
-        return [ctx, acc];
-      }
-    }
-  }
-}
-function take_lines(ctx, cond) {
-  let $ = do_take_lines(ctx, cond, toList([]));
-  let ctx$1;
-  let lines;
-  ctx$1 = $[0];
-  lines = $[1];
-  return [ctx$1, reverse(lines)];
-}
-function try_parse_fenced_code(ctx, fence_ch, rest, cont) {
-  let $ = take_fence_run(rest, fence_ch);
-  let fence_len;
-  let rest$1;
-  fence_len = $[0];
-  rest$1 = $[1];
-  return lazy_guard(fence_len < 3, cont, () => {
-    return take_hspaces(rest$1, (rest2) => {
-      return lazy_guard(fence_ch === "`" && contains_string(rest2, "`"), cont, () => {
-        let _block;
-        if (rest2 === "") {
-          _block = new None;
-        } else {
-          _block = new Some(rest2);
-        }
-        let lang = _block;
-        let nspaces = count_spaces(ctx.state.line, 0);
-        let ctx$1 = advance_line2(ctx);
-        let $1 = take_lines(ctx$1, (line) => {
-          let dropped = drop_indent(line, nspaces);
-          let text4 = drop_3_spaces(dropped);
-          let $2 = take_fence_run(text4, fence_ch);
-          let endlen_plus_1;
-          let text$1;
-          endlen_plus_1 = $2[0];
-          text$1 = $2[1];
-          return guard(endlen_plus_1 <= fence_len, new Some(dropped), () => {
-            return guard(!is_blank(text$1), new Some(dropped), () => {
-              return new None;
+function do_try_parse_link(ctx) {
+  return next_nonspace(ctx.state, (state) => {
+    return merge_until_unescaped_end_bracket(state, ctx.cache.sp_link_text, (state2) => {
+      let $ = gobble_link_label(ctx.cache.sp_link_label, state2.pos);
+      let label2;
+      let pos;
+      label2 = $[0];
+      pos = $[1];
+      return guard(label2 === "", new Error(undefined), () => {
+        let state$1 = update_pos(state2, pos);
+        return try_pop2(state$1, ":", () => {
+          return new Error(undefined);
+        }, (state3) => {
+          return next_line_if_blank(state3, (state4) => {
+            let ctx$1 = new Context(ctx.cache, state4, ctx.stack, ctx.doc, ctx.nest);
+            let in$ = state4.pos;
+            return parse_link_dest(in$, ctx$1.cache.sp_link_dest, ctx$1.cache.sp_link_dest_tag, (dest, in$2) => {
+              let in$1 = gobble_hspace(in$2);
+              let state$12 = update_pos(state4, in$1);
+              let with_title = (ctx2, in$3) => {
+                return parse_link_title(in$3, ctx2.cache.sp_link_title, (title2, in$4) => {
+                  let $1 = is_blankn(in$4);
+                  if ($1) {
+                    let doc = set_link(ctx2.doc, label2, dest, title2);
+                    let ctx$12 = new Context(ctx2.cache, new_state(in$4, ctx2.cache.sp_line), ctx2.stack, doc, ctx2.nest);
+                    return new Ok(ctx$12);
+                  } else {
+                    return new Error(undefined);
+                  }
+                });
+              };
+              return lazy_guard(starts_title(in$1), () => {
+                let $1 = with_title(ctx$1, in$1 + `
+` + state$12.rest);
+                if ($1 instanceof Ok) {
+                  return $1;
+                } else {
+                  return new Error(undefined);
+                }
+              }, () => {
+                let $1 = next_line_if_blank2(ctx$1, in$1);
+                let ctx$2;
+                let in$22;
+                ctx$2 = $1[0];
+                in$22 = $1[1];
+                let state$2 = ctx$2.state;
+                let in$3 = gobble_hspace(in$22);
+                let $2 = starts_title(in$3);
+                if ($2) {
+                  let $3 = with_title(ctx$2, in$3 + `
+` + state$2.rest);
+                  if ($3 instanceof Ok) {
+                    return $3;
+                  } else {
+                    return new Ok(with_doc(ctx$2, set_link(ctx$2.doc, label2, dest, new None)));
+                  }
+                } else {
+                  return new Ok(with_doc(ctx$2, set_link(ctx$2.doc, label2, dest, new None)));
+                }
+              });
             });
           });
         });
-        let ctx$2;
-        let lines;
-        ctx$2 = $1[0];
-        lines = $1[1];
-        let _block$1;
-        if (lines instanceof Empty) {
-          _block$1 = "";
-        } else {
-          _block$1 = join(lines, `
-`) + `
-`;
-        }
-        let body = _block$1;
-        return advance_line_with_blocks(ctx$2, prepend(new Code(lang, body), ctx$2.doc.blocks));
       });
     });
   });
 }
-function do_take_lines_with_state(ctx, state, cond, acc) {
-  return guard(at_eof(ctx.state), [ctx, acc], () => {
-    let $ = cond(ctx.state.pos, state);
-    let $1 = $[0];
-    if ($1 instanceof Some) {
-      let state$1 = $[1];
-      let line = $1[0];
-      let ctx$1 = new Context(ctx.cache, advance_line(ctx.state), ctx.stack, ctx.doc, ctx.nest);
-      return do_take_lines_with_state(ctx$1, state$1, cond, prepend(line, acc));
+function try_parse_link(ctx, cont) {
+  return lazy_unwrap(do_try_parse_link(ctx), cont);
+}
+function set_footnote(doc, label2, blocks) {
+  let _block;
+  let _pipe = label2;
+  _block = casefold(_pipe);
+  let label$1 = _block;
+  let num = size(doc.footnotes) + 1;
+  let footnotes = upsert(doc.footnotes, label$1, (current) => {
+    if (current instanceof Some) {
+      let v = current[0];
+      return v;
     } else {
-      return [ctx, acc];
+      return new FootnoteData(num, blocks);
     }
   });
+  return new Document(doc.options, doc.blocks, doc.links, footnotes);
 }
-function take_lines_with_state(ctx, state, cond) {
-  let $ = do_take_lines_with_state(ctx, state, cond, toList([]));
-  let ctx$1;
-  let lines;
-  ctx$1 = $[0];
-  lines = $[1];
-  return [ctx$1, reverse(lines)];
+function skip_blanks(loop$ctx) {
+  while (true) {
+    let ctx = loop$ctx;
+    let $ = !at_eof(ctx.state) && is_blank(ctx.state.pos);
+    if ($) {
+      loop$ctx = advance_line2(ctx);
+    } else {
+      return ctx;
+    }
+  }
+}
+function take_footnote_paragraphs(loop$ctx) {
+  while (true) {
+    let ctx = loop$ctx;
+    let _block;
+    let _pipe = try_parse_paragraph(ctx, () => {
+      return ctx;
+    });
+    _block = skip_blanks(_pipe);
+    let next = _block;
+    let $ = next.state.indent >= 4 && !isEqual(next.doc.blocks, ctx.doc.blocks);
+    if ($) {
+      let state = update_pos(next.state, drop_indent(next.state.pos, 4));
+      let next$1 = new Context(next.cache, state, next.stack, next.doc, next.nest);
+      loop$ctx = next$1;
+    } else {
+      return next;
+    }
+  }
+}
+function do_try_parse_footnote(ctx) {
+  return next_nonspace(ctx.state, (state) => {
+    return try_pop2(state, "^", () => {
+      return new Error(undefined);
+    }, (state2) => {
+      return merge_until_unescaped_end_bracket(state2, ctx.cache.sp_link_text, (state3) => {
+        let $ = gobble_link_label(ctx.cache.sp_link_label, state3.pos);
+        let label2;
+        let pos;
+        label2 = $[0];
+        pos = $[1];
+        return guard(label2 === "", new Error(undefined), () => {
+          let state$1 = update_pos(state3, pos);
+          return try_pop2(state$1, ":", () => {
+            return new Error(undefined);
+          }, (state4) => {
+            return next_line_if_blank(state4, (state5) => {
+              let footnote_ctx = new Context(ctx.cache, state5, ctx.stack, (() => {
+                let _record = ctx.doc;
+                return new Document(_record.options, toList([]), _record.links, _record.footnotes);
+              })(), prepend(new NestItem(4), ctx.nest));
+              let footnote_ctx$1 = take_footnote_paragraphs(footnote_ctx);
+              let doc = set_footnote(ctx.doc, label2, footnote_ctx$1.doc.blocks);
+              let ctx$1 = new Context(ctx.cache, footnote_ctx$1.state, ctx.stack, doc, ctx.nest);
+              return new Ok(ctx$1);
+            });
+          });
+        });
+      });
+    });
+  });
+}
+function try_parse_footnote(ctx, cont) {
+  let $ = ctx.doc.options.footnotes;
+  if ($) {
+    let _pipe = ctx;
+    let _pipe$1 = do_try_parse_footnote(_pipe);
+    return lazy_unwrap(_pipe$1, cont);
+  } else {
+    return cont();
+  }
 }
 function raw_line_minus_nest(ctx) {
   let $ = ctx.nest;
@@ -14761,539 +15268,236 @@ function try_parse_html(ctx, cont) {
     });
   });
 }
-function next_line_if_blank2(ctx, in$) {
-  let $ = is_blank(in$);
-  if ($) {
-    let ctx$1 = advance_line2(ctx);
-    return [ctx$1, ctx$1.state.pos];
-  } else {
-    return [ctx, in$];
-  }
-}
-function starts_title(in$) {
-  return starts_with(in$, '"') || starts_with(in$, "'") || starts_with(in$, "(");
-}
-function set_link(doc, label2, dest, title2) {
-  let _block;
-  let _pipe = label2;
-  _block = casefold(_pipe);
-  let label$1 = _block;
-  let links = upsert(doc.links, label$1, (current) => {
-    if (current instanceof Some) {
-      let v = current[0];
-      return v;
-    } else {
-      return new LinkData(dest, title2);
-    }
-  });
-  return new Document(doc.options, doc.blocks, links, doc.footnotes);
-}
-function set_footnote(doc, label2, blocks) {
-  let _block;
-  let _pipe = label2;
-  _block = casefold(_pipe);
-  let label$1 = _block;
-  let num = size(doc.footnotes) + 1;
-  let footnotes = upsert(doc.footnotes, label$1, (current) => {
-    if (current instanceof Some) {
-      let v = current[0];
-      return v;
-    } else {
-      return new FootnoteData(num, blocks);
-    }
-  });
-  return new Document(doc.options, doc.blocks, doc.links, footnotes);
-}
-function with_doc(ctx, doc) {
-  return new Context(ctx.cache, ctx.state, ctx.stack, doc, ctx.nest);
-}
-function do_try_parse_link(ctx) {
-  return next_nonspace(ctx.state, (state) => {
-    return merge_until_unescaped_end_bracket(state, ctx.cache.sp_link_text, (state2) => {
-      let $ = gobble_link_label(ctx.cache.sp_link_label, state2.pos);
-      let label2;
-      let pos;
-      label2 = $[0];
-      pos = $[1];
-      return guard(label2 === "", new Error(undefined), () => {
-        let state$1 = update_pos(state2, pos);
-        return try_pop2(state$1, ":", () => {
-          return new Error(undefined);
-        }, (state3) => {
-          return next_line_if_blank(state3, (state4) => {
-            let ctx$1 = new Context(ctx.cache, state4, ctx.stack, ctx.doc, ctx.nest);
-            let in$ = state4.pos;
-            return parse_link_dest(in$, ctx$1.cache.sp_link_dest, ctx$1.cache.sp_link_dest_tag, (dest, in$2) => {
-              let in$1 = gobble_hspace(in$2);
-              let state$12 = update_pos(state4, in$1);
-              let with_title = (ctx2, in$3) => {
-                return parse_link_title(in$3, ctx2.cache.sp_link_title, (title2, in$4) => {
-                  let $1 = is_blankn(in$4);
-                  if ($1) {
-                    let doc = set_link(ctx2.doc, label2, dest, title2);
-                    let ctx$12 = new Context(ctx2.cache, new_state(in$4, ctx2.cache.sp_line), ctx2.stack, doc, ctx2.nest);
-                    return new Ok(ctx$12);
-                  } else {
-                    return new Error(undefined);
-                  }
-                });
-              };
-              return lazy_guard(starts_title(in$1), () => {
-                let $1 = with_title(ctx$1, in$1 + `
-` + state$12.rest);
-                if ($1 instanceof Ok) {
-                  return $1;
-                } else {
-                  return new Error(undefined);
-                }
-              }, () => {
-                let $1 = next_line_if_blank2(ctx$1, in$1);
-                let ctx$2;
-                let in$22;
-                ctx$2 = $1[0];
-                in$22 = $1[1];
-                let state$2 = ctx$2.state;
-                let in$3 = gobble_hspace(in$22);
-                let $2 = starts_title(in$3);
-                if ($2) {
-                  let $3 = with_title(ctx$2, in$3 + `
-` + state$2.rest);
-                  if ($3 instanceof Ok) {
-                    return $3;
-                  } else {
-                    return new Ok(with_doc(ctx$2, set_link(ctx$2.doc, label2, dest, new None)));
-                  }
-                } else {
-                  return new Ok(with_doc(ctx$2, set_link(ctx$2.doc, label2, dest, new None)));
-                }
-              });
-            });
-          });
-        });
-      });
-    });
-  });
-}
-function try_parse_link(ctx, cont) {
-  return lazy_unwrap(do_try_parse_link(ctx), cont);
-}
-function skip_blanks(loop$ctx) {
-  while (true) {
-    let ctx = loop$ctx;
-    let $ = !at_eof(ctx.state) && is_blank(ctx.state.pos);
-    if ($) {
-      loop$ctx = advance_line2(ctx);
-    } else {
-      return ctx;
-    }
-  }
-}
-function nest_indent(ctx) {
+function set_nest_blockquote(ctx) {
   let $ = ctx.nest;
   if ($ instanceof Empty) {
-    return 0;
+    return new Context(ctx.cache, ctx.state, ctx.stack, ctx.doc, prepend(new NestItem(0), ctx.nest));
   } else {
-    let indent = $.head.indent;
-    return indent;
+    return ctx;
   }
 }
-function list_item_line(ctx, line, indent, lazy) {
-  let line_indent = find_indent(line);
-  let nest = nest_indent(ctx);
-  return lazy_guard(is_blank(line), () => {
-    return new Some("");
-  }, () => {
-    return lazy_guard(!lazy && line_indent < nest + indent, () => {
-      return new None;
-    }, () => {
-      return lazy_guard(line_indent < indent && is_empty_list(ctx.cache.sp_dot_paren, line), () => {
-        return new None;
-      }, () => {
-        return lazy_guard(line_indent <= nest && is_list_item(ctx, line), () => {
-          return new None;
-        }, () => {
-          return guard(lazy && ctx.cache.is_paragraph_continuation_text(line), new Some(line), () => {
-            return lazy_guard(lazy && ctx.state.indent > 0 && !(setext_underline(ctx, line) instanceof SetextNot), () => {
-              return new Some(line);
-            }, () => {
-              let $ = line_indent >= indent;
-              if ($) {
-                return new Some(line);
-              } else {
-                return new None;
-              }
-            });
-          });
+function line_is_codeblock(line) {
+  let indent = find_indent(line);
+  return guard(indent >= 4, true, () => {
+    let line$1 = drop_3_spaces(line);
+    let $ = line$1.charCodeAt(0);
+    if ($ === 96) {
+      let line$2 = line$1.slice(1);
+      let $1 = take_quot_run(line$2, 1);
+      let len;
+      let line$3;
+      len = $1[0];
+      line$3 = $1[1];
+      return guard(len < 3, false, () => {
+        return guard(contains_string(line$3, "`"), false, () => {
+          return true;
         });
       });
-    });
-  });
-}
-function try_parse_indented_code(ctx, cont) {
-  let nest_indent$1 = nest_indent(ctx);
-  return lazy_guard(ctx.state.indent - nest_indent$1 < 4, cont, () => {
-    return do_indented(ctx, nest_indent$1, toList([]));
-  });
-}
-function maybe_delim_row(loop$s, loop$npipes) {
-  while (true) {
-    let s = loop$s;
-    let npipes = loop$npipes;
-    let $ = gobble_hspace(s);
-    if ($.startsWith("|")) {
-      let s$1 = $.slice(1);
-      loop$s = s$1;
-      loop$npipes = npipes + 1;
-    } else if ($.startsWith("-")) {
-      let s$1 = $.slice(1);
-      loop$s = s$1;
-      loop$npipes = npipes;
-    } else if ($.startsWith(":")) {
-      let s$1 = $.slice(1);
-      loop$s = s$1;
-      loop$npipes = npipes;
-    } else if ($.startsWith(" ")) {
-      let s$1 = $.slice(1);
-      loop$s = s$1;
-      loop$npipes = npipes;
-    } else if ($ === "") {
-      return npipes > 0;
+    } else if ($ === 126) {
+      let line$2 = line$1.slice(1);
+      let $1 = take_tilde_run(line$2, 1);
+      let len;
+      len = $1[0];
+      return guard(len < 3, false, () => {
+        return true;
+      });
     } else {
       return false;
     }
-  }
+  });
 }
-function column_alignment(spec) {
-  let spec$1 = trim(spec);
-  let $ = from_string("^:?-+:?$");
-  let re;
-  if ($ instanceof Ok) {
-    re = $[0];
-  } else {
-    throw makeError("let_assert", FILEPATH5, "mork/internal/blocks", 1091, "column_alignment", "Pattern match failed, no pattern matched the value.", {
-      value: $,
-      start: 30852,
-      end: 30902,
-      pattern_start: 30863,
-      pattern_end: 30869
-    });
-  }
-  let $1 = check2(re, spec$1);
-  if ($1) {
-    let l = starts_with(spec$1, ":");
-    let r = ends_with(spec$1, ":");
-    return new Ok((() => {
-      if (r) {
-        if (l === true) {
-          return new Center;
-        } else {
-          return new Right;
-        }
-      } else {
-        return new Left;
-      }
-    })());
-  } else {
-    return new Error(undefined);
-  }
-}
-function do_delim_row(loop$pipe, loop$input, loop$count, loop$res) {
+function take_hspaces(loop$tail, loop$rest) {
   while (true) {
-    let pipe = loop$pipe;
-    let input2 = loop$input;
-    let count2 = loop$count;
-    let res = loop$res;
-    let input$1 = gobble_hspace(input2);
-    let $ = split5(pipe, input$1);
-    let l;
-    let s;
-    let r;
-    l = $[0];
-    s = $[1];
-    r = $[2];
-    if (s === "\\|") {
-      return new Error(undefined);
-    } else if (s === "|") {
-      let $1 = l === "";
-      if ($1) {
-        if (res instanceof Empty) {
-          loop$pipe = pipe;
-          loop$input = r;
-          loop$count = count2;
-          loop$res = res;
-        } else {
-          loop$pipe = pipe;
-          loop$input = r;
-          loop$count = count2 + 1;
-          loop$res = prepend(new Left, res);
-        }
-      } else {
-        let $2 = column_alignment(l);
-        if ($2 instanceof Ok) {
-          let align = $2[0];
-          loop$pipe = pipe;
-          loop$input = r;
-          loop$count = count2 + 1;
-          loop$res = prepend(align, res);
-        } else {
-          return $2;
-        }
-      }
-    } else if (s === "") {
-      let $1 = l === "";
-      if ($1) {
-        return new Ok([count2, res]);
-      } else {
-        let $2 = column_alignment(l);
-        if ($2 instanceof Ok) {
-          let align = $2[0];
-          return new Ok([count2 + 1, prepend(align, res)]);
-        } else {
-          return $2;
-        }
-      }
+    let tail = loop$tail;
+    let rest = loop$rest;
+    let $ = tail.charCodeAt(0);
+    if ($ === 32) {
+      let tail$1 = tail.slice(1);
+      loop$tail = tail$1;
+      loop$rest = rest;
+    } else if ($ === 9) {
+      let tail$1 = tail.slice(1);
+      loop$tail = tail$1;
+      loop$rest = rest;
     } else {
-      throw makeError("panic", FILEPATH5, "mork/internal/blocks", 1085, "do_delim_row", "unreachable", {});
+      return rest(tail);
     }
   }
 }
-function parse_delim_row(pipe, s) {
-  let _pipe = do_delim_row(pipe, s, 0, toList([]));
-  return map4(_pipe, (v) => {
-    return [
-      v[0],
-      (() => {
-        let _pipe$1 = v[1];
-        return reverse(_pipe$1);
-      })()
-    ];
-  });
-}
-function do_pipe_split(loop$pipe, loop$input, loop$acc, loop$res) {
-  while (true) {
-    let pipe = loop$pipe;
-    let input2 = loop$input;
-    let acc = loop$acc;
-    let res = loop$res;
-    let $ = split5(pipe, input2);
-    let l;
-    let s;
-    let r;
-    l = $[0];
-    s = $[1];
-    r = $[2];
-    let body = acc + l;
-    if (s === "|") {
-      loop$pipe = pipe;
-      loop$input = r;
-      loop$acc = "";
-      loop$res = prepend(body, res);
-    } else if (s === "\\|") {
-      loop$pipe = pipe;
-      loop$input = r;
-      loop$acc = body + "|";
-      loop$res = res;
-    } else if (s === "") {
-      return prepend(body, res);
-    } else {
-      throw makeError("panic", FILEPATH5, "mork/internal/blocks", 1144, "do_pipe_split", "unreachable", {});
-    }
-  }
-}
-function pipe_split(pipe, input2) {
-  let input$1 = trim(input2);
-  let _block;
-  let $ = starts_with(input$1, "|") && ends_with(input$1, "|");
-  if ($) {
-    _block = slice(input$1, 1, string_length(input$1) - 2);
-  } else {
-    _block = input$1;
-  }
-  let input$2 = _block;
-  let _pipe = do_pipe_split(pipe, input$2, "", toList([]));
-  return reverse(_pipe);
-}
-function parse_header_row(pipe, header, num_cols, aligns) {
-  let cols = pipe_split(pipe, header);
-  let true_len = length(cols);
-  let $ = true_len === length(aligns) && true_len === num_cols;
-  if ($) {
-    return new Ok(map2(zip(cols, aligns), (data2) => {
-      let raw24;
-      let align;
-      raw24 = data2[0];
-      align = data2[1];
-      return new THead(align, raw24, toList([]));
-    }));
-  } else {
-    return new Error(undefined);
-  }
-}
-function parse_table_row(ctx, num_cols, row) {
-  let _block;
-  let _pipe = pipe_split(ctx.cache.sp_pipe, row);
-  _block = map2(_pipe, (_capture) => {
-    return new Cell(_capture, toList([]));
-  });
-  let cols = _block;
-  let $ = num_cols === length(cols);
-  if ($) {
-    return new Some(cols);
-  } else {
-    return new None;
-  }
-}
-function try_parse_table(ctx, abort) {
-  return lazy_guard(!ctx.doc.options.tables, abort, () => {
-    let pipe = ctx.cache.sp_pipe;
-    let delim_row = next_line(ctx.state);
-    let $ = maybe_delim_row(delim_row, 0);
-    if ($) {
-      let $1 = parse_delim_row(pipe, delim_row);
-      if ($1 instanceof Ok) {
-        let num_cols = $1[0][0];
-        let aligns = $1[0][1];
-        let $2 = parse_header_row(pipe, ctx.state.pos, num_cols, aligns);
-        if ($2 instanceof Ok) {
-          let header = $2[0];
-          let _block;
-          let _pipe = ctx;
-          let _pipe$1 = advance_line2(_pipe);
-          _block = advance_line2(_pipe$1);
-          let ctx$1 = _block;
-          let $3 = take_lines(ctx$1, (_capture) => {
-            return parse_table_row(ctx$1, num_cols, _capture);
-          });
-          let ctx$2;
-          let rows;
-          ctx$2 = $3[0];
-          rows = $3[1];
-          return update_blocks(ctx$2, prepend(new Table(header, rows), ctx$2.doc.blocks));
+function try_parse_fenced_code(ctx, fence_ch, rest, cont) {
+  let $ = take_fence_run(rest, fence_ch);
+  let fence_len;
+  let rest$1;
+  fence_len = $[0];
+  rest$1 = $[1];
+  return lazy_guard(fence_len < 3, cont, () => {
+    return take_hspaces(rest$1, (rest2) => {
+      return lazy_guard(fence_ch === "`" && contains_string(rest2, "`"), cont, () => {
+        let _block;
+        if (rest2 === "") {
+          _block = new None;
         } else {
-          return abort();
+          _block = new Some(rest2);
         }
-      } else {
-        return abort();
-      }
-    } else {
-      return abort();
-    }
-  });
-}
-function take_first_paragraph_line(ctx, cont, when_ok) {
-  let line = ctx.state.pos;
-  let $ = is_blank(line);
-  if ($) {
-    return cont();
-  } else {
-    return when_ok(advance_line2(ctx), line);
-  }
-}
-function try_parse_paragraph(ctx, cont) {
-  return take_first_paragraph_line(ctx, cont, (ctx2, line) => {
-    let nest = nest_indent(ctx2);
-    let $ = take_lines(ctx2, (line2) => {
-      let undented = drop_indent(line2, nest);
-      let line_indent = find_indent(line2);
-      let $1 = !(is_blockquote_line(undented) || !(setext_underline(ctx2, undented) instanceof SetextNot) && (isEqual(ctx2.nest, toList([])) || ctx2.state.indent > 0)) && (is_empty_list(ctx2.cache.sp_dot_paren, line2) || nest > line_indent && line_indent > 3 || ctx2.cache.is_paragraph_continuation_text(undented));
-      if ($1) {
-        return new Some(undented);
-      } else {
-        return new None;
-      }
-    });
-    let ctx$1;
-    let lines;
-    ctx$1 = $[0];
-    lines = $[1];
-    let lines$1 = prepend(line, lines);
-    return lazy_guard(isEqual(lines$1, toList([])), cont, () => {
-      let raw24 = join(lines$1, `
-`);
-      return lazy_guard(!isEqual(ctx$1.nest, toList([])) && ctx$1.state.indent === 0, () => {
-        return update_blocks(ctx$1, prepend(new Paragraph(raw24, toList([])), ctx$1.doc.blocks));
-      }, () => {
-        let $1 = setext_underline(ctx$1, ctx$1.state.pos);
-        if ($1 instanceof SetextH1) {
-          return advance_line_with_blocks(ctx$1, prepend(new Heading(1, "", raw24, toList([])), ctx$1.doc.blocks));
-        } else if ($1 instanceof SetextH2) {
-          return advance_line_with_blocks(ctx$1, prepend(new Heading(2, "", raw24, toList([])), ctx$1.doc.blocks));
-        } else {
-          return update_blocks(ctx$1, prepend(new Paragraph(raw24, toList([])), ctx$1.doc.blocks));
-        }
-      });
-    });
-  });
-}
-function block_fallback(ctx) {
-  return try_parse_table(ctx, () => {
-    return try_parse_paragraph(ctx, () => {
-      return try_parse_blank(ctx, () => {
-        throw makeError("panic", FILEPATH5, "mork/internal/blocks", 63, "block_fallback", "try_parse_block could not parse: " + inspect2(ctx), {});
-      });
-    });
-  });
-}
-function take_footnote_paragraphs(loop$ctx) {
-  while (true) {
-    let ctx = loop$ctx;
-    let _block;
-    let _pipe = try_parse_paragraph(ctx, () => {
-      return ctx;
-    });
-    _block = skip_blanks(_pipe);
-    let next = _block;
-    let $ = next.state.indent >= 4 && !isEqual(next.doc.blocks, ctx.doc.blocks);
-    if ($) {
-      let state = update_pos(next.state, drop_indent(next.state.pos, 4));
-      let next$1 = new Context(next.cache, state, next.stack, next.doc, next.nest);
-      loop$ctx = next$1;
-    } else {
-      return next;
-    }
-  }
-}
-function do_try_parse_footnote(ctx) {
-  return next_nonspace(ctx.state, (state) => {
-    return try_pop2(state, "^", () => {
-      return new Error(undefined);
-    }, (state2) => {
-      return merge_until_unescaped_end_bracket(state2, ctx.cache.sp_link_text, (state3) => {
-        let $ = gobble_link_label(ctx.cache.sp_link_label, state3.pos);
-        let label2;
-        let pos;
-        label2 = $[0];
-        pos = $[1];
-        return guard(label2 === "", new Error(undefined), () => {
-          let state$1 = update_pos(state3, pos);
-          return try_pop2(state$1, ":", () => {
-            return new Error(undefined);
-          }, (state4) => {
-            return next_line_if_blank(state4, (state5) => {
-              let footnote_ctx = new Context(ctx.cache, state5, ctx.stack, (() => {
-                let _record = ctx.doc;
-                return new Document(_record.options, toList([]), _record.links, _record.footnotes);
-              })(), prepend(new NestItem(4), ctx.nest));
-              let footnote_ctx$1 = take_footnote_paragraphs(footnote_ctx);
-              let doc = set_footnote(ctx.doc, label2, footnote_ctx$1.doc.blocks);
-              let ctx$1 = new Context(ctx.cache, footnote_ctx$1.state, ctx.stack, doc, ctx.nest);
-              return new Ok(ctx$1);
+        let lang = _block;
+        let nspaces = count_spaces(ctx.state.line, 0);
+        let ctx$1 = advance_line2(ctx);
+        let $1 = take_lines(ctx$1, (line) => {
+          let dropped = drop_indent(line, nspaces);
+          let text4 = drop_3_spaces(dropped);
+          let $2 = take_fence_run(text4, fence_ch);
+          let endlen_plus_1;
+          let text$1;
+          endlen_plus_1 = $2[0];
+          text$1 = $2[1];
+          return guard(endlen_plus_1 <= fence_len, new Some(dropped), () => {
+            return guard(!is_blank(text$1), new Some(dropped), () => {
+              return new None;
             });
           });
         });
+        let ctx$2;
+        let lines;
+        ctx$2 = $1[0];
+        lines = $1[1];
+        let _block$1;
+        if (lines instanceof Empty) {
+          _block$1 = "";
+        } else {
+          _block$1 = join(lines, `
+`) + `
+`;
+        }
+        let body = _block$1;
+        return advance_line_with_blocks(ctx$2, prepend(new Code(lang, body), ctx$2.doc.blocks));
       });
     });
   });
 }
-function try_parse_footnote(ctx, cont) {
-  let $ = ctx.doc.options.footnotes;
-  if ($) {
-    let _pipe = ctx;
-    let _pipe$1 = do_try_parse_footnote(_pipe);
-    return lazy_unwrap(_pipe$1, cont);
+function do_heading_id(loop$text, loop$acc) {
+  while (true) {
+    let text4 = loop$text;
+    let acc = loop$acc;
+    let $ = pop_grapheme(text4);
+    if ($ instanceof Ok) {
+      let ch = $[0][0];
+      let rest = $[0][1];
+      let $1 = contains_string("abcdefghijklmnopqrstuvwxyz0123456789", lowercase(ch));
+      if ($1) {
+        loop$text = rest;
+        loop$acc = acc + ch;
+      } else {
+        if (ch === " ") {
+          loop$text = rest;
+          loop$acc = acc + "-";
+        } else if (ch === "-") {
+          loop$text = rest;
+          loop$acc = acc + "-";
+        } else if (ch === "_") {
+          loop$text = rest;
+          loop$acc = acc + "-";
+        } else {
+          loop$text = rest;
+          loop$acc = acc;
+        }
+      }
+    } else {
+      return acc;
+    }
+  }
+}
+function heading_id(re, text4) {
+  let $ = scan2(re, text4);
+  if ($ instanceof Empty) {
+    return do_heading_id(text4, "");
+  } else {
+    let $1 = $.tail;
+    if ($1 instanceof Empty) {
+      let $2 = $.head.submatches;
+      if ($2 instanceof Empty) {
+        return do_heading_id(text4, "");
+      } else {
+        let $3 = $2.head;
+        if ($3 instanceof Some) {
+          let $4 = $2.tail;
+          if ($4 instanceof Empty) {
+            let text$1 = $3[0];
+            return text$1;
+          } else {
+            return do_heading_id(text4, "");
+          }
+        } else {
+          return do_heading_id(text4, "");
+        }
+      }
+    } else {
+      return do_heading_id(text4, "");
+    }
+  }
+}
+function take_hspaces1(tail, cont, rest) {
+  let $ = tail.charCodeAt(0);
+  if ($ === 32) {
+    let tail$1 = tail.slice(1);
+    return take_hspaces(tail$1, rest);
+  } else if ($ === 9) {
+    let tail$1 = tail.slice(1);
+    return take_hspaces(tail$1, rest);
+  } else if (tail === "") {
+    return rest(tail);
   } else {
     return cont();
   }
+}
+function take_hashes(loop$input, loop$acc) {
+  while (true) {
+    let input2 = loop$input;
+    let acc = loop$acc;
+    if (input2.charCodeAt(0) === 35) {
+      let input$1 = input2.slice(1);
+      loop$input = input$1;
+      loop$acc = acc + 1;
+    } else {
+      return [acc, input2];
+    }
+  }
+}
+function try_parse_atx_heading(ctx, rest, cont) {
+  let $ = take_hashes(rest, 1);
+  let num;
+  let rest$1;
+  num = $[0];
+  rest$1 = $[1];
+  return lazy_guard(num > 6, cont, () => {
+    return take_hspaces1(rest$1, cont, (rest2) => {
+      let rest$12 = replace3(ctx.cache.atx_heading_tail, rest2, "");
+      let _block;
+      let $1 = check2(ctx.cache.atx_heading_empty, rest$12);
+      if ($1) {
+        _block = "";
+      } else {
+        _block = rest$12;
+      }
+      let rest$2 = _block;
+      let _block$1;
+      let $2 = ctx.doc.options.heading_ids;
+      if ($2) {
+        _block$1 = heading_id(ctx.cache.atx_heading_id, rest$2);
+      } else {
+        _block$1 = "";
+      }
+      let id2 = _block$1;
+      let _block$2;
+      let $3 = ctx.doc.options.heading_ids;
+      if ($3) {
+        _block$2 = replace3(ctx.cache.atx_heading_id, rest$2, "");
+      } else {
+        _block$2 = rest$2;
+      }
+      let rest$3 = _block$2;
+      return advance_line_with_blocks(ctx, prepend(new Heading(num, id2, rest$3, toList([])), ctx.doc.blocks));
+    });
+  });
 }
 function collect_list_item(ctx, marker, require_indent) {
   let $ = list_item_line_start(ctx, marker, require_indent);
@@ -15379,489 +15583,6 @@ function collect_list_item(ctx, marker, require_indent) {
     return [ctx, indent, new None];
   }
 }
-function parse_blocks(ctx) {
-  let ctx$1 = do_parse_blocks(ctx);
-  return update_blocks(ctx$1, (() => {
-    let _pipe = ctx$1.doc.blocks;
-    return reverse(_pipe);
-  })());
-}
-function do_parse_blocks(loop$ctx) {
-  while (true) {
-    let ctx = loop$ctx;
-    let $ = (() => {
-      let _pipe = ctx.state;
-      return at_eof(_pipe);
-    })();
-    if ($) {
-      return ctx;
-    } else {
-      let $1 = ctx.nest;
-      if ($1 instanceof Empty) {
-        let _pipe = ctx;
-        let _pipe$1 = try_parse_block(_pipe);
-        loop$ctx = _pipe$1;
-      } else {
-        let indent = $1.head.indent;
-        let $2 = is_blank(ctx.state.pos);
-        if ($2) {
-          let _pipe = advance_pos(ctx, "");
-          let _pipe$1 = try_parse_block(_pipe);
-          loop$ctx = _pipe$1;
-        } else {
-          let got_indent = find_indent(ctx.state.pos);
-          if (got_indent < indent) {
-            return ctx;
-          } else {
-            let _pipe = advance_pos(ctx, drop_indent(ctx.state.pos, indent));
-            let _pipe$1 = try_parse_block(_pipe);
-            loop$ctx = _pipe$1;
-          }
-        }
-      }
-    }
-  }
-}
-function try_parse_block(ctx) {
-  let $ = ctx.state.pos;
-  if ($.startsWith("    ")) {
-    return try_parse_indented_code(ctx, () => {
-      return block_fallback(ctx);
-    });
-  } else if ($.startsWith("   ")) {
-    let rest = $.slice(3);
-    if (rest.startsWith("#")) {
-      let tail = rest.slice(1);
-      return try_parse_atx_heading(ctx, tail, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("`")) {
-      let fence = "`";
-      let tail = rest.slice(1);
-      return try_parse_fenced_code(ctx, fence, tail, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("~")) {
-      let fence = "~";
-      let tail = rest.slice(1);
-      return try_parse_fenced_code(ctx, fence, tail, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith(">")) {
-      return try_parse_blockquote(ctx);
-    } else if (rest.startsWith("<")) {
-      return try_parse_html(advance_pos(ctx, rest), () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("[")) {
-      let post_bracket = rest.slice(1);
-      let link_ctx = advance_pos(ctx, post_bracket);
-      return try_parse_footnote(link_ctx, () => {
-        return try_parse_link(link_ctx, () => {
-          return block_fallback(ctx);
-        });
-      });
-    } else if (rest.startsWith("*")) {
-      return try_parse_thematic_break(ctx, () => {
-        return try_parse_bullet_list(ctx, () => {
-          return block_fallback(ctx);
-        });
-      });
-    } else if (rest.startsWith("-")) {
-      return try_parse_thematic_break(ctx, () => {
-        return try_parse_bullet_list(ctx, () => {
-          return block_fallback(ctx);
-        });
-      });
-    } else if (rest.startsWith("_")) {
-      return try_parse_thematic_break(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("+")) {
-      return try_parse_bullet_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("\t")) {
-      return try_parse_indented_code(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("0")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("1")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("2")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("3")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("4")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("5")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("6")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("7")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("8")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("9")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else {
-      return block_fallback(ctx);
-    }
-  } else if ($.startsWith("  ")) {
-    let rest = $.slice(2);
-    if (rest.startsWith("#")) {
-      let tail = rest.slice(1);
-      return try_parse_atx_heading(ctx, tail, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("`")) {
-      let fence = "`";
-      let tail = rest.slice(1);
-      return try_parse_fenced_code(ctx, fence, tail, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("~")) {
-      let fence = "~";
-      let tail = rest.slice(1);
-      return try_parse_fenced_code(ctx, fence, tail, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith(">")) {
-      return try_parse_blockquote(ctx);
-    } else if (rest.startsWith("<")) {
-      return try_parse_html(advance_pos(ctx, rest), () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("[")) {
-      let post_bracket = rest.slice(1);
-      let link_ctx = advance_pos(ctx, post_bracket);
-      return try_parse_footnote(link_ctx, () => {
-        return try_parse_link(link_ctx, () => {
-          return block_fallback(ctx);
-        });
-      });
-    } else if (rest.startsWith("*")) {
-      return try_parse_thematic_break(ctx, () => {
-        return try_parse_bullet_list(ctx, () => {
-          return block_fallback(ctx);
-        });
-      });
-    } else if (rest.startsWith("-")) {
-      return try_parse_thematic_break(ctx, () => {
-        return try_parse_bullet_list(ctx, () => {
-          return block_fallback(ctx);
-        });
-      });
-    } else if (rest.startsWith("_")) {
-      return try_parse_thematic_break(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("+")) {
-      return try_parse_bullet_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("\t")) {
-      return try_parse_indented_code(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("0")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("1")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("2")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("3")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("4")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("5")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("6")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("7")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("8")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("9")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else {
-      return block_fallback(ctx);
-    }
-  } else if ($.startsWith(" ")) {
-    let rest = $.slice(1);
-    if (rest.startsWith("#")) {
-      let tail = rest.slice(1);
-      return try_parse_atx_heading(ctx, tail, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("`")) {
-      let fence = "`";
-      let tail = rest.slice(1);
-      return try_parse_fenced_code(ctx, fence, tail, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("~")) {
-      let fence = "~";
-      let tail = rest.slice(1);
-      return try_parse_fenced_code(ctx, fence, tail, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith(">")) {
-      return try_parse_blockquote(ctx);
-    } else if (rest.startsWith("<")) {
-      return try_parse_html(advance_pos(ctx, rest), () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("[")) {
-      let post_bracket = rest.slice(1);
-      let link_ctx = advance_pos(ctx, post_bracket);
-      return try_parse_footnote(link_ctx, () => {
-        return try_parse_link(link_ctx, () => {
-          return block_fallback(ctx);
-        });
-      });
-    } else if (rest.startsWith("*")) {
-      return try_parse_thematic_break(ctx, () => {
-        return try_parse_bullet_list(ctx, () => {
-          return block_fallback(ctx);
-        });
-      });
-    } else if (rest.startsWith("-")) {
-      return try_parse_thematic_break(ctx, () => {
-        return try_parse_bullet_list(ctx, () => {
-          return block_fallback(ctx);
-        });
-      });
-    } else if (rest.startsWith("_")) {
-      return try_parse_thematic_break(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("+")) {
-      return try_parse_bullet_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("\t")) {
-      return try_parse_indented_code(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("0")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("1")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("2")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("3")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("4")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("5")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("6")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("7")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("8")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("9")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else {
-      return block_fallback(ctx);
-    }
-  } else {
-    let rest = $;
-    if (rest.startsWith("#")) {
-      let tail = rest.slice(1);
-      return try_parse_atx_heading(ctx, tail, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("`")) {
-      let fence = "`";
-      let tail = rest.slice(1);
-      return try_parse_fenced_code(ctx, fence, tail, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("~")) {
-      let fence = "~";
-      let tail = rest.slice(1);
-      return try_parse_fenced_code(ctx, fence, tail, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith(">")) {
-      return try_parse_blockquote(ctx);
-    } else if (rest.startsWith("<")) {
-      return try_parse_html(advance_pos(ctx, rest), () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("[")) {
-      let post_bracket = rest.slice(1);
-      let link_ctx = advance_pos(ctx, post_bracket);
-      return try_parse_footnote(link_ctx, () => {
-        return try_parse_link(link_ctx, () => {
-          return block_fallback(ctx);
-        });
-      });
-    } else if (rest.startsWith("*")) {
-      return try_parse_thematic_break(ctx, () => {
-        return try_parse_bullet_list(ctx, () => {
-          return block_fallback(ctx);
-        });
-      });
-    } else if (rest.startsWith("-")) {
-      return try_parse_thematic_break(ctx, () => {
-        return try_parse_bullet_list(ctx, () => {
-          return block_fallback(ctx);
-        });
-      });
-    } else if (rest.startsWith("_")) {
-      return try_parse_thematic_break(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("+")) {
-      return try_parse_bullet_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("\t")) {
-      return try_parse_indented_code(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("0")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("1")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("2")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("3")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("4")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("5")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("6")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("7")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("8")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else if (rest.startsWith("9")) {
-      return try_parse_ordered_list(ctx, () => {
-        return block_fallback(ctx);
-      });
-    } else {
-      return block_fallback(ctx);
-    }
-  }
-}
-function try_parse_ordered_list(ctx, cont) {
-  return try_or(parse_ordinal_item(ctx.cache.sp_dot_paren, ctx.state.pos), cont, (_use0) => {
-    let marker;
-    let indent;
-    let ordinal;
-    marker = _use0[0];
-    indent = _use0[1];
-    ordinal = _use0[2];
-    let ordinal$1 = check3(ordinal !== 1, new Some(ordinal), new None);
-    let $ = collect_list_items(ctx, marker, indent);
-    let ctx$1;
-    let items;
-    ctx$1 = $[0];
-    items = $[1];
-    let pack = calculate_list_pack(items);
-    return update_blocks(ctx$1, prepend(new OrderedList(pack, items, ordinal$1), ctx$1.doc.blocks));
-  });
-}
-function collect_list_items(ctx, marker, indent) {
-  let $ = do_collect_list_items(ctx, marker, indent, toList([]));
-  let ctx$1;
-  let items;
-  ctx$1 = $[0];
-  items = $[1];
-  return [
-    ctx$1,
-    (() => {
-      let _pipe = items;
-      return reverse(_pipe);
-    })()
-  ];
-}
 function do_collect_list_items(loop$ctx, loop$marker, loop$indent, loop$items) {
   while (true) {
     let ctx = loop$ctx;
@@ -15885,6 +15606,38 @@ function do_collect_list_items(loop$ctx, loop$marker, loop$indent, loop$items) {
       return [ctx$1, items];
     }
   }
+}
+function collect_list_items(ctx, marker, indent) {
+  let $ = do_collect_list_items(ctx, marker, indent, toList([]));
+  let ctx$1;
+  let items;
+  ctx$1 = $[0];
+  items = $[1];
+  return [
+    ctx$1,
+    (() => {
+      let _pipe = items;
+      return reverse(_pipe);
+    })()
+  ];
+}
+function try_parse_ordered_list(ctx, cont) {
+  return try_or(parse_ordinal_item(ctx.cache.sp_dot_paren, ctx.state.pos), cont, (_use0) => {
+    let marker;
+    let indent;
+    let ordinal;
+    marker = _use0[0];
+    indent = _use0[1];
+    ordinal = _use0[2];
+    let ordinal$1 = check3(ordinal !== 1, new Some(ordinal), new None);
+    let $ = collect_list_items(ctx, marker, indent);
+    let ctx$1;
+    let items;
+    ctx$1 = $[0];
+    items = $[1];
+    let pack = calculate_list_pack(items);
+    return update_blocks(ctx$1, prepend(new OrderedList(pack, items, ordinal$1), ctx$1.doc.blocks));
+  });
 }
 function try_parse_bullet_list(ctx, cont) {
   return try_or(parse_bullet_item(ctx.state.pos), cont, (_use0) => {
@@ -15928,6 +15681,461 @@ function try_parse_blockquote(ctx) {
   let inner_ctx = _block;
   return merge3(ctx$1, inner_ctx, prepend(new BlockQuote(inner_ctx.doc.blocks), ctx$1.doc.blocks));
 }
+function try_parse_block(ctx) {
+  let $ = ctx.state.pos;
+  if ($.startsWith("    ")) {
+    return try_parse_indented_code(ctx, () => {
+      return block_fallback(ctx);
+    });
+  } else if ($.startsWith("   ")) {
+    let rest = $.slice(3);
+    let $1 = rest.charCodeAt(0);
+    if ($1 === 35) {
+      let tail = rest.slice(1);
+      return try_parse_atx_heading(ctx, tail, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 96) {
+      let fence = "`";
+      let tail = rest.slice(1);
+      return try_parse_fenced_code(ctx, fence, tail, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 126) {
+      let fence = "~";
+      let tail = rest.slice(1);
+      return try_parse_fenced_code(ctx, fence, tail, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 62) {
+      return try_parse_blockquote(ctx);
+    } else if ($1 === 60) {
+      return try_parse_html(advance_pos(ctx, rest), () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 91) {
+      let post_bracket = rest.slice(1);
+      let link_ctx = advance_pos(ctx, post_bracket);
+      return try_parse_footnote(link_ctx, () => {
+        return try_parse_link(link_ctx, () => {
+          return block_fallback(ctx);
+        });
+      });
+    } else if ($1 === 42) {
+      return try_parse_thematic_break(ctx, () => {
+        return try_parse_bullet_list(ctx, () => {
+          return block_fallback(ctx);
+        });
+      });
+    } else if ($1 === 45) {
+      return try_parse_thematic_break(ctx, () => {
+        return try_parse_bullet_list(ctx, () => {
+          return block_fallback(ctx);
+        });
+      });
+    } else if ($1 === 95) {
+      return try_parse_thematic_break(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 43) {
+      return try_parse_bullet_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 9) {
+      return try_parse_indented_code(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 48) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 49) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 50) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 51) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 52) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 53) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 54) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 55) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 56) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 57) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else {
+      return block_fallback(ctx);
+    }
+  } else if ($.startsWith("  ")) {
+    let rest = $.slice(2);
+    let $1 = rest.charCodeAt(0);
+    if ($1 === 35) {
+      let tail = rest.slice(1);
+      return try_parse_atx_heading(ctx, tail, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 96) {
+      let fence = "`";
+      let tail = rest.slice(1);
+      return try_parse_fenced_code(ctx, fence, tail, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 126) {
+      let fence = "~";
+      let tail = rest.slice(1);
+      return try_parse_fenced_code(ctx, fence, tail, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 62) {
+      return try_parse_blockquote(ctx);
+    } else if ($1 === 60) {
+      return try_parse_html(advance_pos(ctx, rest), () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 91) {
+      let post_bracket = rest.slice(1);
+      let link_ctx = advance_pos(ctx, post_bracket);
+      return try_parse_footnote(link_ctx, () => {
+        return try_parse_link(link_ctx, () => {
+          return block_fallback(ctx);
+        });
+      });
+    } else if ($1 === 42) {
+      return try_parse_thematic_break(ctx, () => {
+        return try_parse_bullet_list(ctx, () => {
+          return block_fallback(ctx);
+        });
+      });
+    } else if ($1 === 45) {
+      return try_parse_thematic_break(ctx, () => {
+        return try_parse_bullet_list(ctx, () => {
+          return block_fallback(ctx);
+        });
+      });
+    } else if ($1 === 95) {
+      return try_parse_thematic_break(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 43) {
+      return try_parse_bullet_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 9) {
+      return try_parse_indented_code(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 48) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 49) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 50) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 51) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 52) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 53) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 54) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 55) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 56) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 57) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else {
+      return block_fallback(ctx);
+    }
+  } else if ($.charCodeAt(0) === 32) {
+    let rest = $.slice(1);
+    let $1 = rest.charCodeAt(0);
+    if ($1 === 35) {
+      let tail = rest.slice(1);
+      return try_parse_atx_heading(ctx, tail, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 96) {
+      let fence = "`";
+      let tail = rest.slice(1);
+      return try_parse_fenced_code(ctx, fence, tail, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 126) {
+      let fence = "~";
+      let tail = rest.slice(1);
+      return try_parse_fenced_code(ctx, fence, tail, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 62) {
+      return try_parse_blockquote(ctx);
+    } else if ($1 === 60) {
+      return try_parse_html(advance_pos(ctx, rest), () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 91) {
+      let post_bracket = rest.slice(1);
+      let link_ctx = advance_pos(ctx, post_bracket);
+      return try_parse_footnote(link_ctx, () => {
+        return try_parse_link(link_ctx, () => {
+          return block_fallback(ctx);
+        });
+      });
+    } else if ($1 === 42) {
+      return try_parse_thematic_break(ctx, () => {
+        return try_parse_bullet_list(ctx, () => {
+          return block_fallback(ctx);
+        });
+      });
+    } else if ($1 === 45) {
+      return try_parse_thematic_break(ctx, () => {
+        return try_parse_bullet_list(ctx, () => {
+          return block_fallback(ctx);
+        });
+      });
+    } else if ($1 === 95) {
+      return try_parse_thematic_break(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 43) {
+      return try_parse_bullet_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 9) {
+      return try_parse_indented_code(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 48) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 49) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 50) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 51) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 52) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 53) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 54) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 55) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 56) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 57) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else {
+      return block_fallback(ctx);
+    }
+  } else {
+    let rest = $;
+    let $1 = rest.charCodeAt(0);
+    if ($1 === 35) {
+      let tail = rest.slice(1);
+      return try_parse_atx_heading(ctx, tail, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 96) {
+      let fence = "`";
+      let tail = rest.slice(1);
+      return try_parse_fenced_code(ctx, fence, tail, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 126) {
+      let fence = "~";
+      let tail = rest.slice(1);
+      return try_parse_fenced_code(ctx, fence, tail, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 62) {
+      return try_parse_blockquote(ctx);
+    } else if ($1 === 60) {
+      return try_parse_html(advance_pos(ctx, rest), () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 91) {
+      let post_bracket = rest.slice(1);
+      let link_ctx = advance_pos(ctx, post_bracket);
+      return try_parse_footnote(link_ctx, () => {
+        return try_parse_link(link_ctx, () => {
+          return block_fallback(ctx);
+        });
+      });
+    } else if ($1 === 42) {
+      return try_parse_thematic_break(ctx, () => {
+        return try_parse_bullet_list(ctx, () => {
+          return block_fallback(ctx);
+        });
+      });
+    } else if ($1 === 45) {
+      return try_parse_thematic_break(ctx, () => {
+        return try_parse_bullet_list(ctx, () => {
+          return block_fallback(ctx);
+        });
+      });
+    } else if ($1 === 95) {
+      return try_parse_thematic_break(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 43) {
+      return try_parse_bullet_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 9) {
+      return try_parse_indented_code(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 48) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 49) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 50) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 51) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 52) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 53) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 54) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 55) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 56) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else if ($1 === 57) {
+      return try_parse_ordered_list(ctx, () => {
+        return block_fallback(ctx);
+      });
+    } else {
+      return block_fallback(ctx);
+    }
+  }
+}
+function do_parse_blocks(loop$ctx) {
+  while (true) {
+    let ctx = loop$ctx;
+    let $ = (() => {
+      let _pipe = ctx.state;
+      return at_eof(_pipe);
+    })();
+    if ($) {
+      return ctx;
+    } else {
+      let $1 = ctx.nest;
+      if ($1 instanceof Empty) {
+        let _pipe = ctx;
+        let _pipe$1 = try_parse_block(_pipe);
+        loop$ctx = _pipe$1;
+      } else {
+        let indent = $1.head.indent;
+        let $2 = is_blank(ctx.state.pos);
+        if ($2) {
+          let _pipe = advance_pos(ctx, "");
+          let _pipe$1 = try_parse_block(_pipe);
+          loop$ctx = _pipe$1;
+        } else {
+          let got_indent = find_indent(ctx.state.pos);
+          if (got_indent < indent) {
+            return ctx;
+          } else {
+            let _pipe = advance_pos(ctx, drop_indent(ctx.state.pos, indent));
+            let _pipe$1 = try_parse_block(_pipe);
+            loop$ctx = _pipe$1;
+          }
+        }
+      }
+    }
+  }
+}
+function parse_blocks(ctx) {
+  let ctx$1 = do_parse_blocks(ctx);
+  return update_blocks(ctx$1, (() => {
+    let _pipe = ctx$1.doc.blocks;
+    return reverse(_pipe);
+  })());
+}
 
 // build/dev/javascript/mork/mork/internal/inlines.mjs
 var FILEPATH6 = "src/mork/internal/inlines.gleam";
@@ -15939,19 +16147,283 @@ class InlineState extends CustomType {
     this.inlines = inlines;
   }
 }
-function try_parse_checkbox(raw24) {
-  let raw$1 = gobble_hspace(raw24);
-  return try_pop("[", raw$1, (raw25) => {
-    if (raw25.startsWith(" ]")) {
-      let rest = raw25.slice(2);
-      return new Ok([new Checkbox(false), rest]);
-    } else if (raw25.startsWith("x]")) {
-      let rest = raw25.slice(2);
-      return new Ok([new Checkbox(true), rest]);
+function consume_delims(ctx, style2, pre_len, post_len, inner) {
+  return lazy_guard(pre_len === 0, () => {
+    if (post_len === 0) {
+      return inner;
     } else {
-      return new Error(undefined);
+      return append(inner, toList([new Delim(style2, post_len, false, true)]));
     }
+  }, () => {
+    return lazy_guard(post_len === 0, () => {
+      if (pre_len === 0) {
+        return inner;
+      } else {
+        return prepend(new Delim(style2, pre_len, true, false), inner);
+      }
+    }, () => {
+      let _block;
+      let _pipe = new InlineState(ctx, inner);
+      _block = resolve_delims(_pipe);
+      let state = _block;
+      let inner$1 = state.inlines;
+      if (style2 === "~") {
+        return consume_delims(ctx, style2, pre_len - 2, post_len - 2, toList([new Strikethrough(inner$1)]));
+      } else if (style2 === "=") {
+        return consume_delims(ctx, style2, pre_len - 2, post_len - 2, toList([new Highlight(inner$1)]));
+      } else if (pre_len > 1 && post_len > 1) {
+        return consume_delims(ctx, style2, pre_len - 2, post_len - 2, toList([new Strong(inner$1)]));
+      } else {
+        return consume_delims(ctx, style2, pre_len - 1, post_len - 1, toList([new Emphasis(inner$1)]));
+      }
+    });
   });
+}
+function matching_opener(loop$ctx, loop$style, loop$len, loop$acc, loop$rest, loop$strict, loop$resolves) {
+  while (true) {
+    let ctx = loop$ctx;
+    let style2 = loop$style;
+    let len = loop$len;
+    let acc = loop$acc;
+    let rest = loop$rest;
+    let strict = loop$strict;
+    let resolves = loop$resolves;
+    if (rest instanceof Empty) {
+      return [toList([]), new None, acc, resolves];
+    } else {
+      let $ = rest.head;
+      if ($ instanceof Delim) {
+        let $1 = $.can_open;
+        if ($1) {
+          let match_style = $.style;
+          let match_len = $.len;
+          if (match_style === style2 && (!strict || match_len === len)) {
+            let tail = rest.tail;
+            let can_close = $.can_close;
+            return [
+              acc,
+              new Some(new Delim(style2, match_len, true, can_close)),
+              tail,
+              true
+            ];
+          } else {
+            let inline = $;
+            let tail = rest.tail;
+            loop$ctx = ctx;
+            loop$style = style2;
+            loop$len = len;
+            loop$acc = prepend(inline, acc);
+            loop$rest = tail;
+            loop$strict = strict;
+            loop$resolves = resolves;
+          }
+        } else {
+          let $2 = $.can_close;
+          if ($2) {
+            let $3 = do_resolve_delims(ctx, rest, toList([]), resolves);
+            let new_rest;
+            let resolves$1;
+            new_rest = $3[0];
+            resolves$1 = $3[1];
+            if (new_rest instanceof Empty) {
+              loop$ctx = ctx;
+              loop$style = style2;
+              loop$len = len;
+              loop$acc = acc;
+              loop$rest = new_rest;
+              loop$strict = strict;
+              loop$resolves = resolves$1;
+            } else {
+              let $4 = new_rest.head;
+              if ($4 instanceof Delim) {
+                let $5 = $4.can_open;
+                if (!$5) {
+                  let $6 = $4.can_close;
+                  if ($6) {
+                    let new_rest$1 = new_rest.tail;
+                    let style$1 = $4.style;
+                    let len$1 = $4.len;
+                    loop$ctx = ctx;
+                    loop$style = style$1;
+                    loop$len = len$1;
+                    loop$acc = prepend(new Delim(style$1, len$1, false, true), acc);
+                    loop$rest = new_rest$1;
+                    loop$strict = strict;
+                    loop$resolves = resolves$1;
+                  } else {
+                    loop$ctx = ctx;
+                    loop$style = style2;
+                    loop$len = len;
+                    loop$acc = acc;
+                    loop$rest = new_rest;
+                    loop$strict = strict;
+                    loop$resolves = resolves$1;
+                  }
+                } else {
+                  loop$ctx = ctx;
+                  loop$style = style2;
+                  loop$len = len;
+                  loop$acc = acc;
+                  loop$rest = new_rest;
+                  loop$strict = strict;
+                  loop$resolves = resolves$1;
+                }
+              } else {
+                loop$ctx = ctx;
+                loop$style = style2;
+                loop$len = len;
+                loop$acc = acc;
+                loop$rest = new_rest;
+                loop$strict = strict;
+                loop$resolves = resolves$1;
+              }
+            }
+          } else {
+            let inline = $;
+            let tail = rest.tail;
+            loop$ctx = ctx;
+            loop$style = style2;
+            loop$len = len;
+            loop$acc = prepend(inline, acc);
+            loop$rest = tail;
+            loop$strict = strict;
+            loop$resolves = resolves;
+          }
+        }
+      } else {
+        let inline = $;
+        let tail = rest.tail;
+        loop$ctx = ctx;
+        loop$style = style2;
+        loop$len = len;
+        loop$acc = prepend(inline, acc);
+        loop$rest = tail;
+        loop$strict = strict;
+        loop$resolves = resolves;
+      }
+    }
+  }
+}
+function do_resolve_delims(loop$ctx, loop$inlines, loop$acc, loop$resolves) {
+  while (true) {
+    let ctx = loop$ctx;
+    let inlines = loop$inlines;
+    let acc = loop$acc;
+    let resolves = loop$resolves;
+    if (inlines instanceof Empty) {
+      return [
+        (() => {
+          let _pipe = acc;
+          return reverse(_pipe);
+        })(),
+        resolves
+      ];
+    } else {
+      let $ = inlines.head;
+      if ($ instanceof Delim) {
+        let $1 = $.can_close;
+        if ($1) {
+          let rest = inlines.tail;
+          let style2 = $.style;
+          let len = $.len;
+          let can_open = $.can_open;
+          let $2 = matching_opener(ctx, style2, len, toList([]), rest, true, resolves);
+          let inner;
+          let opener;
+          let tail;
+          let resolves$1;
+          inner = $2[0];
+          opener = $2[1];
+          tail = $2[2];
+          resolves$1 = $2[3];
+          if (opener instanceof Some) {
+            let opener$1 = opener[0];
+            if (!(opener$1 instanceof Delim)) {
+              throw makeError("let_assert", FILEPATH6, "mork/internal/inlines", 325, "do_resolve_delims", "Pattern match failed, no pattern matched the value.", {
+                value: opener$1,
+                start: 10275,
+                end: 10304,
+                pattern_start: 10286,
+                pattern_end: 10295
+              });
+            }
+            loop$ctx = ctx;
+            loop$inlines = tail;
+            loop$acc = flatten(toList([consume_delims(ctx, style2, opener$1.len, len, inner), acc]));
+            loop$resolves = true;
+          } else {
+            let $3 = matching_opener(ctx, style2, len, toList([]), rest, false, resolves$1);
+            let inner$1;
+            let opener$1;
+            let tail$1;
+            let resolves$2;
+            inner$1 = $3[0];
+            opener$1 = $3[1];
+            tail$1 = $3[2];
+            resolves$2 = $3[3];
+            if (opener$1 instanceof Some) {
+              let opener$2 = opener$1[0];
+              if (!(opener$2 instanceof Delim)) {
+                throw makeError("let_assert", FILEPATH6, "mork/internal/inlines", 341, "do_resolve_delims", "Pattern match failed, no pattern matched the value.", {
+                  value: opener$2,
+                  start: 10744,
+                  end: 10773,
+                  pattern_start: 10755,
+                  pattern_end: 10764
+                });
+              }
+              loop$ctx = ctx;
+              loop$inlines = tail$1;
+              loop$acc = flatten(toList([
+                consume_delims(ctx, style2, opener$2.len, len, inner$1),
+                acc
+              ]));
+              loop$resolves = true;
+            } else {
+              loop$ctx = ctx;
+              loop$inlines = rest;
+              loop$acc = prepend(new Delim(style2, len, can_open, true), acc);
+              loop$resolves = resolves$2;
+            }
+          }
+        } else {
+          let any2 = $;
+          let rest = inlines.tail;
+          loop$ctx = ctx;
+          loop$inlines = rest;
+          loop$acc = prepend(any2, acc);
+          loop$resolves = resolves;
+        }
+      } else {
+        let any2 = $;
+        let rest = inlines.tail;
+        loop$ctx = ctx;
+        loop$inlines = rest;
+        loop$acc = prepend(any2, acc);
+        loop$resolves = resolves;
+      }
+    }
+  }
+}
+function rec_resolve_delims(loop$state, loop$depth) {
+  while (true) {
+    let state = loop$state;
+    let depth = loop$depth;
+    let $ = do_resolve_delims(state.ctx, state.inlines, toList([]), false);
+    let inlines;
+    let resolves;
+    inlines = $[0];
+    resolves = $[1];
+    if (resolves && depth < 14) {
+      loop$state = new InlineState(state.ctx, inlines);
+      loop$depth = depth + 1;
+    } else {
+      return new InlineState(state.ctx, inlines);
+    }
+  }
+}
+function resolve_delims(state) {
+  return rec_resolve_delims(state, 0);
 }
 function push_text(text4, inlines) {
   if (text4 === "") {
@@ -15963,13 +16435,162 @@ function push_text(text4, inlines) {
     })(), inlines);
   }
 }
-function make_break(acc, inlines) {
-  let nspaces = count_spaces(reverse3(acc), 0);
-  let $ = nspaces >= 2;
-  if ($) {
-    return prepend(new HardBreak, push_text(drop_end(acc, nspaces), inlines));
+function is_matched(loop$s, loop$lp, loop$rp) {
+  while (true) {
+    let s = loop$s;
+    let lp = loop$lp;
+    let rp = loop$rp;
+    let $ = s.charCodeAt(0);
+    if ($ === 40) {
+      let s$1 = s.slice(1);
+      loop$s = s$1;
+      loop$lp = lp + 1;
+      loop$rp = rp;
+    } else if ($ === 41) {
+      let s$1 = s.slice(1);
+      loop$s = s$1;
+      loop$lp = lp;
+      loop$rp = rp + 1;
+    } else {
+      let $1 = pop_grapheme(s);
+      if ($1 instanceof Ok) {
+        let s$1 = $1[0][1];
+        loop$s = s$1;
+        loop$lp = lp;
+        loop$rp = rp;
+      } else {
+        return lp === rp;
+      }
+    }
+  }
+}
+function backtrack_autolink(loop$s, loop$acc) {
+  while (true) {
+    let s = loop$s;
+    let acc = loop$acc;
+    let $ = s.charCodeAt(0);
+    if ($ === 41) {
+      let p2 = ")";
+      let rest = s.slice(1);
+      let $1 = is_matched(rest, 0, 1);
+      if ($1) {
+        return [acc, s];
+      } else {
+        loop$s = rest;
+        loop$acc = acc + p2;
+      }
+    } else if ($ === 59) {
+      let p2 = ";";
+      let rest = s.slice(1);
+      let $1 = from_string("^[A-Za-z0-9]+&");
+      let re;
+      if ($1 instanceof Ok) {
+        re = $1[0];
+      } else {
+        throw makeError("let_assert", FILEPATH6, "mork/internal/inlines", 838, "backtrack_autolink", "Pattern match failed, no pattern matched the value.", {
+          value: $1,
+          start: 24286,
+          end: 24342,
+          pattern_start: 24297,
+          pattern_end: 24303
+        });
+      }
+      let $2 = check2(re, rest);
+      if ($2) {
+        let $3 = split_once(rest, "&");
+        if ($3 instanceof Ok) {
+          let escape3 = $3[0][0];
+          let rest$1 = $3[0][1];
+          return [acc + p2 + escape3 + "&", rest$1];
+        } else {
+          return [acc, rest];
+        }
+      } else {
+        loop$s = rest;
+        loop$acc = acc + p2;
+      }
+    } else if ($ === 46) {
+      let p2 = ".";
+      let rest = s.slice(1);
+      loop$s = rest;
+      loop$acc = acc + p2;
+    } else if ($ === 44) {
+      let p2 = ",";
+      let rest = s.slice(1);
+      loop$s = rest;
+      loop$acc = acc + p2;
+    } else if ($ === 33) {
+      let p2 = "!";
+      let rest = s.slice(1);
+      loop$s = rest;
+      loop$acc = acc + p2;
+    } else if ($ === 63) {
+      let p2 = "?";
+      let rest = s.slice(1);
+      loop$s = rest;
+      loop$acc = acc + p2;
+    } else if ($ === 58) {
+      let p2 = ":";
+      let rest = s.slice(1);
+      loop$s = rest;
+      loop$acc = acc + p2;
+    } else if ($ === 42) {
+      let p2 = "*";
+      let rest = s.slice(1);
+      loop$s = rest;
+      loop$acc = acc + p2;
+    } else if ($ === 95) {
+      let p2 = "_";
+      let rest = s.slice(1);
+      loop$s = rest;
+      loop$acc = acc + p2;
+    } else if ($ === 126) {
+      let p2 = "~";
+      let rest = s.slice(1);
+      loop$s = rest;
+      loop$acc = acc + p2;
+    } else {
+      return [acc, s];
+    }
+  }
+}
+function parse_autolink_tail(_, rest) {
+  let $ = from_string("^[A-Za-z0-9_-]+\\.[A-Za-z0-9.-]+");
+  let re;
+  if ($ instanceof Ok) {
+    re = $[0];
   } else {
-    return prepend(new SoftBreak, push_text(trim_end(acc), inlines));
+    throw makeError("let_assert", FILEPATH6, "mork/internal/inlines", 812, "parse_autolink_tail", "Pattern match failed, no pattern matched the value.", {
+      value: $,
+      start: 23495,
+      end: 23569,
+      pattern_start: 23506,
+      pattern_end: 23512
+    });
+  }
+  let $1 = check2(re, rest);
+  if ($1) {
+    let sp = new$7(toList([" ", `\r
+`, `
+`, "\t", "<"]));
+    let $2 = split5(sp, rest);
+    let l;
+    let s;
+    let r;
+    l = $2[0];
+    s = $2[1];
+    r = $2[2];
+    let reversed = reverse3(l);
+    let $3 = backtrack_autolink(reversed, "");
+    let post2;
+    let body;
+    post2 = $3[0];
+    body = $3[1];
+    let body$1 = reverse3(body);
+    let post$1 = reverse3(post2);
+    return [body$1, post$1 + s + r];
+  } else {
+    return ["", rest];
   }
 }
 function do_last_char_of(inline) {
@@ -16028,8 +16649,54 @@ function last_char_of(inlines) {
     return do_last_char_of(inline);
   }
 }
+function make_break(acc, inlines) {
+  let nspaces = count_spaces(reverse3(acc), 0);
+  let $ = nspaces >= 2;
+  if ($) {
+    return prepend(new HardBreak, push_text(drop_end(acc, nspaces), inlines));
+  } else {
+    return prepend(new SoftBreak, push_text(trim_end(acc), inlines));
+  }
+}
+function normalize_span(s) {
+  let s$1 = replace(s, `
+`, " ");
+  let $ = starts_with(s$1, " ") && ends_with(s$1, " ") && !is_blank(s$1);
+  if ($) {
+    let _pipe = s$1;
+    let _pipe$1 = drop_start(_pipe, 1);
+    return drop_end(_pipe$1, 1);
+  } else {
+    return s$1;
+  }
+}
+function make_codespan(body) {
+  let _pipe = body;
+  let _pipe$1 = normalize_span(_pipe);
+  return new CodeSpan(_pipe$1);
+}
 function take_while(haystack, needle) {
   return do_take_while(haystack, needle, "");
+}
+function parse_link_paren(ctx, in$) {
+  let in$1 = gobble_hspace(in$);
+  return parse_link_dest(in$1, ctx.cache.sp_link_dest, ctx.cache.sp_link_dest_tag, (dest, in$2) => {
+    let in$12 = gobble_hspace(in$2);
+    if (in$12.charCodeAt(0) === 41) {
+      let rest = in$12.slice(1);
+      return new Ok([new LinkData(dest, new None), rest]);
+    } else {
+      return parse_link_title(in$12, ctx.cache.sp_link_title, (title2, in$3) => {
+        let in$13 = gobble_hspace(in$3);
+        if (in$13.charCodeAt(0) === 41) {
+          let rest = in$13.slice(1);
+          return new Ok([new LinkData(dest, title2), rest]);
+        } else {
+          return new Error(undefined);
+        }
+      });
+    }
+  });
 }
 function contains_a_link(inlines) {
   if (inlines instanceof Empty) {
@@ -16059,26 +16726,6 @@ function contains_a_link(inlines) {
       }
     })() || contains_a_link(rest);
   }
-}
-function parse_link_paren(ctx, in$) {
-  let in$1 = gobble_hspace(in$);
-  return parse_link_dest(in$1, ctx.cache.sp_link_dest, ctx.cache.sp_link_dest_tag, (dest, in$2) => {
-    let in$12 = gobble_hspace(in$2);
-    if (in$12.startsWith(")")) {
-      let rest = in$12.slice(1);
-      return new Ok([new LinkData(dest, new None), rest]);
-    } else {
-      return parse_link_title(in$12, ctx.cache.sp_link_title, (title2, in$3) => {
-        let in$13 = gobble_hspace(in$3);
-        if (in$13.startsWith(")")) {
-          let rest = in$13.slice(1);
-          return new Ok([new LinkData(dest, title2), rest]);
-        } else {
-          return new Error(undefined);
-        }
-      });
-    }
-  });
 }
 function do_split_at_tag(loop$sp, loop$rest, loop$acc, loop$stack) {
   while (true) {
@@ -16190,529 +16837,6 @@ function do_split_at_tag(loop$sp, loop$rest, loop$acc, loop$stack) {
 }
 function split_at_tag(ctx, s) {
   return do_split_at_tag(ctx.cache.sp_tag, s, "", toList([]));
-}
-function is_matched(loop$s, loop$lp, loop$rp) {
-  while (true) {
-    let s = loop$s;
-    let lp = loop$lp;
-    let rp = loop$rp;
-    if (s.startsWith("(")) {
-      let s$1 = s.slice(1);
-      loop$s = s$1;
-      loop$lp = lp + 1;
-      loop$rp = rp;
-    } else if (s.startsWith(")")) {
-      let s$1 = s.slice(1);
-      loop$s = s$1;
-      loop$lp = lp;
-      loop$rp = rp + 1;
-    } else {
-      let $ = pop_grapheme(s);
-      if ($ instanceof Ok) {
-        let s$1 = $[0][1];
-        loop$s = s$1;
-        loop$lp = lp;
-        loop$rp = rp;
-      } else {
-        return lp === rp;
-      }
-    }
-  }
-}
-function backtrack_autolink(loop$s, loop$acc) {
-  while (true) {
-    let s = loop$s;
-    let acc = loop$acc;
-    if (s.startsWith(")")) {
-      let p2 = ")";
-      let rest = s.slice(1);
-      let $ = is_matched(rest, 0, 1);
-      if ($) {
-        return [acc, s];
-      } else {
-        loop$s = rest;
-        loop$acc = acc + p2;
-      }
-    } else if (s.startsWith(";")) {
-      let p2 = ";";
-      let rest = s.slice(1);
-      let $ = from_string("^[A-Za-z0-9]+&");
-      let re;
-      if ($ instanceof Ok) {
-        re = $[0];
-      } else {
-        throw makeError("let_assert", FILEPATH6, "mork/internal/inlines", 838, "backtrack_autolink", "Pattern match failed, no pattern matched the value.", {
-          value: $,
-          start: 24286,
-          end: 24342,
-          pattern_start: 24297,
-          pattern_end: 24303
-        });
-      }
-      let $1 = check2(re, rest);
-      if ($1) {
-        let $2 = split_once(rest, "&");
-        if ($2 instanceof Ok) {
-          let escape3 = $2[0][0];
-          let rest$1 = $2[0][1];
-          return [acc + p2 + escape3 + "&", rest$1];
-        } else {
-          return [acc, rest];
-        }
-      } else {
-        loop$s = rest;
-        loop$acc = acc + p2;
-      }
-    } else if (s.startsWith(".")) {
-      let p2 = ".";
-      let rest = s.slice(1);
-      loop$s = rest;
-      loop$acc = acc + p2;
-    } else if (s.startsWith(",")) {
-      let p2 = ",";
-      let rest = s.slice(1);
-      loop$s = rest;
-      loop$acc = acc + p2;
-    } else if (s.startsWith("!")) {
-      let p2 = "!";
-      let rest = s.slice(1);
-      loop$s = rest;
-      loop$acc = acc + p2;
-    } else if (s.startsWith("?")) {
-      let p2 = "?";
-      let rest = s.slice(1);
-      loop$s = rest;
-      loop$acc = acc + p2;
-    } else if (s.startsWith(":")) {
-      let p2 = ":";
-      let rest = s.slice(1);
-      loop$s = rest;
-      loop$acc = acc + p2;
-    } else if (s.startsWith("*")) {
-      let p2 = "*";
-      let rest = s.slice(1);
-      loop$s = rest;
-      loop$acc = acc + p2;
-    } else if (s.startsWith("_")) {
-      let p2 = "_";
-      let rest = s.slice(1);
-      loop$s = rest;
-      loop$acc = acc + p2;
-    } else if (s.startsWith("~")) {
-      let p2 = "~";
-      let rest = s.slice(1);
-      loop$s = rest;
-      loop$acc = acc + p2;
-    } else {
-      return [acc, s];
-    }
-  }
-}
-function parse_autolink_tail(_, rest) {
-  let $ = from_string("^[A-Za-z0-9_-]+\\.[A-Za-z0-9.-]+");
-  let re;
-  if ($ instanceof Ok) {
-    re = $[0];
-  } else {
-    throw makeError("let_assert", FILEPATH6, "mork/internal/inlines", 812, "parse_autolink_tail", "Pattern match failed, no pattern matched the value.", {
-      value: $,
-      start: 23495,
-      end: 23569,
-      pattern_start: 23506,
-      pattern_end: 23512
-    });
-  }
-  let $1 = check2(re, rest);
-  if ($1) {
-    let sp = new$7(toList([" ", `\r
-`, `
-`, "\t", "<"]));
-    let $2 = split5(sp, rest);
-    let l;
-    let s;
-    let r;
-    l = $2[0];
-    s = $2[1];
-    r = $2[2];
-    let reversed = reverse3(l);
-    let $3 = backtrack_autolink(reversed, "");
-    let post2;
-    let body;
-    post2 = $3[0];
-    body = $3[1];
-    let body$1 = reverse3(body);
-    let post$1 = reverse3(post2);
-    return [body$1, post$1 + s + r];
-  } else {
-    return ["", rest];
-  }
-}
-function normalize_span(s) {
-  let s$1 = replace(s, `
-`, " ");
-  let $ = starts_with(s$1, " ") && ends_with(s$1, " ") && !is_blank(s$1);
-  if ($) {
-    let _pipe = s$1;
-    let _pipe$1 = drop_start(_pipe, 1);
-    return drop_end(_pipe$1, 1);
-  } else {
-    return s$1;
-  }
-}
-function make_codespan(body) {
-  let _pipe = body;
-  let _pipe$1 = normalize_span(_pipe);
-  return new CodeSpan(_pipe$1);
-}
-function do_item_blocks(ctx, blocks) {
-  let $ = ctx.doc.options.tasklists;
-  if ($) {
-    if (blocks instanceof Empty) {
-      return map2(blocks, (_capture) => {
-        return parse_block_inlines(ctx, _capture);
-      });
-    } else {
-      let $1 = blocks.head;
-      if ($1 instanceof Paragraph) {
-        let blocks$1 = blocks.tail;
-        let raw24 = $1.raw;
-        let first3 = new Paragraph("", do_checkbox_inlines(ctx, raw24));
-        let rest = map2(blocks$1, (_capture) => {
-          return parse_block_inlines(ctx, _capture);
-        });
-        return prepend2(rest, first3);
-      } else {
-        return map2(blocks, (_capture) => {
-          return parse_block_inlines(ctx, _capture);
-        });
-      }
-    }
-  } else {
-    return map2(blocks, (_capture) => {
-      return parse_block_inlines(ctx, _capture);
-    });
-  }
-}
-function parse_block_inlines(ctx, block) {
-  if (block instanceof BlockQuote) {
-    let blocks = block.blocks;
-    return new BlockQuote(map2(blocks, (_capture) => {
-      return parse_block_inlines(ctx, _capture);
-    }));
-  } else if (block instanceof BulletList) {
-    let pack = block.pack;
-    let items = block.items;
-    return new BulletList(pack, map2(items, (item) => {
-      return new ListItem(do_item_blocks(ctx, item.blocks), item.ends_with_blank, item.contains_blank);
-    }));
-  } else if (block instanceof Heading) {
-    let level = block.level;
-    let id2 = block.id;
-    let raw24 = block.raw;
-    return new Heading(level, id2, "", do_inlines(ctx, raw24));
-  } else if (block instanceof OrderedList) {
-    let pack = block.pack;
-    let items = block.items;
-    let start5 = block.start;
-    return new OrderedList(pack, map2(items, (item) => {
-      return new ListItem(do_item_blocks(ctx, item.blocks), item.ends_with_blank, item.contains_blank);
-    }), start5);
-  } else if (block instanceof Paragraph) {
-    let raw24 = block.raw;
-    return new Paragraph("", do_inlines(ctx, raw24));
-  } else if (block instanceof Table) {
-    let header = block.header;
-    let rows = block.rows;
-    return new Table(map2(header, (head) => {
-      return new THead(head.align, "", do_inlines(ctx, head.raw));
-    }), map2(rows, (_capture) => {
-      return map2(_capture, (cell) => {
-        return new Cell("", do_inlines(ctx, cell.raw));
-      });
-    }));
-  } else {
-    return block;
-  }
-}
-function parse_footnote_blocks(ctx, data2) {
-  return new FootnoteData(data2.num, map2(data2.blocks, (_capture) => {
-    return parse_block_inlines(ctx, _capture);
-  }));
-}
-function process_inlines(ctx) {
-  let blocks = map2(ctx.doc.blocks, (_capture) => {
-    return parse_block_inlines(ctx, _capture);
-  });
-  let _block;
-  let $ = ctx.doc.options.footnotes;
-  if ($) {
-    _block = map(ctx.doc.footnotes, (_, v) => {
-      return parse_footnote_blocks(ctx, v);
-    });
-  } else {
-    _block = ctx.doc.footnotes;
-  }
-  let footnotes = _block;
-  let _record = ctx.doc;
-  return new Document(_record.options, blocks, _record.links, footnotes);
-}
-function handle_und_emoji(acc, und, r, ctx, inlines) {
-  let sp = new$7(toList([":"]));
-  let rhead = split_after(sp, reverse3(acc));
-  let head = reverse3(rhead[0]);
-  let $ = split_after(sp, r);
-  let butt;
-  let r2;
-  butt = $[0];
-  r2 = $[1];
-  let $1 = from_string("^:[A-Za-z_]{1,24}:$");
-  let re;
-  if ($1 instanceof Ok) {
-    re = $1[0];
-  } else {
-    throw makeError("let_assert", FILEPATH6, "mork/internal/inlines", 213, "handle_und_emoji", "Pattern match failed, no pattern matched the value.", {
-      value: $1,
-      start: 7073,
-      end: 7134,
-      pattern_start: 7084,
-      pattern_end: 7090
-    });
-  }
-  let $2 = check2(re, head + und + butt);
-  if ($2) {
-    return do_parse_inlines(with_state(ctx, r2), acc + und + butt, inlines);
-  } else {
-    let $3 = take_unds_run(r, 1);
-    let run2;
-    let rest;
-    run2 = $3[0];
-    rest = $3[1];
-    return parse_delim(with_state(ctx, rest), "_", run2, acc, inlines);
-  }
-}
-function parse_delim(ctx, style2, len, acc, inlines) {
-  let _block;
-  let $ = acc !== "";
-  if ($) {
-    _block = acc;
-  } else {
-    _block = last_char_of(inlines);
-  }
-  let before = _block;
-  let rest = ctx.state.start;
-  let before_is_ws = ctx.cache.ends_with_ws(before);
-  let before_is_p = ctx.cache.ends_with_p(before);
-  let after_is_ws = ctx.cache.starts_with_ws(rest);
-  let after_is_p = ctx.cache.starts_with_p(rest);
-  let left_flanking = !after_is_ws && (!after_is_p || before_is_ws || before_is_p);
-  let right_flanking = !before_is_ws && (!before_is_p || after_is_ws || after_is_p);
-  let _block$1;
-  if (style2 === "_") {
-    _block$1 = [
-      left_flanking && (!right_flanking || before_is_p),
-      right_flanking && (!left_flanking || after_is_p)
-    ];
-  } else {
-    _block$1 = [left_flanking, right_flanking];
-  }
-  let $1 = _block$1;
-  let can_open;
-  let can_close;
-  can_open = $1[0];
-  can_close = $1[1];
-  let inlines$1 = push_text(acc, inlines);
-  return do_parse_inlines(ctx, "", prepend(new Delim(style2, len, can_open, can_close), inlines$1));
-}
-function do_parse_inlines(loop$ctx, loop$acc, loop$inlines) {
-  while (true) {
-    let ctx = loop$ctx;
-    let acc = loop$acc;
-    let inlines = loop$inlines;
-    let $ = split5(ctx.cache.sp_inline, ctx.state.start);
-    let l;
-    let sep;
-    let r;
-    l = $[0];
-    sep = $[1];
-    r = $[2];
-    let acc$1 = acc + l;
-    if (sep === "") {
-      return new InlineState(ctx, push_text(acc$1, inlines));
-    } else if (sep === ">") {
-      let ch = sep;
-      loop$ctx = with_state(ctx, r);
-      loop$acc = acc$1 + ch;
-      loop$inlines = inlines;
-    } else if (sep === "&") {
-      let ch = sep;
-      loop$ctx = with_state(ctx, r);
-      loop$acc = acc$1 + ch;
-      loop$inlines = inlines;
-    } else if (sep === '"') {
-      let ch = sep;
-      loop$ctx = with_state(ctx, r);
-      loop$acc = acc$1 + ch;
-      loop$inlines = inlines;
-    } else if (sep === "\\") {
-      return do_inline_escape(with_state(ctx, r), acc$1, inlines);
-    } else if (sep === "<") {
-      return do_parse_inline_html(with_state(ctx, r), acc$1, inlines);
-    } else if (sep === "![") {
-      return do_parse_image(with_state(ctx, r), acc$1, inlines);
-    } else if (sep === "[^") {
-      return do_parse_footnote(with_state(ctx, r), acc$1, inlines);
-    } else if (sep === "[") {
-      return do_parse_linkref(with_state(ctx, r), acc$1, inlines);
-    } else if (sep === "`") {
-      let $1 = take_quot_run(r, 1);
-      let run2;
-      let rest;
-      run2 = $1[0];
-      rest = $1[1];
-      return do_parse_codespan(with_state(ctx, rest), run2, acc$1, inlines);
-    } else if (sep === "*") {
-      let $1 = take_star_run(r, 1);
-      let run2;
-      let rest;
-      run2 = $1[0];
-      rest = $1[1];
-      return parse_delim(with_state(ctx, rest), "*", run2, acc$1, inlines);
-    } else if (sep === "_") {
-      let $1 = ctx.doc.options.emojis && contains_string(acc$1, ":");
-      if ($1) {
-        return handle_und_emoji(acc$1, "_", r, ctx, inlines);
-      } else {
-        let $2 = take_unds_run(r, 1);
-        let run2;
-        let rest;
-        run2 = $2[0];
-        rest = $2[1];
-        return parse_delim(with_state(ctx, rest), "_", run2, acc$1, inlines);
-      }
-    } else if (sep === "~~") {
-      let $1 = ends_with(l, "~") || starts_with(r, "~");
-      if ($1) {
-        loop$ctx = with_state(ctx, r);
-        loop$acc = acc$1 + "~~";
-        loop$inlines = inlines;
-      } else {
-        return parse_delim(with_state(ctx, r), "~", 2, acc$1, inlines);
-      }
-    } else if (sep === "==") {
-      let $1 = ends_with(l, "=") || starts_with(r, "=");
-      if ($1) {
-        loop$ctx = with_state(ctx, r);
-        loop$acc = acc$1 + "==";
-        loop$inlines = inlines;
-      } else {
-        return parse_delim(with_state(ctx, r), "=", 2, acc$1, inlines);
-      }
-    } else if (sep === `
-`) {
-      loop$ctx = with_state(ctx, r);
-      loop$acc = "";
-      loop$inlines = make_break(acc$1, inlines);
-    } else if (sep === "]") {
-      let $1 = ctx.stack;
-      if ($1 instanceof Empty) {
-        loop$ctx = with_state(ctx, r);
-        loop$acc = acc$1 + "]";
-        loop$inlines = inlines;
-      } else {
-        let $2 = $1.head;
-        if ($2 === "]") {
-          let stack = $1.tail;
-          let ctx$1 = new Context(ctx.cache, new_state(r, ctx.cache.sp_line), stack, ctx.doc, ctx.nest);
-          return new InlineState(ctx$1, push_text(acc$1, inlines));
-        } else {
-          throw makeError("panic", FILEPATH6, "mork/internal/inlines", 186, "do_parse_inlines", "non-bracket on the stack", {});
-        }
-      }
-    } else if (sep === "https://") {
-      let $1 = ctx.doc.options.autolinks;
-      if ($1) {
-        return do_parse_autolink(ctx, sep, r, acc$1, inlines);
-      } else {
-        loop$ctx = with_state(ctx, r);
-        loop$acc = acc$1 + sep;
-        loop$inlines = inlines;
-      }
-    } else if (sep === "http://") {
-      let $1 = ctx.doc.options.autolinks;
-      if ($1) {
-        return do_parse_autolink(ctx, sep, r, acc$1, inlines);
-      } else {
-        loop$ctx = with_state(ctx, r);
-        loop$acc = acc$1 + sep;
-        loop$inlines = inlines;
-      }
-    } else if (sep === "www.") {
-      let $1 = ctx.doc.options.autolinks;
-      if ($1) {
-        return do_parse_autolink(ctx, sep, r, acc$1, inlines);
-      } else {
-        loop$ctx = with_state(ctx, r);
-        loop$acc = acc$1 + sep;
-        loop$inlines = inlines;
-      }
-    } else {
-      throw makeError("panic", FILEPATH6, "mork/internal/inlines", 194, "do_parse_inlines", "unimplemented inline: " + sep, {});
-    }
-  }
-}
-function link_handle_reference(ctx, start5, rest, acc, text4, inner_inlines, inlines, ref2) {
-  let fail = () => {
-    let inlines$1 = flatten(toList([
-      toList([new Text2("]")]),
-      inner_inlines,
-      toList([new Text2(start5)]),
-      inlines
-    ]));
-    return do_parse_inlines(ctx, "", inlines$1);
-  };
-  let _block;
-  if (acc === "[") {
-    _block = gobble_link_label(ctx.cache.sp_link_label, rest);
-  } else if (acc === "[]") {
-    _block = [text4, rest];
-  } else if (acc === "") {
-    _block = [text4, rest];
-  } else {
-    throw makeError("panic", FILEPATH6, "mork/internal/inlines", 639, "link_handle_reference", "unreachable label case, acc=" + acc, {});
-  }
-  let $ = _block;
-  let raw_label;
-  let rest$1;
-  raw_label = $[0];
-  rest$1 = $[1];
-  return lazy_guard(raw_label === "", fail, () => {
-    let _block$1;
-    let _pipe = raw_label;
-    _block$1 = casefold(_pipe);
-    let raw_label$1 = _block$1;
-    let link = get(ctx.doc.links, raw_label$1);
-    if (link instanceof Ok) {
-      return do_parse_inlines(with_state(ctx, rest$1), "", prepend(ref2((() => {
-        let _pipe$1 = inner_inlines;
-        return reverse(_pipe$1);
-      })(), raw_label$1), inlines));
-    } else {
-      return fail();
-    }
-  });
-}
-function link_handle_parens(ctx, start5, rest, text4, inner_inlines, inlines, ref2, full) {
-  let $ = parse_link_paren(ctx, rest);
-  if ($ instanceof Ok) {
-    let data2 = $[0][0];
-    let rest$1 = $[0][1];
-    return do_parse_inlines(with_state(ctx, rest$1), "", prepend(full((() => {
-      let _pipe = inner_inlines;
-      return reverse(_pipe);
-    })(), data2), inlines));
-  } else {
-    return link_handle_reference(ctx, start5, "(" + rest, "", text4, inner_inlines, inlines, ref2);
-  }
 }
 function do_parse_autolink(ctx, scheme, rest, acc, inlines) {
   let _block;
@@ -16899,46 +17023,72 @@ function do_parse_autolink(ctx, scheme, rest, acc, inlines) {
     return do_parse_inlines(with_state(ctx, rest), acc + scheme, inlines);
   }
 }
-function do_parse_inline_html(ctx, acc, inlines) {
-  let $ = split_at_tag(ctx, ctx.state.start);
-  let html;
-  let gt;
-  let tail;
-  html = $[0];
-  gt = $[1];
-  tail = $[2];
-  return lazy_guard(gt === "", () => {
-    return do_parse_inlines(ctx, acc + "<", inlines);
-  }, () => {
-    return lazy_guard(check2(ctx.cache.autolink, html), () => {
-      return do_parse_inlines(with_state(ctx, tail), "", prepend(new Autolink(html, new None), push_text(acc, inlines)));
-    }, () => {
-      return lazy_guard(check2(ctx.cache.email_autolink, html), () => {
-        return do_parse_inlines(with_state(ctx, tail), "", prepend(new EmailAutolink(html), prepend(new Text2(acc), inlines)));
-      }, () => {
-        return lazy_guard(ctx.cache.is_a_html_tag("<" + html + ">", false, false), () => {
-          return do_parse_inlines(with_state(ctx, tail), "", prepend(new RawHtml("<" + html + ">"), prepend(new Text2(acc), inlines)));
-        }, () => {
-          if (html === "![CDATA[") {
-            let $1 = split_once(tail, "]]>");
-            if ($1 instanceof Ok) {
-              let bod = $1[0][0];
-              let tail$1 = $1[0][1];
-              return do_parse_inlines(with_state(ctx, tail$1), "", prepend(new RawHtml("<" + html + ">" + bod + "]]>"), prepend(new Text2(acc), inlines)));
-            } else {
-              return do_parse_inlines(ctx, acc + "<", inlines);
-            }
-          } else if (html.startsWith("!")) {
-            return do_parse_inlines(with_state(ctx, tail), "", prepend(new RawHtml("<" + html + ">"), prepend(new Text2(acc), inlines)));
-          } else if (html.startsWith("?")) {
-            return do_parse_inlines(with_state(ctx, tail), "", prepend(new RawHtml("<" + html + ">"), prepend(new Text2(acc), inlines)));
-          } else {
-            return do_parse_inlines(ctx, acc + "<", inlines);
-          }
-        });
-      });
+function parse_delim(ctx, style2, len, acc, inlines) {
+  let _block;
+  let $ = acc !== "";
+  if ($) {
+    _block = acc;
+  } else {
+    _block = last_char_of(inlines);
+  }
+  let before = _block;
+  let rest = ctx.state.start;
+  let before_is_ws = ctx.cache.ends_with_ws(before);
+  let before_is_p = ctx.cache.ends_with_p(before);
+  let after_is_ws = ctx.cache.starts_with_ws(rest);
+  let after_is_p = ctx.cache.starts_with_p(rest);
+  let left_flanking = !after_is_ws && (!after_is_p || before_is_ws || before_is_p);
+  let right_flanking = !before_is_ws && (!before_is_p || after_is_ws || after_is_p);
+  let _block$1;
+  if (style2 === "_") {
+    _block$1 = [
+      left_flanking && (!right_flanking || before_is_p),
+      right_flanking && (!left_flanking || after_is_p)
+    ];
+  } else {
+    _block$1 = [left_flanking, right_flanking];
+  }
+  let $1 = _block$1;
+  let can_open;
+  let can_close;
+  can_open = $1[0];
+  can_close = $1[1];
+  let inlines$1 = push_text(acc, inlines);
+  return do_parse_inlines(ctx, "", prepend(new Delim(style2, len, can_open, can_close), inlines$1));
+}
+function handle_und_emoji(acc, und, r, ctx, inlines) {
+  let sp = new$7(toList([":"]));
+  let rhead = split_after(sp, reverse3(acc));
+  let head = reverse3(rhead[0]);
+  let $ = split_after(sp, r);
+  let butt;
+  let r2;
+  butt = $[0];
+  r2 = $[1];
+  let $1 = from_string("^:[A-Za-z_]{1,24}:$");
+  let re;
+  if ($1 instanceof Ok) {
+    re = $1[0];
+  } else {
+    throw makeError("let_assert", FILEPATH6, "mork/internal/inlines", 213, "handle_und_emoji", "Pattern match failed, no pattern matched the value.", {
+      value: $1,
+      start: 7073,
+      end: 7134,
+      pattern_start: 7084,
+      pattern_end: 7090
     });
-  });
+  }
+  let $2 = check2(re, head + und + butt);
+  if ($2) {
+    return do_parse_inlines(with_state(ctx, r2), acc + und + butt, inlines);
+  } else {
+    let $3 = take_unds_run(r, 1);
+    let run2;
+    let rest;
+    run2 = $3[0];
+    rest = $3[1];
+    return parse_delim(with_state(ctx, rest), "_", run2, acc, inlines);
+  }
 }
 function do_parse_codespan_end(loop$ctx, loop$runsplit, loop$run, loop$acc, loop$inlines) {
   while (true) {
@@ -17030,437 +17180,107 @@ function do_parse_codespan(ctx, run2, acc, inlines) {
     return do_parse_codespan_end(ctx, runsplit, runs, "", push_text(acc, inlines));
   });
 }
-function do_inline_escape(ctx, acc, inlines) {
-  let $ = ctx.state.start;
-  if ($ === "") {
-    return new InlineState(ctx, prepend(new Text2(acc + "\\"), inlines));
-  } else if ($.startsWith('"')) {
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + "\\\"", inlines);
-  } else if ($.startsWith("&")) {
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + "\\&", inlines);
-  } else if ($.startsWith("<")) {
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + "\\<", inlines);
-  } else if ($.startsWith(">")) {
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + "\\>", inlines);
-  } else if ($.startsWith("\\")) {
-    let ch = "\\";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("!")) {
-    let ch = "!";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("#")) {
-    let ch = "#";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("$")) {
-    let ch = "$";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("%")) {
-    let ch = "%";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("'")) {
-    let ch = "'";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("(")) {
-    let ch = "(";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith(")")) {
-    let ch = ")";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("*")) {
-    let ch = "*";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("+")) {
-    let ch = "+";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith(",")) {
-    let ch = ",";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("-")) {
-    let ch = "-";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith(".")) {
-    let ch = ".";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("/")) {
-    let ch = "/";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith(":")) {
-    let ch = ":";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith(";")) {
-    let ch = ";";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("=")) {
-    let ch = "=";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("?")) {
-    let ch = "?";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("@")) {
-    let ch = "@";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("[")) {
-    let ch = "[";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("]")) {
-    let ch = "]";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("^")) {
-    let ch = "^";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("_")) {
-    let ch = "_";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("`")) {
-    let ch = "`";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("{")) {
-    let ch = "{";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("|")) {
-    let ch = "|";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("}")) {
-    let ch = "}";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith("~")) {
-    let ch = "~";
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
-  } else if ($.startsWith(`
-`)) {
-    let rest = $.slice(1);
-    return do_parse_inlines(with_state(ctx, rest), "", prepend(new HardBreak, push_text(acc, inlines)));
+function link_handle_reference(ctx, start5, rest, acc, text4, inner_inlines, inlines, ref2) {
+  let fail = () => {
+    let inlines$1 = flatten(toList([
+      toList([new Text2("]")]),
+      inner_inlines,
+      toList([new Text2(start5)]),
+      inlines
+    ]));
+    return do_parse_inlines(ctx, "", inlines$1);
+  };
+  let _block;
+  if (acc === "[") {
+    _block = gobble_link_label(ctx.cache.sp_link_label, rest);
+  } else if (acc === "[]") {
+    _block = [text4, rest];
+  } else if (acc === "") {
+    _block = [text4, rest];
   } else {
-    return do_parse_inlines(ctx, acc + "\\", inlines);
+    throw makeError("panic", FILEPATH6, "mork/internal/inlines", 639, "link_handle_reference", "unreachable label case, acc=" + acc, {});
+  }
+  let $ = _block;
+  let raw_label;
+  let rest$1;
+  raw_label = $[0];
+  rest$1 = $[1];
+  return lazy_guard(raw_label === "", fail, () => {
+    let _block$1;
+    let _pipe = raw_label;
+    _block$1 = casefold(_pipe);
+    let raw_label$1 = _block$1;
+    let link = get(ctx.doc.links, raw_label$1);
+    if (link instanceof Ok) {
+      return do_parse_inlines(with_state(ctx, rest$1), "", prepend(ref2((() => {
+        let _pipe$1 = inner_inlines;
+        return reverse(_pipe$1);
+      })(), raw_label$1), inlines));
+    } else {
+      return fail();
+    }
+  });
+}
+function link_handle_parens(ctx, start5, rest, text4, inner_inlines, inlines, ref2, full) {
+  let $ = parse_link_paren(ctx, rest);
+  if ($ instanceof Ok) {
+    let data2 = $[0][0];
+    let rest$1 = $[0][1];
+    return do_parse_inlines(with_state(ctx, rest$1), "", prepend(full((() => {
+      let _pipe = inner_inlines;
+      return reverse(_pipe);
+    })(), data2), inlines));
+  } else {
+    return link_handle_reference(ctx, start5, "(" + rest, "", text4, inner_inlines, inlines, ref2);
   }
 }
-function consume_delims(ctx, style2, pre_len, post_len, inner) {
-  return lazy_guard(pre_len === 0, () => {
-    if (post_len === 0) {
-      return inner;
-    } else {
-      return append(inner, toList([new Delim(style2, post_len, false, true)]));
-    }
+function parse_common_linkref(ctx, acc, inlines, start5, full, ref2) {
+  let stackpos = length(ctx.stack);
+  let inlines$1 = push_text(acc, inlines);
+  let _block;
+  let _pipe = do_parse_inlines(new Context(ctx.cache, ctx.state, prepend("]", ctx.stack), ctx.doc, ctx.nest), "", toList([]));
+  _block = resolve_delims(_pipe);
+  let inner = _block;
+  let $ = gobble_link_label(ctx.cache.sp_link_label, ctx.state.start);
+  let text4;
+  text4 = $[0];
+  return lazy_guard(length(inner.ctx.stack) !== stackpos, () => {
+    return do_parse_inlines(ctx, start5, inlines$1);
   }, () => {
-    return lazy_guard(post_len === 0, () => {
-      if (pre_len === 0) {
-        return inner;
-      } else {
-        return prepend(new Delim(style2, pre_len, true, false), inner);
-      }
+    return lazy_guard(start5 !== "![" && contains_a_link(inner.inlines), () => {
+      let inlines$2 = flatten(toList([
+        toList([new Text2("]")]),
+        inner.inlines,
+        toList([new Text2(start5)]),
+        inlines$1
+      ]));
+      return do_parse_inlines(inner.ctx, "", inlines$2);
     }, () => {
-      let _block;
-      let _pipe = new InlineState(ctx, inner);
-      _block = resolve_delims(_pipe);
-      let state = _block;
-      let inner$1 = state.inlines;
-      if (style2 === "~") {
-        return consume_delims(ctx, style2, pre_len - 2, post_len - 2, toList([new Strikethrough(inner$1)]));
-      } else if (style2 === "=") {
-        return consume_delims(ctx, style2, pre_len - 2, post_len - 2, toList([new Highlight(inner$1)]));
-      } else if (pre_len > 1 && post_len > 1) {
-        return consume_delims(ctx, style2, pre_len - 2, post_len - 2, toList([new Strong(inner$1)]));
+      let rest = inner.ctx.state.start;
+      let $1 = rest.charCodeAt(0);
+      if ($1 === 40) {
+        let rest$1 = rest.slice(1);
+        return link_handle_parens(inner.ctx, start5, rest$1, text4, inner.inlines, inlines$1, ref2, full);
+      } else if (rest.startsWith("[]")) {
+        let post2 = "[]";
+        let rest$1 = rest.slice(2);
+        return link_handle_reference(inner.ctx, start5, rest$1, post2, text4, inner.inlines, inlines$1, ref2);
+      } else if ($1 === 91) {
+        let post2 = "[";
+        let rest$1 = rest.slice(1);
+        return link_handle_reference(inner.ctx, start5, rest$1, post2, text4, inner.inlines, inlines$1, ref2);
       } else {
-        return consume_delims(ctx, style2, pre_len - 1, post_len - 1, toList([new Emphasis(inner$1)]));
+        return link_handle_reference(inner.ctx, start5, rest, "", text4, inner.inlines, inlines$1, ref2);
       }
     });
   });
 }
-function resolve_delims(state) {
-  return rec_resolve_delims(state, 0);
-}
-function rec_resolve_delims(loop$state, loop$depth) {
-  while (true) {
-    let state = loop$state;
-    let depth = loop$depth;
-    let $ = do_resolve_delims(state.ctx, state.inlines, toList([]), false);
-    let inlines;
-    let resolves;
-    inlines = $[0];
-    resolves = $[1];
-    if (resolves && depth < 14) {
-      loop$state = new InlineState(state.ctx, inlines);
-      loop$depth = depth + 1;
-    } else {
-      return new InlineState(state.ctx, inlines);
-    }
-  }
-}
-function do_resolve_delims(loop$ctx, loop$inlines, loop$acc, loop$resolves) {
-  while (true) {
-    let ctx = loop$ctx;
-    let inlines = loop$inlines;
-    let acc = loop$acc;
-    let resolves = loop$resolves;
-    if (inlines instanceof Empty) {
-      return [
-        (() => {
-          let _pipe = acc;
-          return reverse(_pipe);
-        })(),
-        resolves
-      ];
-    } else {
-      let $ = inlines.head;
-      if ($ instanceof Delim) {
-        let $1 = $.can_close;
-        if ($1) {
-          let rest = inlines.tail;
-          let style2 = $.style;
-          let len = $.len;
-          let can_open = $.can_open;
-          let $2 = matching_opener(ctx, style2, len, toList([]), rest, true, resolves);
-          let inner;
-          let opener;
-          let tail;
-          let resolves$1;
-          inner = $2[0];
-          opener = $2[1];
-          tail = $2[2];
-          resolves$1 = $2[3];
-          if (opener instanceof Some) {
-            let opener$1 = opener[0];
-            if (!(opener$1 instanceof Delim)) {
-              throw makeError("let_assert", FILEPATH6, "mork/internal/inlines", 325, "do_resolve_delims", "Pattern match failed, no pattern matched the value.", {
-                value: opener$1,
-                start: 10275,
-                end: 10304,
-                pattern_start: 10286,
-                pattern_end: 10295
-              });
-            }
-            loop$ctx = ctx;
-            loop$inlines = tail;
-            loop$acc = flatten(toList([consume_delims(ctx, style2, opener$1.len, len, inner), acc]));
-            loop$resolves = true;
-          } else {
-            let $3 = matching_opener(ctx, style2, len, toList([]), rest, false, resolves$1);
-            let inner$1;
-            let opener$1;
-            let tail$1;
-            let resolves$2;
-            inner$1 = $3[0];
-            opener$1 = $3[1];
-            tail$1 = $3[2];
-            resolves$2 = $3[3];
-            if (opener$1 instanceof Some) {
-              let opener$2 = opener$1[0];
-              if (!(opener$2 instanceof Delim)) {
-                throw makeError("let_assert", FILEPATH6, "mork/internal/inlines", 341, "do_resolve_delims", "Pattern match failed, no pattern matched the value.", {
-                  value: opener$2,
-                  start: 10744,
-                  end: 10773,
-                  pattern_start: 10755,
-                  pattern_end: 10764
-                });
-              }
-              loop$ctx = ctx;
-              loop$inlines = tail$1;
-              loop$acc = flatten(toList([
-                consume_delims(ctx, style2, opener$2.len, len, inner$1),
-                acc
-              ]));
-              loop$resolves = true;
-            } else {
-              loop$ctx = ctx;
-              loop$inlines = rest;
-              loop$acc = prepend(new Delim(style2, len, can_open, true), acc);
-              loop$resolves = resolves$2;
-            }
-          }
-        } else {
-          let any2 = $;
-          let rest = inlines.tail;
-          loop$ctx = ctx;
-          loop$inlines = rest;
-          loop$acc = prepend(any2, acc);
-          loop$resolves = resolves;
-        }
-      } else {
-        let any2 = $;
-        let rest = inlines.tail;
-        loop$ctx = ctx;
-        loop$inlines = rest;
-        loop$acc = prepend(any2, acc);
-        loop$resolves = resolves;
-      }
-    }
-  }
-}
-function do_inlines(ctx, text4) {
-  let _pipe = do_parse_inlines(with_state(ctx, text4), "", toList([]));
-  let _pipe$1 = resolve_delims(_pipe);
-  let _pipe$2 = ((state) => {
-    return state.inlines;
-  })(_pipe$1);
-  return reverse(_pipe$2);
-}
-function do_checkbox_inlines(ctx, raw24) {
-  let $ = try_parse_checkbox(raw24);
-  if ($ instanceof Ok) {
-    let checkbox = $[0][0];
-    let raw$1 = $[0][1];
-    return prepend(checkbox, do_inlines(ctx, raw$1));
-  } else {
-    return do_inlines(ctx, raw24);
-  }
-}
-function matching_opener(loop$ctx, loop$style, loop$len, loop$acc, loop$rest, loop$strict, loop$resolves) {
-  while (true) {
-    let ctx = loop$ctx;
-    let style2 = loop$style;
-    let len = loop$len;
-    let acc = loop$acc;
-    let rest = loop$rest;
-    let strict = loop$strict;
-    let resolves = loop$resolves;
-    if (rest instanceof Empty) {
-      return [toList([]), new None, acc, resolves];
-    } else {
-      let $ = rest.head;
-      if ($ instanceof Delim) {
-        let $1 = $.can_open;
-        if ($1) {
-          let match_style = $.style;
-          let match_len = $.len;
-          if (match_style === style2 && (!strict || match_len === len)) {
-            let tail = rest.tail;
-            let can_close = $.can_close;
-            return [
-              acc,
-              new Some(new Delim(style2, match_len, true, can_close)),
-              tail,
-              true
-            ];
-          } else {
-            let inline = $;
-            let tail = rest.tail;
-            loop$ctx = ctx;
-            loop$style = style2;
-            loop$len = len;
-            loop$acc = prepend(inline, acc);
-            loop$rest = tail;
-            loop$strict = strict;
-            loop$resolves = resolves;
-          }
-        } else {
-          let $2 = $.can_close;
-          if ($2) {
-            let $3 = do_resolve_delims(ctx, rest, toList([]), resolves);
-            let new_rest;
-            let resolves$1;
-            new_rest = $3[0];
-            resolves$1 = $3[1];
-            if (new_rest instanceof Empty) {
-              loop$ctx = ctx;
-              loop$style = style2;
-              loop$len = len;
-              loop$acc = acc;
-              loop$rest = new_rest;
-              loop$strict = strict;
-              loop$resolves = resolves$1;
-            } else {
-              let $4 = new_rest.head;
-              if ($4 instanceof Delim) {
-                let $5 = $4.can_open;
-                if (!$5) {
-                  let $6 = $4.can_close;
-                  if ($6) {
-                    let new_rest$1 = new_rest.tail;
-                    let style$1 = $4.style;
-                    let len$1 = $4.len;
-                    loop$ctx = ctx;
-                    loop$style = style$1;
-                    loop$len = len$1;
-                    loop$acc = prepend(new Delim(style$1, len$1, false, true), acc);
-                    loop$rest = new_rest$1;
-                    loop$strict = strict;
-                    loop$resolves = resolves$1;
-                  } else {
-                    loop$ctx = ctx;
-                    loop$style = style2;
-                    loop$len = len;
-                    loop$acc = acc;
-                    loop$rest = new_rest;
-                    loop$strict = strict;
-                    loop$resolves = resolves$1;
-                  }
-                } else {
-                  loop$ctx = ctx;
-                  loop$style = style2;
-                  loop$len = len;
-                  loop$acc = acc;
-                  loop$rest = new_rest;
-                  loop$strict = strict;
-                  loop$resolves = resolves$1;
-                }
-              } else {
-                loop$ctx = ctx;
-                loop$style = style2;
-                loop$len = len;
-                loop$acc = acc;
-                loop$rest = new_rest;
-                loop$strict = strict;
-                loop$resolves = resolves$1;
-              }
-            }
-          } else {
-            let inline = $;
-            let tail = rest.tail;
-            loop$ctx = ctx;
-            loop$style = style2;
-            loop$len = len;
-            loop$acc = prepend(inline, acc);
-            loop$rest = tail;
-            loop$strict = strict;
-            loop$resolves = resolves;
-          }
-        }
-      } else {
-        let inline = $;
-        let tail = rest.tail;
-        loop$ctx = ctx;
-        loop$style = style2;
-        loop$len = len;
-        loop$acc = prepend(inline, acc);
-        loop$rest = tail;
-        loop$strict = strict;
-        loop$resolves = resolves;
-      }
-    }
-  }
+function do_parse_linkref(ctx, acc, inlines) {
+  return parse_common_linkref(ctx, acc, inlines, "[", (var0, var1) => {
+    return new FullLink(var0, var1);
+  }, (var0, var1) => {
+    return new RefLink(var0, var1);
+  });
 }
 function do_parse_footnote(ctx, acc, inlines) {
   let start5 = "[^";
@@ -17534,46 +17354,6 @@ function do_parse_footnote(ctx, acc, inlines) {
     });
   });
 }
-function parse_common_linkref(ctx, acc, inlines, start5, full, ref2) {
-  let stackpos = length(ctx.stack);
-  let inlines$1 = push_text(acc, inlines);
-  let _block;
-  let _pipe = do_parse_inlines(new Context(ctx.cache, ctx.state, prepend("]", ctx.stack), ctx.doc, ctx.nest), "", toList([]));
-  _block = resolve_delims(_pipe);
-  let inner = _block;
-  let $ = gobble_link_label(ctx.cache.sp_link_label, ctx.state.start);
-  let text4;
-  text4 = $[0];
-  return lazy_guard(length(inner.ctx.stack) !== stackpos, () => {
-    return do_parse_inlines(ctx, start5, inlines$1);
-  }, () => {
-    return lazy_guard(start5 !== "![" && contains_a_link(inner.inlines), () => {
-      let inlines$2 = flatten(toList([
-        toList([new Text2("]")]),
-        inner.inlines,
-        toList([new Text2(start5)]),
-        inlines$1
-      ]));
-      return do_parse_inlines(inner.ctx, "", inlines$2);
-    }, () => {
-      let rest = inner.ctx.state.start;
-      if (rest.startsWith("(")) {
-        let rest$1 = rest.slice(1);
-        return link_handle_parens(inner.ctx, start5, rest$1, text4, inner.inlines, inlines$1, ref2, full);
-      } else if (rest.startsWith("[]")) {
-        let post2 = "[]";
-        let rest$1 = rest.slice(2);
-        return link_handle_reference(inner.ctx, start5, rest$1, post2, text4, inner.inlines, inlines$1, ref2);
-      } else if (rest.startsWith("[")) {
-        let post2 = "[";
-        let rest$1 = rest.slice(1);
-        return link_handle_reference(inner.ctx, start5, rest$1, post2, text4, inner.inlines, inlines$1, ref2);
-      } else {
-        return link_handle_reference(inner.ctx, start5, rest, "", text4, inner.inlines, inlines$1, ref2);
-      }
-    });
-  });
-}
 function do_parse_image(ctx, acc, inlines) {
   return parse_common_linkref(ctx, acc, inlines, "![", (var0, var1) => {
     return new FullImage(var0, var1);
@@ -17581,12 +17361,444 @@ function do_parse_image(ctx, acc, inlines) {
     return new RefImage(var0, var1);
   });
 }
-function do_parse_linkref(ctx, acc, inlines) {
-  return parse_common_linkref(ctx, acc, inlines, "[", (var0, var1) => {
-    return new FullLink(var0, var1);
-  }, (var0, var1) => {
-    return new RefLink(var0, var1);
+function do_parse_inline_html(ctx, acc, inlines) {
+  let $ = split_at_tag(ctx, ctx.state.start);
+  let html;
+  let gt;
+  let tail;
+  html = $[0];
+  gt = $[1];
+  tail = $[2];
+  return lazy_guard(gt === "", () => {
+    return do_parse_inlines(ctx, acc + "<", inlines);
+  }, () => {
+    return lazy_guard(check2(ctx.cache.autolink, html), () => {
+      return do_parse_inlines(with_state(ctx, tail), "", prepend(new Autolink(html, new None), push_text(acc, inlines)));
+    }, () => {
+      return lazy_guard(check2(ctx.cache.email_autolink, html), () => {
+        return do_parse_inlines(with_state(ctx, tail), "", prepend(new EmailAutolink(html), prepend(new Text2(acc), inlines)));
+      }, () => {
+        return lazy_guard(ctx.cache.is_a_html_tag("<" + html + ">", false, false), () => {
+          return do_parse_inlines(with_state(ctx, tail), "", prepend(new RawHtml("<" + html + ">"), prepend(new Text2(acc), inlines)));
+        }, () => {
+          let $1 = html.charCodeAt(0);
+          if (html === "![CDATA[") {
+            let $2 = split_once(tail, "]]>");
+            if ($2 instanceof Ok) {
+              let bod = $2[0][0];
+              let tail$1 = $2[0][1];
+              return do_parse_inlines(with_state(ctx, tail$1), "", prepend(new RawHtml("<" + html + ">" + bod + "]]>"), prepend(new Text2(acc), inlines)));
+            } else {
+              return do_parse_inlines(ctx, acc + "<", inlines);
+            }
+          } else if ($1 === 33) {
+            return do_parse_inlines(with_state(ctx, tail), "", prepend(new RawHtml("<" + html + ">"), prepend(new Text2(acc), inlines)));
+          } else if ($1 === 63) {
+            return do_parse_inlines(with_state(ctx, tail), "", prepend(new RawHtml("<" + html + ">"), prepend(new Text2(acc), inlines)));
+          } else {
+            return do_parse_inlines(ctx, acc + "<", inlines);
+          }
+        });
+      });
+    });
   });
+}
+function do_inline_escape(ctx, acc, inlines) {
+  let $ = ctx.state.start;
+  let $1 = $.charCodeAt(0);
+  if ($ === "") {
+    return new InlineState(ctx, prepend(new Text2(acc + "\\"), inlines));
+  } else if ($1 === 34) {
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + "\\\"", inlines);
+  } else if ($1 === 38) {
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + "\\&", inlines);
+  } else if ($1 === 60) {
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + "\\<", inlines);
+  } else if ($1 === 62) {
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + "\\>", inlines);
+  } else if ($1 === 92) {
+    let ch = "\\";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 33) {
+    let ch = "!";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 35) {
+    let ch = "#";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 36) {
+    let ch = "$";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 37) {
+    let ch = "%";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 39) {
+    let ch = "'";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 40) {
+    let ch = "(";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 41) {
+    let ch = ")";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 42) {
+    let ch = "*";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 43) {
+    let ch = "+";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 44) {
+    let ch = ",";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 45) {
+    let ch = "-";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 46) {
+    let ch = ".";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 47) {
+    let ch = "/";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 58) {
+    let ch = ":";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 59) {
+    let ch = ";";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 61) {
+    let ch = "=";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 63) {
+    let ch = "?";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 64) {
+    let ch = "@";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 91) {
+    let ch = "[";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 93) {
+    let ch = "]";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 94) {
+    let ch = "^";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 95) {
+    let ch = "_";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 96) {
+    let ch = "`";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 123) {
+    let ch = "{";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 124) {
+    let ch = "|";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 125) {
+    let ch = "}";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 126) {
+    let ch = "~";
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), acc + ch, inlines);
+  } else if ($1 === 10) {
+    let rest = $.slice(1);
+    return do_parse_inlines(with_state(ctx, rest), "", prepend(new HardBreak, push_text(acc, inlines)));
+  } else {
+    return do_parse_inlines(ctx, acc + "\\", inlines);
+  }
+}
+function do_parse_inlines(loop$ctx, loop$acc, loop$inlines) {
+  while (true) {
+    let ctx = loop$ctx;
+    let acc = loop$acc;
+    let inlines = loop$inlines;
+    let $ = split5(ctx.cache.sp_inline, ctx.state.start);
+    let l;
+    let sep;
+    let r;
+    l = $[0];
+    sep = $[1];
+    r = $[2];
+    let acc$1 = acc + l;
+    if (sep === "") {
+      return new InlineState(ctx, push_text(acc$1, inlines));
+    } else if (sep === ">") {
+      let ch = sep;
+      loop$ctx = with_state(ctx, r);
+      loop$acc = acc$1 + ch;
+      loop$inlines = inlines;
+    } else if (sep === "&") {
+      let ch = sep;
+      loop$ctx = with_state(ctx, r);
+      loop$acc = acc$1 + ch;
+      loop$inlines = inlines;
+    } else if (sep === '"') {
+      let ch = sep;
+      loop$ctx = with_state(ctx, r);
+      loop$acc = acc$1 + ch;
+      loop$inlines = inlines;
+    } else if (sep === "\\") {
+      return do_inline_escape(with_state(ctx, r), acc$1, inlines);
+    } else if (sep === "<") {
+      return do_parse_inline_html(with_state(ctx, r), acc$1, inlines);
+    } else if (sep === "![") {
+      return do_parse_image(with_state(ctx, r), acc$1, inlines);
+    } else if (sep === "[^") {
+      return do_parse_footnote(with_state(ctx, r), acc$1, inlines);
+    } else if (sep === "[") {
+      return do_parse_linkref(with_state(ctx, r), acc$1, inlines);
+    } else if (sep === "`") {
+      let $1 = take_quot_run(r, 1);
+      let run2;
+      let rest;
+      run2 = $1[0];
+      rest = $1[1];
+      return do_parse_codespan(with_state(ctx, rest), run2, acc$1, inlines);
+    } else if (sep === "*") {
+      let $1 = take_star_run(r, 1);
+      let run2;
+      let rest;
+      run2 = $1[0];
+      rest = $1[1];
+      return parse_delim(with_state(ctx, rest), "*", run2, acc$1, inlines);
+    } else if (sep === "_") {
+      let $1 = ctx.doc.options.emojis && contains_string(acc$1, ":");
+      if ($1) {
+        return handle_und_emoji(acc$1, "_", r, ctx, inlines);
+      } else {
+        let $2 = take_unds_run(r, 1);
+        let run2;
+        let rest;
+        run2 = $2[0];
+        rest = $2[1];
+        return parse_delim(with_state(ctx, rest), "_", run2, acc$1, inlines);
+      }
+    } else if (sep === "~~") {
+      let $1 = ends_with(l, "~") || starts_with(r, "~");
+      if ($1) {
+        loop$ctx = with_state(ctx, r);
+        loop$acc = acc$1 + "~~";
+        loop$inlines = inlines;
+      } else {
+        return parse_delim(with_state(ctx, r), "~", 2, acc$1, inlines);
+      }
+    } else if (sep === "==") {
+      let $1 = ends_with(l, "=") || starts_with(r, "=");
+      if ($1) {
+        loop$ctx = with_state(ctx, r);
+        loop$acc = acc$1 + "==";
+        loop$inlines = inlines;
+      } else {
+        return parse_delim(with_state(ctx, r), "=", 2, acc$1, inlines);
+      }
+    } else if (sep === `
+`) {
+      loop$ctx = with_state(ctx, r);
+      loop$acc = "";
+      loop$inlines = make_break(acc$1, inlines);
+    } else if (sep === "]") {
+      let $1 = ctx.stack;
+      if ($1 instanceof Empty) {
+        loop$ctx = with_state(ctx, r);
+        loop$acc = acc$1 + "]";
+        loop$inlines = inlines;
+      } else {
+        let $2 = $1.head;
+        if ($2 === "]") {
+          let stack = $1.tail;
+          let ctx$1 = new Context(ctx.cache, new_state(r, ctx.cache.sp_line), stack, ctx.doc, ctx.nest);
+          return new InlineState(ctx$1, push_text(acc$1, inlines));
+        } else {
+          throw makeError("panic", FILEPATH6, "mork/internal/inlines", 186, "do_parse_inlines", "non-bracket on the stack", {});
+        }
+      }
+    } else if (sep === "https://") {
+      let $1 = ctx.doc.options.autolinks;
+      if ($1) {
+        return do_parse_autolink(ctx, sep, r, acc$1, inlines);
+      } else {
+        loop$ctx = with_state(ctx, r);
+        loop$acc = acc$1 + sep;
+        loop$inlines = inlines;
+      }
+    } else if (sep === "http://") {
+      let $1 = ctx.doc.options.autolinks;
+      if ($1) {
+        return do_parse_autolink(ctx, sep, r, acc$1, inlines);
+      } else {
+        loop$ctx = with_state(ctx, r);
+        loop$acc = acc$1 + sep;
+        loop$inlines = inlines;
+      }
+    } else if (sep === "www.") {
+      let $1 = ctx.doc.options.autolinks;
+      if ($1) {
+        return do_parse_autolink(ctx, sep, r, acc$1, inlines);
+      } else {
+        loop$ctx = with_state(ctx, r);
+        loop$acc = acc$1 + sep;
+        loop$inlines = inlines;
+      }
+    } else {
+      throw makeError("panic", FILEPATH6, "mork/internal/inlines", 194, "do_parse_inlines", "unimplemented inline: " + sep, {});
+    }
+  }
+}
+function do_inlines(ctx, text4) {
+  let _pipe = do_parse_inlines(with_state(ctx, text4), "", toList([]));
+  let _pipe$1 = resolve_delims(_pipe);
+  let _pipe$2 = ((state) => {
+    return state.inlines;
+  })(_pipe$1);
+  return reverse(_pipe$2);
+}
+function try_parse_checkbox(raw26) {
+  let raw$1 = gobble_hspace(raw26);
+  return try_pop("[", raw$1, (raw27) => {
+    if (raw27.startsWith(" ]")) {
+      let rest = raw27.slice(2);
+      return new Ok([new Checkbox(false), rest]);
+    } else if (raw27.startsWith("x]")) {
+      let rest = raw27.slice(2);
+      return new Ok([new Checkbox(true), rest]);
+    } else {
+      return new Error(undefined);
+    }
+  });
+}
+function do_checkbox_inlines(ctx, raw26) {
+  let $ = try_parse_checkbox(raw26);
+  if ($ instanceof Ok) {
+    let checkbox = $[0][0];
+    let raw$1 = $[0][1];
+    return prepend(checkbox, do_inlines(ctx, raw$1));
+  } else {
+    return do_inlines(ctx, raw26);
+  }
+}
+function do_item_blocks(ctx, blocks) {
+  let $ = ctx.doc.options.tasklists;
+  if ($) {
+    if (blocks instanceof Empty) {
+      return map2(blocks, (_capture) => {
+        return parse_block_inlines(ctx, _capture);
+      });
+    } else {
+      let $1 = blocks.head;
+      if ($1 instanceof Paragraph) {
+        let blocks$1 = blocks.tail;
+        let raw26 = $1.raw;
+        let first3 = new Paragraph("", do_checkbox_inlines(ctx, raw26));
+        let rest = map2(blocks$1, (_capture) => {
+          return parse_block_inlines(ctx, _capture);
+        });
+        return prepend2(rest, first3);
+      } else {
+        return map2(blocks, (_capture) => {
+          return parse_block_inlines(ctx, _capture);
+        });
+      }
+    }
+  } else {
+    return map2(blocks, (_capture) => {
+      return parse_block_inlines(ctx, _capture);
+    });
+  }
+}
+function parse_block_inlines(ctx, block) {
+  if (block instanceof BlockQuote) {
+    let blocks = block.blocks;
+    return new BlockQuote(map2(blocks, (_capture) => {
+      return parse_block_inlines(ctx, _capture);
+    }));
+  } else if (block instanceof BulletList) {
+    let pack = block.pack;
+    let items = block.items;
+    return new BulletList(pack, map2(items, (item) => {
+      return new ListItem(do_item_blocks(ctx, item.blocks), item.ends_with_blank, item.contains_blank);
+    }));
+  } else if (block instanceof Heading) {
+    let level = block.level;
+    let id2 = block.id;
+    let raw26 = block.raw;
+    return new Heading(level, id2, "", do_inlines(ctx, raw26));
+  } else if (block instanceof OrderedList) {
+    let pack = block.pack;
+    let items = block.items;
+    let start5 = block.start;
+    return new OrderedList(pack, map2(items, (item) => {
+      return new ListItem(do_item_blocks(ctx, item.blocks), item.ends_with_blank, item.contains_blank);
+    }), start5);
+  } else if (block instanceof Paragraph) {
+    let raw26 = block.raw;
+    return new Paragraph("", do_inlines(ctx, raw26));
+  } else if (block instanceof Table) {
+    let header = block.header;
+    let rows = block.rows;
+    return new Table(map2(header, (head) => {
+      return new THead(head.align, "", do_inlines(ctx, head.raw));
+    }), map2(rows, (_capture) => {
+      return map2(_capture, (cell) => {
+        return new Cell("", do_inlines(ctx, cell.raw));
+      });
+    }));
+  } else {
+    return block;
+  }
+}
+function parse_footnote_blocks(ctx, data2) {
+  return new FootnoteData(data2.num, map2(data2.blocks, (_capture) => {
+    return parse_block_inlines(ctx, _capture);
+  }));
+}
+function process_inlines(ctx) {
+  let blocks = map2(ctx.doc.blocks, (_capture) => {
+    return parse_block_inlines(ctx, _capture);
+  });
+  let _block;
+  let $ = ctx.doc.options.footnotes;
+  if ($) {
+    _block = map(ctx.doc.footnotes, (_, v) => {
+      return parse_footnote_blocks(ctx, v);
+    });
+  } else {
+    _block = ctx.doc.footnotes;
+  }
+  let footnotes = _block;
+  let _record = ctx.doc;
+  return new Document(_record.options, blocks, _record.links, footnotes);
 }
 
 // build/dev/javascript/mork/mork.mjs
@@ -17679,21 +17891,9 @@ class Components extends CustomType {
     this.ul = ul2;
   }
 }
-function img2(components, img3) {
-  return new Components(components.a, components.blockquote, components.checkbox, components.code, components.del, components.em, components.footnote, components.h1, components.h2, components.h3, components.h4, components.h5, components.h6, components.hr, img3, components.li, components.mark, components.ol, components.p, components.pre, components.strong, components.table, components.tbody, components.td, components.th, components.thead, components.tr, components.ul);
-}
 function default_view(view3) {
   return (children) => {
     return view3(toList([]), children);
-  };
-}
-function heading_view(view3) {
-  return (id2, children) => {
-    if (id2 === "") {
-      return view3(toList([]), children);
-    } else {
-      return view3(toList([id(id2)]), children);
-    }
   };
 }
 function aligned_cell_view(view3) {
@@ -17708,6 +17908,15 @@ function aligned_cell_view(view3) {
     }
     let align_value = _block;
     return view3(toList([style("text-align", align_value)]), children);
+  };
+}
+function heading_view(view3) {
+  return (id2, children) => {
+    if (id2 === "") {
+      return view3(toList([]), children);
+    } else {
+      return view3(toList([id(id2)]), children);
+    }
   };
 }
 function default$2() {
@@ -17776,22 +17985,16 @@ function default$2() {
     }
   }, default_view(p), default_view(pre), default_view(strong), default_view(table), default_view(tbody), aligned_cell_view(td), aligned_cell_view(th), default_view(thead), default_view(tr), default_view(ul));
 }
+function img2(components, img3) {
+  return new Components(components.a, components.blockquote, components.checkbox, components.code, components.del, components.em, components.footnote, components.h1, components.h2, components.h3, components.h4, components.h5, components.h6, components.hr, img3, components.li, components.mark, components.ol, components.p, components.pre, components.strong, components.table, components.tbody, components.td, components.th, components.thead, components.tr, components.ul);
+}
 
 // build/dev/javascript/maud/maud/internal/render.mjs
-function render_autolink(uri, text4, components) {
-  return components.a(uri, new None, toList([text2(unwrap(text4, uri))]));
+function render_thematic_break(components) {
+  return components.hr();
 }
 function render_checkbox(checked2, components) {
   return components.checkbox(checked2);
-}
-function render_footnote(num, children, components) {
-  return components.footnote(num, children);
-}
-function render_pre(language, text4, components) {
-  return components.pre(toList([components.code(language, toList([text2(text4)]))]));
-}
-function render_thematic_break(components) {
-  return components.hr();
 }
 function src2(destination) {
   if (destination instanceof Absolute) {
@@ -17804,13 +18007,6 @@ function src2(destination) {
     let anchor = destination.id;
     return "#" + percent_encode(anchor);
   }
-}
-function html_attributes(attributes) {
-  let _pipe = attributes;
-  let _pipe$1 = to_list(_pipe);
-  return map2(_pipe$1, (pair) => {
-    return attribute2(pair[0], pair[1]);
-  });
 }
 function inlines_to_text(inlines) {
   let _pipe = inlines;
@@ -17848,80 +18044,49 @@ function render_img(inlines, link_data, _, components) {
   let alt2 = inlines_to_text(inlines);
   return components.img(uri, alt2, link_data.title);
 }
-function mork_alignment_to_alignment(alignment) {
-  if (alignment instanceof Left) {
-    return new Left2;
-  } else if (alignment instanceof Right) {
-    return new Right2;
-  } else {
-    return new Center2;
-  }
-}
-function render_blockquote(blocks, document2, components) {
-  let _pipe = blocks;
-  let _pipe$1 = render_blocks(_pipe, document2, components);
-  return components.blockquote(_pipe$1);
-}
-function render_blocks(blocks, document2, components) {
-  return map2(blocks, (block) => {
-    return render_block(block, document2, components, new Loose);
-  });
-}
-function render_block(block, document2, components, pack) {
-  if (block instanceof BlockQuote) {
-    let blocks = block.blocks;
-    return render_blockquote(blocks, document2, components);
-  } else if (block instanceof BulletList) {
-    let pack$1 = block.pack;
-    let items = block.items;
-    return render_ul(pack$1, items, document2, components);
-  } else if (block instanceof Code) {
-    let lang = block.lang;
-    let text4 = block.text;
-    return render_pre(lang, text4, components);
-  } else if (block instanceof Empty2) {
-    return none2();
-  } else if (block instanceof Heading) {
-    let level = block.level;
-    let id2 = block.id;
-    let inlines = block.inlines;
-    return render_heading(level, id2, inlines, document2, components);
-  } else if (block instanceof HtmlBlock) {
-    let raw24 = block.raw;
-    return unsafe_raw_html("", "div", toList([]), raw24);
-  } else if (block instanceof Newline) {
-    return none2();
-  } else if (block instanceof OrderedList) {
-    let pack$1 = block.pack;
-    let items = block.items;
-    let start5 = block.start;
-    return render_ol(start5, pack$1, items, document2, components);
-  } else if (block instanceof Paragraph) {
-    let inlines = block.inlines;
-    return render_paragraph(pack, inlines, document2, components);
-  } else if (block instanceof Table) {
-    let header = block.header;
-    let rows = block.rows;
-    return render_table(header, rows, document2, components);
-  } else {
-    return render_thematic_break(components);
-  }
-}
-function footnote(acc, document2, components) {
-  let _pipe = document2.footnotes;
+function html_attributes(attributes) {
+  let _pipe = attributes;
   let _pipe$1 = to_list(_pipe);
-  let _pipe$2 = sort(_pipe$1, (a2, b) => {
-    return compare3(a2[0], b[0]);
+  return map2(_pipe$1, (pair) => {
+    return attribute2(pair[0], pair[1]);
   });
-  let _pipe$3 = map2(_pipe$2, (tup) => {
-    return tup[1];
-  });
-  let _pipe$4 = flat_map(_pipe$3, (doc) => {
-    return render_blocks(doc.blocks, document2, components);
-  });
-  return ((footnotes) => {
-    return append(acc, footnotes);
-  })(_pipe$4);
+}
+function render_footnote(num, children, components) {
+  return components.footnote(num, children);
+}
+function render_autolink(uri, text4, components) {
+  return components.a(uri, new None, toList([text2(unwrap(text4, uri))]));
+}
+function render_strong(inlines, document2, components) {
+  let _pipe = inlines;
+  let _pipe$1 = render_inlines(_pipe, document2, components);
+  return components.strong(_pipe$1);
+}
+function render_strikethrough(inlines, document2, components) {
+  let _pipe = inlines;
+  let _pipe$1 = render_inlines(_pipe, document2, components);
+  return components.del(_pipe$1);
+}
+function render_a(inlines, link_data, document2, components) {
+  let href2 = src2(link_data.dest);
+  let _pipe = inlines;
+  let _pipe$1 = render_inlines(_pipe, document2, components);
+  return ((children) => {
+    return components.a(href2, link_data.title, children);
+  })(_pipe$1);
+}
+function render_inline_html(tag, attributes, children, document2, components) {
+  return element2(tag, html_attributes(attributes), render_inlines(children, document2, components));
+}
+function render_highlight(inlines, document2, components) {
+  let _pipe = inlines;
+  let _pipe$1 = render_inlines(_pipe, document2, components);
+  return components.mark(_pipe$1);
+}
+function render_emphasis(inlines, document2, components) {
+  let _pipe = inlines;
+  let _pipe$1 = render_inlines(_pipe, document2, components);
+  return components.em(_pipe$1);
 }
 function render_inline(document2, inline, components) {
   if (inline instanceof Autolink) {
@@ -18006,65 +18171,19 @@ function render_inline(document2, inline, components) {
     return text2(repeat(style2, len));
   }
 }
-function render_strong(inlines, document2, components) {
-  let _pipe = inlines;
-  let _pipe$1 = render_inlines(_pipe, document2, components);
-  return components.strong(_pipe$1);
-}
 function render_inlines(inlines, document2, components) {
   return map2(inlines, (inline) => {
     return render_inline(document2, inline, components);
   });
 }
-function render_a(inlines, link_data, document2, components) {
-  let href2 = src2(link_data.dest);
-  let _pipe = inlines;
-  let _pipe$1 = render_inlines(_pipe, document2, components);
-  return ((children) => {
-    return components.a(href2, link_data.title, children);
-  })(_pipe$1);
-}
-function render_emphasis(inlines, document2, components) {
-  let _pipe = inlines;
-  let _pipe$1 = render_inlines(_pipe, document2, components);
-  return components.em(_pipe$1);
-}
-function render_heading(level, id2, inlines, document2, components) {
-  let children = render_inlines(inlines, document2, components);
-  if (level === 1) {
-    return components.h1(id2, children);
-  } else if (level === 2) {
-    return components.h2(id2, children);
-  } else if (level === 3) {
-    return components.h3(id2, children);
-  } else if (level === 4) {
-    return components.h4(id2, children);
-  } else if (level === 5) {
-    return components.h5(id2, children);
+function mork_alignment_to_alignment(alignment) {
+  if (alignment instanceof Left) {
+    return new Left2;
+  } else if (alignment instanceof Right) {
+    return new Right2;
   } else {
-    return components.h6(id2, children);
+    return new Center2;
   }
-}
-function render_highlight(inlines, document2, components) {
-  let _pipe = inlines;
-  let _pipe$1 = render_inlines(_pipe, document2, components);
-  return components.mark(_pipe$1);
-}
-function render_inline_html(tag, attributes, children, document2, components) {
-  return element2(tag, html_attributes(attributes), render_inlines(children, document2, components));
-}
-function render_paragraph(pack, inlines, document2, components) {
-  let text4 = render_inlines(inlines, document2, components);
-  if (pack instanceof Loose) {
-    return components.p(text4);
-  } else {
-    return fragment2(text4);
-  }
-}
-function render_strikethrough(inlines, document2, components) {
-  let _pipe = inlines;
-  let _pipe$1 = render_inlines(_pipe, document2, components);
-  return components.del(_pipe$1);
 }
 function render_td(alignment, items, document2, components) {
   let align = mork_alignment_to_alignment(alignment);
@@ -18111,6 +18230,33 @@ function render_table(header, rows, document2, components) {
   let tbody2 = render_tbody(rows, aligns, document2, components);
   return components.table(toList([thead2, tbody2]));
 }
+function render_paragraph(pack, inlines, document2, components) {
+  let text4 = render_inlines(inlines, document2, components);
+  if (pack instanceof Loose) {
+    return components.p(text4);
+  } else {
+    return fragment2(text4);
+  }
+}
+function render_heading(level, id2, inlines, document2, components) {
+  let children = render_inlines(inlines, document2, components);
+  if (level === 1) {
+    return components.h1(id2, children);
+  } else if (level === 2) {
+    return components.h2(id2, children);
+  } else if (level === 3) {
+    return components.h3(id2, children);
+  } else if (level === 4) {
+    return components.h4(id2, children);
+  } else if (level === 5) {
+    return components.h5(id2, children);
+  } else {
+    return components.h6(id2, children);
+  }
+}
+function render_pre(language, text4, components) {
+  return components.pre(toList([components.code(language, toList([text2(text4)]))]));
+}
 function render_list_item(list_item, pack, document2, components) {
   let _pipe = list_item.blocks;
   let _pipe$1 = flat_map(_pipe, (block) => {
@@ -18139,6 +18285,72 @@ function render_ul(pack, items, document2, components) {
   });
   return components.ul(_pipe$1);
 }
+function render_blockquote(blocks, document2, components) {
+  let _pipe = blocks;
+  let _pipe$1 = render_blocks(_pipe, document2, components);
+  return components.blockquote(_pipe$1);
+}
+function render_block(block, document2, components, pack) {
+  if (block instanceof BlockQuote) {
+    let blocks = block.blocks;
+    return render_blockquote(blocks, document2, components);
+  } else if (block instanceof BulletList) {
+    let pack$1 = block.pack;
+    let items = block.items;
+    return render_ul(pack$1, items, document2, components);
+  } else if (block instanceof Code) {
+    let lang = block.lang;
+    let text4 = block.text;
+    return render_pre(lang, text4, components);
+  } else if (block instanceof Empty2) {
+    return none2();
+  } else if (block instanceof Heading) {
+    let level = block.level;
+    let id2 = block.id;
+    let inlines = block.inlines;
+    return render_heading(level, id2, inlines, document2, components);
+  } else if (block instanceof HtmlBlock) {
+    let raw26 = block.raw;
+    return unsafe_raw_html("", "div", toList([]), raw26);
+  } else if (block instanceof Newline) {
+    return none2();
+  } else if (block instanceof OrderedList) {
+    let pack$1 = block.pack;
+    let items = block.items;
+    let start5 = block.start;
+    return render_ol(start5, pack$1, items, document2, components);
+  } else if (block instanceof Paragraph) {
+    let inlines = block.inlines;
+    return render_paragraph(pack, inlines, document2, components);
+  } else if (block instanceof Table) {
+    let header = block.header;
+    let rows = block.rows;
+    return render_table(header, rows, document2, components);
+  } else {
+    return render_thematic_break(components);
+  }
+}
+function render_blocks(blocks, document2, components) {
+  return map2(blocks, (block) => {
+    return render_block(block, document2, components, new Loose);
+  });
+}
+function footnote(acc, document2, components) {
+  let _pipe = document2.footnotes;
+  let _pipe$1 = to_list(_pipe);
+  let _pipe$2 = sort(_pipe$1, (a2, b) => {
+    return compare3(a2[0], b[0]);
+  });
+  let _pipe$3 = map2(_pipe$2, (tup) => {
+    return tup[1];
+  });
+  let _pipe$4 = flat_map(_pipe$3, (doc) => {
+    return render_blocks(doc.blocks, document2, components);
+  });
+  return ((footnotes) => {
+    return append(acc, footnotes);
+  })(_pipe$4);
+}
 
 // build/dev/javascript/maud/maud.mjs
 function render_document(document2, components) {
@@ -18158,18 +18370,18 @@ var github_proxy_prefixes = /* @__PURE__ */ toList([
   "https://user-images.githubusercontent.com/",
   "https://avatars.githubusercontent.com/"
 ]);
-function convert_picture_tags(text4) {
-  let $ = compile2("<picture[^>]*>[\\s\\S]*?(<img[^>]*>)[\\s\\S]*?</picture>", new Options2(true, true));
+function convert_video_tags(text4) {
+  let $ = compile2('<video[^>]*?\\bsrc="([^"]*?)"[^>]*/?>(?:[\\s\\S]*?</video>)?', new Options2(true, true));
   let re;
   if ($ instanceof Ok) {
     re = $[0];
   } else {
-    throw makeError("let_assert", FILEPATH7, "client/markdown", 85, "convert_picture_tags", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH7, "client/markdown", 153, "convert_video_tags", "Pattern match failed, no pattern matched the value.", {
       value: $,
-      start: 2448,
-      end: 2623,
-      pattern_start: 2459,
-      pattern_end: 2465
+      start: 4638,
+      end: 4820,
+      pattern_start: 4649,
+      pattern_end: 4655
     });
   }
   let matches2 = scan2(re, text4);
@@ -18181,14 +18393,70 @@ function convert_picture_tags(text4) {
     } else {
       let $2 = $1.head;
       if ($2 instanceof Some) {
-        let img3 = $2[0];
-        _block = img3;
+        let s = $2[0];
+        _block = s;
       } else {
         _block = "";
       }
     }
-    let img_tag = _block;
-    return replace(acc, m.content, img_tag);
+    let src3 = _block;
+    let replacement = "[Video](" + src3 + ")";
+    return replace(acc, m.content, replacement);
+  });
+}
+function convert_details_tags(text4) {
+  let $ = compile2("<details[^>]*>[\\s\\S]*?<summary[^>]*>([\\s\\S]*?)</summary>([\\s\\S]*?)</details>", new Options2(true, true));
+  let re;
+  if ($ instanceof Ok) {
+    re = $[0];
+  } else {
+    throw makeError("let_assert", FILEPATH7, "client/markdown", 134, "convert_details_tags", "Pattern match failed, no pattern matched the value.", {
+      value: $,
+      start: 3903,
+      end: 4104,
+      pattern_start: 3914,
+      pattern_end: 3920
+    });
+  }
+  let matches2 = scan2(re, text4);
+  return fold2(matches2, text4, (acc, m) => {
+    let _block;
+    let $2 = m.submatches;
+    if ($2 instanceof Empty) {
+      _block = ["Details", ""];
+    } else {
+      let $3 = $2.head;
+      if ($3 instanceof Some) {
+        let $4 = $2.tail;
+        if ($4 instanceof Empty) {
+          let s = $3[0];
+          _block = [trim(s), ""];
+        } else {
+          let $5 = $4.head;
+          if ($5 instanceof Some) {
+            let s = $3[0];
+            let b = $5[0];
+            _block = [trim(s), trim(b)];
+          } else {
+            let s = $3[0];
+            _block = [trim(s), ""];
+          }
+        }
+      } else {
+        _block = ["Details", ""];
+      }
+    }
+    let $1 = _block;
+    let summary;
+    let body;
+    summary = $1[0];
+    body = $1[1];
+    let replacement = "> **" + summary + `**
+>
+> ` + replace(body, `
+`, `
+> `);
+    return replace(acc, m.content, replacement);
   });
 }
 function convert_html_images(text4) {
@@ -18258,73 +18526,18 @@ function convert_html_images(text4) {
     return replace(acc, m.content, replacement);
   });
 }
-function convert_details_tags(text4) {
-  let $ = compile2("<details[^>]*>[\\s\\S]*?<summary[^>]*>([\\s\\S]*?)</summary>([\\s\\S]*?)</details>", new Options2(true, true));
+function convert_picture_tags(text4) {
+  let $ = compile2("<picture[^>]*>[\\s\\S]*?(<img[^>]*>)[\\s\\S]*?</picture>", new Options2(true, true));
   let re;
   if ($ instanceof Ok) {
     re = $[0];
   } else {
-    throw makeError("let_assert", FILEPATH7, "client/markdown", 134, "convert_details_tags", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH7, "client/markdown", 85, "convert_picture_tags", "Pattern match failed, no pattern matched the value.", {
       value: $,
-      start: 3903,
-      end: 4104,
-      pattern_start: 3914,
-      pattern_end: 3920
-    });
-  }
-  let matches2 = scan2(re, text4);
-  return fold2(matches2, text4, (acc, m) => {
-    let _block;
-    let $2 = m.submatches;
-    if ($2 instanceof Empty) {
-      _block = ["Details", ""];
-    } else {
-      let $3 = $2.head;
-      if ($3 instanceof Some) {
-        let $4 = $2.tail;
-        if ($4 instanceof Empty) {
-          let s = $3[0];
-          _block = [trim(s), ""];
-        } else {
-          let $5 = $4.head;
-          if ($5 instanceof Some) {
-            let s = $3[0];
-            let b = $5[0];
-            _block = [trim(s), trim(b)];
-          } else {
-            let s = $3[0];
-            _block = [trim(s), ""];
-          }
-        }
-      } else {
-        _block = ["Details", ""];
-      }
-    }
-    let $1 = _block;
-    let summary;
-    let body;
-    summary = $1[0];
-    body = $1[1];
-    let replacement = "> **" + summary + `**
->
-> ` + replace(body, `
-`, `
-> `);
-    return replace(acc, m.content, replacement);
-  });
-}
-function convert_video_tags(text4) {
-  let $ = compile2('<video[^>]*?\\bsrc="([^"]*?)"[^>]*/?>(?:[\\s\\S]*?</video>)?', new Options2(true, true));
-  let re;
-  if ($ instanceof Ok) {
-    re = $[0];
-  } else {
-    throw makeError("let_assert", FILEPATH7, "client/markdown", 153, "convert_video_tags", "Pattern match failed, no pattern matched the value.", {
-      value: $,
-      start: 4638,
-      end: 4820,
-      pattern_start: 4649,
-      pattern_end: 4655
+      start: 2448,
+      end: 2623,
+      pattern_start: 2459,
+      pattern_end: 2465
     });
   }
   let matches2 = scan2(re, text4);
@@ -18336,15 +18549,14 @@ function convert_video_tags(text4) {
     } else {
       let $2 = $1.head;
       if ($2 instanceof Some) {
-        let s = $2[0];
-        _block = s;
+        let img3 = $2[0];
+        _block = img3;
       } else {
         _block = "";
       }
     }
-    let src3 = _block;
-    let replacement = "[Video](" + src3 + ")";
-    return replace(acc, m.content, replacement);
+    let img_tag = _block;
+    return replace(acc, m.content, img_tag);
   });
 }
 function render(text4) {
@@ -18407,6 +18619,1214 @@ function render(text4) {
   })(), custom_components);
 }
 
+// build/dev/javascript/client/client/views/pr_feedback.mjs
+class SnippetLine extends CustomType {
+  constructor(file_line, marker, text4) {
+    super();
+    this.file_line = file_line;
+    this.marker = marker;
+    this.text = text4;
+  }
+}
+
+class DiffHeader extends CustomType {
+}
+
+class NewFileMarker extends CustomType {
+  constructor(path) {
+    super();
+    this.path = path;
+  }
+}
+
+class HunkHeader extends CustomType {
+  constructor(new_start) {
+    super();
+    this.new_start = new_start;
+  }
+}
+
+class ContextLine extends CustomType {
+  constructor(text4) {
+    super();
+    this.text = text4;
+  }
+}
+
+class AddedLine extends CustomType {
+  constructor(text4) {
+    super();
+    this.text = text4;
+  }
+}
+
+class DeletedLine extends CustomType {
+  constructor(text4) {
+    super();
+    this.text = text4;
+  }
+}
+
+class Other2 extends CustomType {
+}
+function nav_link(label2, msg, enabled) {
+  return button(toList([
+    on_click(msg),
+    disabled(!enabled),
+    styles(toList([
+      raw14("0.15rem " + size_2),
+      raw("white"),
+      raw5((() => {
+        if (enabled) {
+          return indigo_7;
+        } else {
+          return gray_5;
+        }
+      })()),
+      raw2("1px solid " + gray_4),
+      raw4(radius_2),
+      raw6((() => {
+        if (enabled) {
+          return "pointer";
+        } else {
+          return "not-allowed";
+        }
+      })()),
+      raw8(font_size_0)
+    ]))
+  ]), toList([text3(label2)]));
+}
+function footer(selected_index, total) {
+  return div(toList([
+    styles(toList([
+      flex,
+      center,
+      raw10(size_3),
+      raw14(size_2 + " " + size_4),
+      raw18("1px solid " + gray_3),
+      raw(gray_1),
+      raw19("0"),
+      raw8(font_size_0),
+      raw5(gray_7)
+    ]))
+  ]), toList([
+    nav_link("← prev", new PrevFeedback, selected_index > 0),
+    nav_link("next →", new NextFeedback, selected_index < total - 1),
+    span(toList([styles(toList([raw7("1")]))]), toList([])),
+    text3((() => {
+      if (total === 0) {
+        return "0 of 0";
+      } else {
+        return to_string(selected_index + 1) + " of " + to_string(total);
+      }
+    })())
+  ]));
+}
+function comment_bubble(comment, is_reply) {
+  return div(toList([
+    styles(toList([
+      raw2("1px solid " + gray_3),
+      raw((() => {
+        if (is_reply) {
+          return gray_1;
+        } else {
+          return "white";
+        }
+      })()),
+      raw4(radius_2),
+      raw14(size_3 + " " + size_4),
+      raw11((() => {
+        if (is_reply) {
+          return "0 0 0 " + size_5;
+        } else {
+          return "0";
+        }
+      })())
+    ]))
+  ]), toList([
+    div(toList([
+      styles(toList([
+        flex,
+        center,
+        raw10(size_2),
+        raw12(size_2)
+      ]))
+    ]), toList([
+      span(toList([styles(toList([raw9("600")]))]), toList([text3(comment.author)])),
+      span(toList([
+        styles(toList([
+          raw5(gray_6),
+          raw8(font_size_0)
+        ]))
+      ]), toList([text3(comment.created_at)]))
+    ])),
+    div(toList([
+      styles(toList([
+        raw8(font_size_1),
+        raw22(font_lineheight_4),
+        break_word
+      ]))
+    ]), render(comment.body))
+  ]));
+}
+function thread_block(comment, replies) {
+  return div(toList([
+    styles(toList([
+      raw14(size_3 + " " + size_4),
+      flex,
+      column,
+      raw10(size_3)
+    ]))
+  ]), flatten(toList([
+    toList([comment_bubble(comment, false)]),
+    map2(replies, (r) => {
+      return comment_bubble(r, true);
+    })
+  ])));
+}
+function snippet_row(line, focus_line, grammar32) {
+  let is_focus = line.file_line === focus_line && line.marker !== "-";
+  let _block;
+  let $1 = line.marker;
+  if (is_focus) {
+    _block = ["#fef3c7", "#f59e0b"];
+  } else if ($1 === "+") {
+    _block = ["#dcfce7", "#22c55e"];
+  } else if ($1 === "-") {
+    _block = ["#fee2e2", "#ef4444"];
+  } else if ($1 === "@") {
+    _block = ["#ede9fe", "#8b5cf6"];
+  } else {
+    _block = ["transparent", "transparent"];
+  }
+  let $ = _block;
+  let bg;
+  let border_color;
+  bg = $[0];
+  border_color = $[1];
+  let _block$1;
+  let $2 = line.file_line;
+  if ($2 === 0) {
+    _block$1 = "";
+  } else {
+    let n = $2;
+    _block$1 = to_string(n);
+  }
+  let gutter_text = _block$1;
+  let _block$2;
+  let $3 = line.marker;
+  if ($3 === "@") {
+    _block$2 = toList([text3(line.text)]);
+  } else {
+    _block$2 = highlight_line(line.text, grammar32);
+  }
+  let highlighted = _block$2;
+  return div(toList([
+    styles(toList([
+      flex,
+      raw(bg),
+      raw17("3px solid " + border_color)
+    ]))
+  ]), toList([
+    span(toList([
+      styles(toList([
+        inline_block,
+        raw24("3.5rem"),
+        raw14("0 " + size_2),
+        right,
+        raw5(gray_5),
+        raw19("0"),
+        ["border-right", "1px solid " + gray_3],
+        raw((() => {
+          if (bg === "transparent") {
+            return gray_1;
+          } else {
+            return "rgba(0,0,0,0.03)";
+          }
+        })())
+      ]))
+    ]), toList([text3(gutter_text)])),
+    span(toList([
+      styles(toList([
+        raw14("0 " + size_3),
+        pre2,
+        raw7("1"),
+        flex
+      ]))
+    ]), toList([
+      span(toList([]), toList([text3(line.marker)])),
+      span(toList([]), highlighted)
+    ]))
+  ]));
+}
+function placeholder_row() {
+  return div(toList([
+    styles(toList([
+      raw14(size_3 + " " + size_4),
+      raw5(gray_5),
+      raw8(font_size_0)
+    ]))
+  ]), toList([text3("(context beyond diff)")]));
+}
+function small_button(label2, msg) {
+  return button(toList([
+    on_click(msg),
+    styles(toList([
+      raw14("0.15rem " + size_2),
+      raw("white"),
+      raw5(gray_8),
+      raw2("1px solid " + gray_4),
+      raw4(radius_2),
+      pointer,
+      raw8(font_size_0)
+    ]))
+  ]), toList([text3(label2)]));
+}
+function snippet_controls(whole_file) {
+  return div(toList([
+    styles(toList([flex, raw10(size_2), center]))
+  ]), toList([
+    small_button("+15 ↑", new ExpandFeedbackUp),
+    small_button("+15 ↓", new ExpandFeedbackDown),
+    (() => {
+      if (whole_file) {
+        return span(toList([
+          styles(toList([
+            raw5(gray_6),
+            raw8(font_size_0)
+          ]))
+        ]), toList([text3("whole file")]));
+      } else {
+        return small_button("Whole file", new ShowWholeFile);
+      }
+    })()
+  ]));
+}
+function window_lines(lines, target2, up, down) {
+  let low = target2 - up;
+  let high = target2 + down;
+  return filter(lines, (l) => {
+    let $ = l.marker;
+    if ($ === "@") {
+      return false;
+    } else {
+      return l.file_line >= low && l.file_line <= high;
+    }
+  });
+}
+function append_snippet(acc, path, entry) {
+  if (path === "") {
+    return acc;
+  } else {
+    if (acc instanceof Empty) {
+      let groups = acc;
+      return prepend([path, toList([entry])], groups);
+    } else {
+      let p2 = acc.head[0];
+      if (p2 === path) {
+        let rest = acc.tail;
+        let lines = acc.head[1];
+        return prepend([p2, prepend(entry, lines)], rest);
+      } else {
+        let groups = acc;
+        return prepend([path, toList([entry])], groups);
+      }
+    }
+  }
+}
+function parse_hunk_new_start(header) {
+  let $ = split2(header, "+");
+  if ($ instanceof Empty) {
+    return 1;
+  } else {
+    let $1 = $.tail;
+    if ($1 instanceof Empty) {
+      return 1;
+    } else {
+      let after_plus = $1.head;
+      let $2 = split2(after_plus, ",");
+      if ($2 instanceof Empty) {
+        return 1;
+      } else {
+        let num_str = $2.head;
+        let $3 = parse_int(num_str);
+        if ($3 instanceof Ok) {
+          let n = $3[0];
+          return n;
+        } else {
+          return 1;
+        }
+      }
+    }
+  }
+}
+function classify_line(line) {
+  let $ = starts_with(line, "diff --git ");
+  if ($) {
+    return new DiffHeader;
+  } else {
+    let $1 = starts_with(line, "+++ b/");
+    if ($1) {
+      return new NewFileMarker(drop_start(line, 6));
+    } else {
+      let $2 = starts_with(line, "+++ ");
+      if ($2) {
+        return new NewFileMarker(drop_start(line, 4));
+      } else {
+        let $3 = starts_with(line, "--- ");
+        if ($3) {
+          return new Other2;
+        } else {
+          let $4 = starts_with(line, "@@");
+          if ($4) {
+            return new HunkHeader(parse_hunk_new_start(line));
+          } else {
+            let $5 = first2(line);
+            if ($5 instanceof Ok) {
+              let $6 = $5[0];
+              if ($6 === "+") {
+                return new AddedLine(drop_start(line, 1));
+              } else if ($6 === "-") {
+                return new DeletedLine(drop_start(line, 1));
+              } else if ($6 === " ") {
+                return new ContextLine(drop_start(line, 1));
+              } else if ($6 === "\\") {
+                return new Other2;
+              } else {
+                return new Other2;
+              }
+            } else {
+              return new Other2;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+function parse_diff(loop$lines, loop$current_path, loop$counter, loop$in_hunk, loop$acc) {
+  while (true) {
+    let lines = loop$lines;
+    let current_path = loop$current_path;
+    let counter = loop$counter;
+    let in_hunk = loop$in_hunk;
+    let acc = loop$acc;
+    if (lines instanceof Empty) {
+      return acc;
+    } else {
+      let line = lines.head;
+      let rest = lines.tail;
+      let $ = classify_line(line);
+      if ($ instanceof DiffHeader) {
+        loop$lines = rest;
+        loop$current_path = "";
+        loop$counter = 0;
+        loop$in_hunk = false;
+        loop$acc = acc;
+      } else if ($ instanceof NewFileMarker) {
+        let path = $.path;
+        loop$lines = rest;
+        loop$current_path = path;
+        loop$counter = 0;
+        loop$in_hunk = false;
+        loop$acc = acc;
+      } else if ($ instanceof HunkHeader) {
+        let new_start = $.new_start;
+        let acc2 = append_snippet(acc, current_path, new SnippetLine(0, "@", line));
+        loop$lines = rest;
+        loop$current_path = current_path;
+        loop$counter = new_start;
+        loop$in_hunk = true;
+        loop$acc = acc2;
+      } else if ($ instanceof ContextLine && in_hunk) {
+        let text4 = $.text;
+        let acc2 = append_snippet(acc, current_path, new SnippetLine(counter, " ", text4));
+        loop$lines = rest;
+        loop$current_path = current_path;
+        loop$counter = counter + 1;
+        loop$in_hunk = true;
+        loop$acc = acc2;
+      } else if ($ instanceof AddedLine && in_hunk) {
+        let text4 = $.text;
+        let acc2 = append_snippet(acc, current_path, new SnippetLine(counter, "+", text4));
+        loop$lines = rest;
+        loop$current_path = current_path;
+        loop$counter = counter + 1;
+        loop$in_hunk = true;
+        loop$acc = acc2;
+      } else if ($ instanceof DeletedLine && in_hunk) {
+        let text4 = $.text;
+        let acc2 = append_snippet(acc, current_path, new SnippetLine(counter, "-", text4));
+        loop$lines = rest;
+        loop$current_path = current_path;
+        loop$counter = counter;
+        loop$in_hunk = true;
+        loop$acc = acc2;
+      } else {
+        loop$lines = rest;
+        loop$current_path = current_path;
+        loop$counter = counter;
+        loop$in_hunk = in_hunk;
+        loop$acc = acc;
+      }
+    }
+  }
+}
+function extract_file_lines(diff2, file_path) {
+  if (file_path === "") {
+    return toList([]);
+  } else {
+    let lines = split2(diff2, `
+`);
+    let _pipe = parse_diff(lines, "", 0, false, toList([]));
+    let _pipe$1 = reverse(_pipe);
+    let _pipe$2 = filter(_pipe$1, (entry) => {
+      return entry[0] === file_path;
+    });
+    return flat_map(_pipe$2, (entry) => {
+      return entry[1];
+    });
+  }
+}
+function code_snippet(detail, comment, model) {
+  let file_lines = extract_file_lines(detail.diff, comment.path);
+  let radius = feedback_default_radius;
+  let up = model.feedback.expand_up;
+  let down = model.feedback.expand_down;
+  let whole = model.feedback.whole_file;
+  let _block;
+  if (whole) {
+    _block = file_lines;
+  } else {
+    _block = window_lines(file_lines, comment.line, radius + up, radius + down);
+  }
+  let snippet = _block;
+  let grammar32 = detect_grammar(comment.path);
+  return div(toList([
+    styles(toList([
+      raw14(size_3 + " " + size_4),
+      raw3("1px solid " + gray_3)
+    ]))
+  ]), toList([
+    snippet_controls(whole),
+    div(toList([
+      styles(toList([
+        raw2("1px solid " + gray_3),
+        raw4(radius_2),
+        raw(gray_1),
+        raw23(size_2),
+        raw25("auto"),
+        raw13("100%"),
+        ["font-family", font_mono],
+        raw8(font_size_0),
+        raw22("1.5")
+      ]))
+    ]), (() => {
+      if (snippet instanceof Empty) {
+        return toList([placeholder_row()]);
+      } else {
+        let lines = snippet;
+        return map2(lines, (l) => {
+          return snippet_row(l, comment.line, grammar32);
+        });
+      }
+    })())
+  ]));
+}
+function right_header(detail, comment) {
+  let _block;
+  let $ = comment.path;
+  if ($ === "") {
+    _block = detail.url;
+  } else {
+    let path = $;
+    _block = detail.url + "/files#diff-" + path;
+  }
+  let file_link = _block;
+  return div(toList([
+    styles(toList([
+      flex,
+      center,
+      raw10(size_2),
+      raw14(size_2 + " " + size_4),
+      raw3("1px solid " + gray_3),
+      raw(gray_1),
+      raw19("0")
+    ]))
+  ]), toList([
+    span(toList([
+      styles(toList([
+        ["font-family", font_mono],
+        raw8(font_size_0),
+        raw5(gray_8),
+        hidden,
+        ["text-overflow", "ellipsis"],
+        nowrap
+      ]))
+    ]), toList([
+      text3((() => {
+        let $1 = comment.path;
+        if ($1 === "") {
+          return "PR conversation";
+        } else {
+          let p2 = $1;
+          return p2 + " : " + to_string(comment.line) + " · " + comment.author;
+        }
+      })())
+    ])),
+    span(toList([styles(toList([raw7("1")]))]), toList([])),
+    a(toList([
+      href(file_link),
+      target("_blank"),
+      styles(toList([
+        raw5(indigo_7),
+        none5,
+        raw8(font_size_0)
+      ]))
+    ]), toList([text3("Open on GitHub ↗")]))
+  ]));
+}
+function thread_content(detail, comment, replies, model) {
+  return div(toList([
+    styles(toList([
+      raw7("1"),
+      raw24("0"),
+      flex,
+      column,
+      raw25("auto")
+    ]))
+  ]), toList([
+    right_header(detail, comment),
+    (() => {
+      let $ = comment.path;
+      if ($ === "") {
+        return div(toList([
+          styles(toList([raw14(size_4 + " " + size_5)]))
+        ]), toList([
+          div(toList([
+            styles(toList([
+              raw5(gray_6),
+              raw8(font_size_0)
+            ]))
+          ]), toList([text3("PR-level comment — no code context.")]))
+        ]));
+      } else {
+        return code_snippet(detail, comment, model);
+      }
+    })(),
+    thread_block(comment, replies)
+  ]));
+}
+function empty_right() {
+  return div(toList([
+    styles(toList([
+      raw7("1"),
+      flex,
+      center,
+      center3,
+      raw5(gray_5)
+    ]))
+  ]), toList([text3("Select a comment from the list.")]));
+}
+function right_pane(model, detail, selected, selected_index, total) {
+  return div(toList([
+    styles(toList([
+      raw7("1"),
+      raw24("0"),
+      flex,
+      column,
+      raw("white")
+    ]))
+  ]), toList([
+    (() => {
+      if (selected instanceof Some) {
+        let comment = selected[0];
+        let _block;
+        let _pipe = model.github_comments;
+        _block = sort(_pipe, (a2, b) => {
+          return compare3(a2.created_at, b.created_at);
+        });
+        let all2 = _block;
+        let replies = filter(all2, (c) => {
+          return c.in_reply_to_id === comment.id;
+        });
+        return thread_content(detail, comment, replies, model);
+      } else {
+        return empty_right();
+      }
+    })(),
+    footer(selected_index, total)
+  ]));
+}
+function resolved_badge() {
+  return span(toList([
+    styles(toList([
+      raw14("0 " + size_1),
+      raw4(radius_2),
+      raw(green_2),
+      raw5(green_10),
+      raw8(font_size_0),
+      raw9("600"),
+      nowrap
+    ]))
+  ]), toList([text3("✓ resolved")]));
+}
+function thread_row(comment, selected_id, has_human_reply, index5) {
+  let is_selected = isEqual(selected_id, new Some(comment.id));
+  let _block;
+  let $ = comment.is_human;
+  if (is_selected) {
+    _block = indigo_6;
+  } else if ($) {
+    _block = indigo_3;
+  } else if (has_human_reply) {
+    _block = orange_6;
+  } else {
+    _block = "transparent";
+  }
+  let border_color = _block;
+  let _block$1;
+  let $1 = is_even(index5);
+  if ($1) {
+    _block$1 = "white";
+  } else {
+    _block$1 = gray_1;
+  }
+  let zebra_bg = _block$1;
+  let _block$2;
+  let $2 = comment.is_resolved;
+  if (is_selected) {
+    _block$2 = indigo_1;
+  } else if ($2) {
+    _block$2 = green_1;
+  } else if (has_human_reply) {
+    _block$2 = orange_1;
+  } else {
+    _block$2 = zebra_bg;
+  }
+  let bg = _block$2;
+  let _block$3;
+  let $3 = comment.is_resolved && !is_selected;
+  if ($3) {
+    _block$3 = "0.6";
+  } else {
+    _block$3 = "1";
+  }
+  let row_opacity = _block$3;
+  let _block$4;
+  let _pipe = comment.body;
+  let _pipe$1 = replace(_pipe, `
+`, " ");
+  _block$4 = slice(_pipe$1, 0, 120);
+  let preview = _block$4;
+  let _block$5;
+  if (is_selected) {
+    _block$5 = indigo_12;
+  } else {
+    _block$5 = gray_8;
+  }
+  let preview_color = _block$5;
+  let _block$6;
+  let $4 = comment.is_resolved;
+  if ($4) {
+    _block$6 = "line-through";
+  } else {
+    _block$6 = "none";
+  }
+  let preview_decoration = _block$6;
+  let _block$7;
+  let $5 = comment.is_human;
+  if ($5) {
+    _block$7 = indigo_10;
+  } else {
+    _block$7 = gray_6;
+  }
+  let author_color = _block$7;
+  let _block$8;
+  let $6 = comment.is_human;
+  if ($6) {
+    _block$8 = "600";
+  } else {
+    _block$8 = "400";
+  }
+  let author_weight = _block$8;
+  return div(toList([
+    on_click(new SelectFeedbackComment(comment.id)),
+    styles(toList([
+      raw14(size_2 + " " + size_3),
+      raw17("3px solid " + border_color),
+      raw(bg),
+      pointer,
+      ["border-bottom", "1px solid " + gray_2],
+      ["opacity", row_opacity]
+    ]))
+  ]), toList([
+    div(toList([
+      styles(toList([
+        flex,
+        center,
+        raw10(size_2),
+        raw8(font_size_0)
+      ]))
+    ]), toList([
+      span(toList([
+        styles(toList([
+          raw5(author_color),
+          raw9(author_weight)
+        ]))
+      ]), toList([text3(comment.author)])),
+      span(toList([styles(toList([raw5(gray_5)]))]), toList([
+        text3((() => {
+          let $7 = comment.path;
+          if ($7 === "") {
+            return "· PR";
+          } else {
+            return "· line " + to_string(comment.line);
+          }
+        })())
+      ])),
+      (() => {
+        let $7 = comment.is_resolved;
+        if ($7) {
+          return resolved_badge();
+        } else {
+          return text3("");
+        }
+      })()
+    ])),
+    div(toList([
+      styles(toList([
+        raw8(font_size_0),
+        raw5(preview_color),
+        raw23("0.15rem"),
+        raw22("1.4"),
+        break_word,
+        raw15(preview_decoration)
+      ]))
+    ]), toList([text3(preview)]))
+  ]));
+}
+function file_group(path, comments, selected_id, human_reply_ids) {
+  let _block;
+  if (path === "") {
+    _block = "PR conversation";
+  } else {
+    _block = path;
+  }
+  let label2 = _block;
+  return div(toList([]), toList([
+    div(toList([
+      styles(toList([
+        raw14(size_2 + " " + size_3),
+        raw5(gray_6),
+        raw8(font_size_0),
+        uppercase2,
+        raw21("0.5px"),
+        ["border-top", "1px solid " + gray_3],
+        raw(gray_2),
+        raw9("600")
+      ]))
+    ]), toList([text3(label2)])),
+    div(toList([]), index_map(comments, (c, i) => {
+      return thread_row(c, selected_id, contains(human_reply_ids, c.id), i);
+    }))
+  ]));
+}
+function empty_list_message() {
+  return div(toList([
+    styles(toList([
+      raw14(size_5),
+      raw5(gray_5),
+      center2,
+      raw8(font_size_0)
+    ]))
+  ]), toList([text3("No comments on this PR.")]));
+}
+function append_group(acc, c) {
+  if (acc instanceof Empty) {
+    return toList([[c.path, toList([c])]]);
+  } else {
+    let path = acc.head[0];
+    if (path === c.path) {
+      let rest = acc.tail;
+      let list4 = acc.head[1];
+      return prepend([path, prepend(c, list4)], rest);
+    } else {
+      let groups = acc;
+      return prepend([c.path, toList([c])], groups);
+    }
+  }
+}
+function group_by_file(top_levels) {
+  let _pipe = fold2(top_levels, toList([]), (acc, c) => {
+    return append_group(acc, c);
+  });
+  let _pipe$1 = reverse(_pipe);
+  return map2(_pipe$1, (g) => {
+    return [g[0], reverse(g[1])];
+  });
+}
+function left_pane(top_levels, selected_id, human_reply_ids) {
+  let groups = group_by_file(top_levels);
+  return div(toList([
+    styles(toList([
+      raw16("320px"),
+      raw19("0"),
+      raw2("0"),
+      ["border-right", "1px solid " + gray_3],
+      raw(gray_1),
+      raw25("auto"),
+      ["height", "100%"]
+    ]))
+  ]), (() => {
+    if (top_levels instanceof Empty) {
+      return toList([empty_list_message()]);
+    } else {
+      return map2(groups, (g) => {
+        return file_group(g[0], g[1], selected_id, human_reply_ids);
+      });
+    }
+  })());
+}
+function find_pull_request(model, number) {
+  let $ = model.pr_groups;
+  if ($ instanceof Some) {
+    let groups = $[0];
+    let all2 = flatten(toList([groups.created_by_me, groups.review_requested, groups.all_open]));
+    let $1 = find(all2, (p2) => {
+      return p2.number === number;
+    });
+    if ($1 instanceof Ok) {
+      let p2 = $1[0];
+      return new Some(p2);
+    } else {
+      return new None;
+    }
+  } else {
+    return $;
+  }
+}
+function review_badge2(decision, draft) {
+  let _block;
+  if (draft) {
+    _block = [blue_2, blue_9, "Draft"];
+  } else if (decision === "APPROVED") {
+    _block = [green_2, green_10, "Approved"];
+  } else if (decision === "CHANGES_REQUESTED") {
+    _block = [red_2, red_10, "Changes requested"];
+  } else if (decision === "REVIEW_REQUIRED") {
+    _block = [yellow_2, yellow_10, "Review required"];
+  } else if (decision === "") {
+    _block = [gray_1, gray_6, "No reviews"];
+  } else {
+    let other = decision;
+    _block = [gray_2, gray_8, other];
+  }
+  let $ = _block;
+  let bg;
+  let fg;
+  let label2;
+  bg = $[0];
+  fg = $[1];
+  label2 = $[2];
+  return span(toList([
+    styles(toList([
+      raw14("0.15rem " + size_2),
+      raw4(radius_2),
+      raw8(font_size_0),
+      nowrap,
+      raw(bg),
+      raw5(fg)
+    ]))
+  ]), toList([text3(label2)]));
+}
+function header(detail, total, pull) {
+  return div(toList([
+    styles(toList([
+      flex,
+      center,
+      raw10(size_3),
+      raw14(size_3 + " " + size_5),
+      raw3("1px solid " + gray_3),
+      raw("white"),
+      raw19("0")
+    ]))
+  ]), toList([
+    a(toList([
+      on_click(new BackToDashboard),
+      styles(toList([
+        raw5(gray_6),
+        none5,
+        pointer,
+        raw8(font_size_1)
+      ]))
+    ]), toList([text3("← Dashboard")])),
+    div(toList([
+      styles(toList([
+        raw7("1"),
+        raw24("0"),
+        flex,
+        center,
+        raw10(size_2),
+        hidden
+      ]))
+    ]), toList([
+      span(toList([
+        styles(toList([raw5(gray_6), raw9("400")]))
+      ]), toList([text3("#" + to_string(detail.number))])),
+      span(toList([
+        styles(toList([
+          raw9("600"),
+          hidden,
+          nowrap,
+          ["text-overflow", "ellipsis"]
+        ]))
+      ]), toList([text3(detail.title)])),
+      span(toList([
+        styles(toList([
+          raw5(gray_6),
+          raw8(font_size_0)
+        ]))
+      ]), toList([text3("· " + detail.author)])),
+      (() => {
+        if (pull instanceof Some) {
+          let p2 = pull[0];
+          return review_badge2(p2.review_decision, p2.draft);
+        } else {
+          return text3("");
+        }
+      })()
+    ])),
+    a(toList([
+      href(detail.url),
+      target("_blank"),
+      styles(toList([
+        raw5(indigo_7),
+        none5,
+        raw8(font_size_0)
+      ]))
+    ]), toList([text3("Open on GitHub ↗")])),
+    a(toList([
+      on_click(new SwitchToAnalysis),
+      styles(toList([
+        raw5(indigo_7),
+        none5,
+        pointer,
+        raw8(font_size_0)
+      ]))
+    ]), toList([text3("Switch to review analysis")])),
+    span(toList([
+      styles(toList([
+        raw5(gray_6),
+        raw8(font_size_0)
+      ]))
+    ]), toList([
+      text3(to_string(total) + (() => {
+        if (total === 1) {
+          return " comment";
+        } else {
+          return " comments";
+        }
+      })())
+    ]))
+  ]));
+}
+function index_of(comments, id2) {
+  let $ = fold2(comments, [0, 0], (acc, c) => {
+    let i;
+    let found;
+    i = acc[0];
+    found = acc[1];
+    let $1 = c.id === id2;
+    if ($1) {
+      return [i + 1, i];
+    } else {
+      return [i + 1, found];
+    }
+  });
+  let idx;
+  idx = $[1];
+  return idx;
+}
+function option_from_result(r) {
+  if (r instanceof Ok) {
+    let v = r[0];
+    return new Some(v);
+  } else {
+    return new None;
+  }
+}
+function compare_for_list(a2, b) {
+  let $ = a2.path;
+  let $1 = b.path;
+  if ($ === "") {
+    if ($1 === "") {
+      return compare3(a2.created_at, b.created_at);
+    } else {
+      return new Gt;
+    }
+  } else if ($1 === "") {
+    return new Lt;
+  } else {
+    let pa = $;
+    let pb = $1;
+    let $2 = compare3(pa, pb);
+    if ($2 instanceof Eq) {
+      let $3 = compare2(a2.line, b.line);
+      if ($3 instanceof Eq) {
+        return compare3(a2.created_at, b.created_at);
+      } else {
+        return $3;
+      }
+    } else {
+      return $2;
+    }
+  }
+}
+function sort_for_list(comments) {
+  return sort(comments, compare_for_list);
+}
+function top_level(comments) {
+  let _block;
+  let _pipe = comments;
+  _block = map2(_pipe, (c) => {
+    return c.id;
+  });
+  let ids = _block;
+  return filter(comments, (c) => {
+    return c.in_reply_to_id === 0 || !any(ids, (id2) => {
+      return id2 === c.in_reply_to_id;
+    });
+  });
+}
+function layout(model, detail) {
+  let _block;
+  let _pipe = top_level(model.github_comments);
+  _block = sort_for_list(_pipe);
+  let top_levels = _block;
+  let total = length(top_levels);
+  let selected_id = model.feedback.selected_comment_id;
+  let bot_with_human_reply_ids = filter_map(top_levels, (c) => {
+    let $ = !c.is_human && any(model.github_comments, (r) => {
+      return r.in_reply_to_id === c.id && r.is_human;
+    });
+    if ($) {
+      return new Ok(c.id);
+    } else {
+      return new Error(undefined);
+    }
+  });
+  let _block$1;
+  if (selected_id instanceof Some) {
+    let id2 = selected_id[0];
+    let _pipe$1 = find(top_levels, (c) => {
+      return c.id === id2;
+    });
+    _block$1 = option_from_result(_pipe$1);
+  } else {
+    let _pipe$1 = first(top_levels);
+    _block$1 = option_from_result(_pipe$1);
+  }
+  let selected = _block$1;
+  let _block$2;
+  if (selected instanceof Some) {
+    let c = selected[0];
+    _block$2 = index_of(top_levels, c.id);
+  } else {
+    _block$2 = 0;
+  }
+  let selected_index = _block$2;
+  return div(toList([
+    styles(toList([
+      ["font-family", font_system_ui],
+      raw5(indigo_12),
+      flex,
+      column,
+      raw20("100vh")
+    ]))
+  ]), toList([
+    header(detail, total, find_pull_request(model, detail.number)),
+    div(toList([
+      styles(toList([
+        flex,
+        raw7("1"),
+        raw24("0"),
+        hidden
+      ]))
+    ]), toList([
+      left_pane(top_levels, selected_id, bot_with_human_reply_ids),
+      right_pane(model, detail, selected, selected_index, total)
+    ]))
+  ]));
+}
+function view3(model) {
+  let $ = model.selected_pr;
+  if ($ instanceof Some) {
+    let detail = $[0];
+    return layout(model, detail);
+  } else {
+    return div(toList([
+      styles(toList([
+        raw14(size_7),
+        ["font-family", font_system_ui],
+        raw5(gray_7)
+      ]))
+    ]), toList([
+      text3((() => {
+        let $1 = model.loading;
+        if ($1) {
+          return "Loading...";
+        } else {
+          return "No PR selected.";
+        }
+      })())
+    ]));
+  }
+}
+function thread_ids(comments) {
+  let _pipe = comments;
+  let _pipe$1 = top_level(_pipe);
+  let _pipe$2 = sort_for_list(_pipe$1);
+  return map2(_pipe$2, (c) => {
+    return c.id;
+  });
+}
+
+// build/dev/javascript/monks_of_style/monks/animation.mjs
+function raw26(value3) {
+  return ["animation", value3];
+}
+
+// build/dev/javascript/monks_of_style/monks/box_sizing.mjs
+var border_box = ["box-sizing", "border-box"];
+
+// build/dev/javascript/monks_of_style/monks/flex_wrap.mjs
+var wrap = ["flex-wrap", "wrap"];
+
+// build/dev/javascript/monks_of_style/monks/min_height.mjs
+function raw27(value3) {
+  return ["min-height", value3];
+}
+
+// build/dev/javascript/monks_of_style/monks/outline.mjs
+var none6 = ["outline", "none"];
+
+// build/dev/javascript/monks_of_style/monks/position.mjs
+var relative2 = ["position", "relative"];
+var absolute = ["position", "absolute"];
+var sticky = ["position", "sticky"];
+
+// build/dev/javascript/monks_of_style/monks/resize.mjs
+var vertical = ["resize", "vertical"];
+
+// build/dev/javascript/monks_of_style/monks/transition.mjs
+function raw28(value3) {
+  return ["transition", value3];
+}
+
+// build/dev/javascript/monks_of_style/monks/user_select.mjs
+var none7 = ["user-select", "none"];
+
 // build/dev/javascript/client/client/views/pr_review.mjs
 class DiffLineEntry extends CustomType {
   constructor(display_line, file_line, file_path, text4) {
@@ -18430,78 +19850,64 @@ function filter_comments(comments, hide_bots) {
     return comments;
   }
 }
-function description_accordion(body, is_open) {
-  let $ = trim(body);
-  if ($ === "") {
-    return text3("");
-  } else {
-    let _block;
-    if (is_open) {
-      _block = "▾";
-    } else {
-      _block = "▸";
-    }
-    let chevron = _block;
-    return div(toList([
+function analyze_prompt() {
+  return div(toList([
+    styles(toList([
+      center2,
+      raw14(size_10 + " " + size_7),
+      raw(gray_1),
+      raw4(radius_3),
+      raw2("1px solid " + gray_2)
+    ]))
+  ]), toList([
+    p(toList([
       styles(toList([
-        raw("white"),
-        raw2("1px solid " + gray_3),
-        raw4(radius_3),
-        raw12(size_5),
-        hidden
+        raw5(gray_6),
+        raw8(font_size_2),
+        raw12(size_4)
       ]))
     ]), toList([
-      div(toList([
-        on_click(new ToggleDescription),
-        styles(toList([
-          raw14("0.875rem 1.25rem"),
-          pointer,
-          flex,
-          center,
-          raw10(size_2),
-          none7,
-          raw23("background 0.15s")
-        ]))
-      ]), toList([
-        span(toList([
-          styles(toList([
-            raw8(font_size_1),
-            raw5(gray_6),
-            raw15(size_4)
-          ]))
-        ]), toList([text3(chevron)])),
-        span(toList([
-          styles(toList([
-            raw8(font_size_1),
-            raw9("600"),
-            raw5(gray_8)
-          ]))
-        ]), toList([text3("PR Description")]))
-      ])),
-      (() => {
-        if (is_open) {
-          return div(toList([
-            styles(toList([
-              raw14("0 1.25rem 1.25rem 1.25rem"),
-              ["border-top", "1px solid " + gray_3]
-            ]))
-          ]), toList([
-            div(toList([
-              styles(toList([
-                raw20(size_4),
-                raw8(font_size_1),
-                raw19(font_lineheight_4),
-                raw5(gray_8),
-                break_word
-              ]))
-            ]), render(body))
-          ]));
-        } else {
-          return text3("");
-        }
-      })()
-    ]));
+      text3('Analysis not started. Click "Analyze PR" to begin.')
+    ]))
+  ]));
+}
+function loading_indicator2(heartbeats) {
+  let elapsed_seconds = heartbeats * heartbeat_interval_seconds;
+  let _block;
+  if (heartbeats === 0) {
+    _block = "Connecting to AI analysis...";
+  } else {
+    _block = "Analyzing PR with AI... (" + to_string(elapsed_seconds) + "s elapsed)";
   }
+  let progress_text = _block;
+  return div(toList([
+    styles(toList([
+      center2,
+      raw14(size_10 + " " + size_7),
+      raw(gray_1),
+      raw4(radius_3),
+      raw2("1px solid " + gray_2)
+    ]))
+  ]), toList([
+    div(toList([
+      styles(toList([
+        inline_block,
+        raw16(size_7),
+        ["height", size_7],
+        raw2("3px solid " + gray_2),
+        ["border-top-color", indigo_7],
+        raw4("50%"),
+        raw26("spin 0.8s linear infinite"),
+        raw12(size_4)
+      ]))
+    ]), toList([])),
+    p(toList([
+      styles(toList([
+        raw5(gray_6),
+        raw8(font_size_1)
+      ]))
+    ]), toList([text3(progress_text)]))
+  ]));
 }
 function styled_button(label2, msg, bg_color, enabled) {
   return button(toList([
@@ -18528,238 +19934,81 @@ function styled_button(label2, msg, bg_color, enabled) {
       })()),
       raw8(font_size_1),
       raw9("500"),
-      raw23("background 0.15s")
+      raw28("background 0.15s")
     ]))
   ]), toList([text3(label2)]));
 }
-function back_button() {
-  return styled_button("Back to Dashboard", new BackToDashboard, gray_6, true);
-}
-function analyze_button() {
-  return styled_button("Analyze PR", new AnalyzePr, indigo_7, true);
-}
-function bot_comments_toggle(hidden2) {
+function review_action_button(label2, event_type, bg_color, submitting) {
   let _block;
-  if (hidden2) {
-    _block = [gray_2, gray_6, "smart_toy"];
+  if (submitting) {
+    _block = "Submitting...";
   } else {
-    _block = [blue_2, blue_8, "smart_toy"];
+    _block = label2;
   }
-  let $ = _block;
-  let bg;
-  let fg;
-  let icon;
-  bg = $[0];
-  fg = $[1];
-  icon = $[2];
-  return button(toList([
-    on_click(new ToggleBotComments),
-    title((() => {
-      if (hidden2) {
-        return "Show bot comments";
-      } else {
-        return "Hide bot comments";
-      }
-    })()),
-    styles(toList([
-      inline_flex,
-      center,
-      raw10("0.25rem"),
-      raw14("0.375rem 0.625rem"),
-      raw(bg),
-      raw5(fg),
-      none4,
-      raw4(radius_2),
-      pointer,
-      raw8(font_size_0),
-      raw9("500")
-    ]))
-  ]), toList([
-    span(toList([
-      class$("material-symbols-outlined"),
-      styles(toList([raw8(font_size_1)]))
-    ]), toList([text3(icon)])),
-    text3((() => {
-      if (hidden2) {
-        return "Bots hidden";
-      } else {
-        return "Hide bots";
-      }
-    })())
-  ]));
+  let display_label = _block;
+  return styled_button(display_label, new SubmitReview(event_type), bg_color, !submitting);
 }
-function header_area(title2, number, url, head_branch, model) {
+function review_submission_section(review) {
+  let _block;
+  if (review instanceof ReviewIdle) {
+    let body = review.body;
+    _block = body;
+  } else {
+    let body = review.body;
+    _block = body;
+  }
+  let review_body = _block;
+  let _block$1;
+  if (review instanceof ReviewIdle) {
+    _block$1 = false;
+  } else {
+    _block$1 = true;
+  }
+  let submitting = _block$1;
   return div(toList([
     styles(toList([
-      flex,
-      flex_start,
-      space_between,
-      raw12(size_5),
-      wrap,
-      raw10(size_3)
-    ]))
-  ]), toList([
-    div(toList([
-      styles(toList([raw7("1"), raw22("0")]))
-    ]), toList([
-      h1(toList([
-        styles(toList([
-          raw11("0"),
-          raw8(font_size_4),
-          raw9("600"),
-          raw5(indigo_12),
-          flex,
-          center,
-          raw10(size_2)
-        ]))
-      ]), toList([
-        a(toList([
-          href(url),
-          target("_blank"),
-          title(url),
-          styles(toList([
-            raw5(gray_6),
-            raw9("400"),
-            none5
-          ]))
-        ]), toList([text3("#" + to_string(number))])),
-        text3(title2),
-        a(toList([
-          href(url),
-          target("_blank"),
-          title(url),
-          styles(toList([
-            raw5(gray_5),
-            none5,
-            raw8(font_size_3),
-            inline_flex,
-            center
-          ]))
-        ]), toList([
-          span(toList([class$("material-symbols-outlined")]), toList([text3("open_in_new")]))
-        ]))
-      ])),
-      div(toList([
-        styles(toList([
-          inline_flex,
-          center,
-          raw10("0.375rem"),
-          raw20(size_2),
-          raw14("0.25rem 0.625rem"),
-          raw(violet_2),
-          raw4("999px"),
-          ["font-family", font_mono],
-          raw8(font_size_0),
-          raw5(violet_9),
-          raw19("1.4")
-        ]))
-      ]), toList([
-        span(toList([
-          class$("material-symbols-outlined"),
-          styles(toList([raw8(font_size_0)]))
-        ]), toList([text3("account_tree")])),
-        text3(head_branch)
-      ]))
-    ])),
-    div(toList([
-      styles(toList([flex, raw10(size_2), center]))
-    ]), toList([
-      bot_comments_toggle(model.hide_bot_comments),
-      back_button(),
-      (() => {
-        let $ = model.analysis_state;
-        if ($ instanceof NotAnalyzed) {
-          return analyze_button();
-        } else if ($ instanceof Analyzing) {
-          return text3("");
-        } else {
-          return analyze_button();
-        }
-      })()
-    ]))
-  ]));
-}
-function analyze_prompt() {
-  return div(toList([
-    styles(toList([
-      center2,
-      raw14(size_10 + " " + size_7),
-      raw(gray_1),
+      raw("white"),
+      raw2("1px solid " + gray_3),
       raw4(radius_3),
-      raw2("1px solid " + gray_2)
+      raw14(size_5 + " " + size_6),
+      raw23(size_5)
     ]))
   ]), toList([
-    p(toList([
+    h2(toList([
       styles(toList([
-        raw5(gray_6),
-        raw8(font_size_2),
-        raw12(size_4)
+        raw11("0 0 " + size_3 + " 0"),
+        raw8(font_size_1),
+        raw9("600"),
+        raw5(gray_8)
       ]))
+    ]), toList([text3("Submit Review")])),
+    textarea(toList([
+      styles(toList([
+        raw16("100%"),
+        raw27("4rem"),
+        raw14("0.625rem"),
+        raw2("1px solid " + gray_4),
+        raw4(radius_2),
+        ["font-family", font_system_ui],
+        raw8(font_size_1),
+        vertical,
+        none6,
+        border_box,
+        raw12(size_3)
+      ])),
+      placeholder("Leave a comment with your review (optional for approvals)..."),
+      on_input((var0) => {
+        return new SetReviewBody(var0);
+      })
+    ]), review_body),
+    div(toList([
+      styles(toList([flex, raw10(size_2), wrap]))
     ]), toList([
-      text3('Analysis not started. Click "Analyze PR" to begin.')
+      review_action_button("Approve", "APPROVE", green_7, submitting),
+      review_action_button("Request Changes", "REQUEST_CHANGES", orange_7, submitting),
+      review_action_button("Comment", "COMMENT", indigo_7, submitting)
     ]))
   ]));
-}
-function error_banner2(message2) {
-  return div(toList([
-    styles(toList([
-      raw14(size_3 + " " + size_4),
-      raw12(size_4),
-      raw(red_1),
-      raw2("1px solid " + red_4),
-      raw4(radius_2),
-      raw5(red_10),
-      raw8(font_size_1),
-      pre_wrap,
-      break_word
-    ]))
-  ]), toList([text3(message2)]));
-}
-function chunk_pill(index5, current, comments) {
-  let is_active = index5 === current;
-  let has_comments = any(comments, (c) => {
-    return c.chunk_index === index5;
-  });
-  let _block;
-  if (is_active) {
-    _block = indigo_7;
-  } else {
-    _block = gray_3;
-  }
-  let bg = _block;
-  return button(toList([
-    on_click(new GoToChunk(index5)),
-    styles(toList([
-      raw15("1.25rem"),
-      ["height", "1.25rem"],
-      raw4("50%"),
-      none4,
-      raw(bg),
-      pointer,
-      relative2,
-      raw14("0"),
-      raw23("background 0.15s")
-    ]))
-  ]), (() => {
-    if (has_comments) {
-      return toList([
-        span(toList([
-          styles(toList([
-            absolute,
-            ["top", "-2px"],
-            ["right", "-2px"],
-            raw15("8px"),
-            ["height", "8px"],
-            raw4("50%"),
-            raw(yellow_6),
-            raw2("1.5px solid white")
-          ]))
-        ]), toList([]))
-      ]);
-    } else {
-      return toList([]);
-    }
-  })());
 }
 function nav_button(label2, msg, enabled) {
   return button(toList([
@@ -18792,308 +20041,31 @@ function nav_button(label2, msg, enabled) {
       })()),
       raw8(font_size_1),
       raw9("500"),
-      raw23("background 0.15s")
+      raw28("background 0.15s")
     ]))
   ]), toList([text3(label2)]));
 }
-function chunk_navigator(current, total, comments) {
+function bottom_navigation(current, total) {
   return div(toList([
     styles(toList([
       flex,
+      center3,
       center,
-      raw10(size_3),
-      wrap
+      raw10(size_4),
+      raw14(size_4 + " 0")
     ]))
   ]), toList([
-    nav_button("Prev", new PrevChunk, current > 0),
+    nav_button("Previous Chunk", new PrevChunk, current > 0),
     span(toList([
       styles(toList([
         raw8(font_size_1),
-        raw5(gray_6),
-        raw9("500"),
-        raw22("6rem"),
-        center2
+        raw5(gray_6)
       ]))
     ]), toList([
-      text3("Chunk " + to_string(current + 1) + " of " + to_string(total))
+      text3(to_string(current + 1) + " / " + to_string(total))
     ])),
-    nav_button("Next", new NextChunk, current < total - 1),
-    div(toList([
-      styles(toList([
-        flex,
-        raw10("0.375rem"),
-        ["margin-left", size_2],
-        wrap
-      ]))
-    ]), (() => {
-      let _pipe = range(0, total, toList([]), (acc, i) => {
-        return prepend(chunk_pill(i, current, comments), acc);
-      });
-      return reverse(_pipe);
-    })())
+    nav_button("Next Chunk", new NextChunk, current < total - 1)
   ]));
-}
-function summary_panel(summary, current, total, comments) {
-  return div(toList([
-    styles(toList([
-      raw("white"),
-      raw2("1px solid " + gray_3),
-      raw4(radius_3),
-      raw14(size_5 + " " + size_6),
-      raw12(size_5)
-    ]))
-  ]), toList([
-    h2(toList([
-      styles(toList([
-        raw11("0 0 " + size_3 + " 0"),
-        raw8(font_size_1),
-        raw9("600"),
-        raw5(gray_8)
-      ]))
-    ]), toList([text3("AI Summary")])),
-    p(toList([
-      styles(toList([
-        raw11("0 0 " + size_4 + " 0"),
-        raw5(gray_7),
-        raw19(font_lineheight_4),
-        raw8(font_size_1)
-      ]))
-    ]), toList([text3(summary)])),
-    chunk_navigator(current, total, comments)
-  ]));
-}
-function parse_hunk_new_start(header) {
-  let $ = split2(header, "+");
-  if ($ instanceof Empty) {
-    return 1;
-  } else {
-    let $1 = $.tail;
-    if ($1 instanceof Empty) {
-      return 1;
-    } else {
-      let after_plus = $1.head;
-      let $2 = split2(after_plus, ",");
-      if ($2 instanceof Empty) {
-        return 1;
-      } else {
-        let num_str = $2.head;
-        let $3 = parse_int(num_str);
-        if ($3 instanceof Ok) {
-          let n = $3[0];
-          return n;
-        } else {
-          return 1;
-        }
-      }
-    }
-  }
-}
-function index_file_lines_acc(loop$lines, loop$display_idx, loop$current_file_line, loop$current_file_path, loop$acc) {
-  while (true) {
-    let lines = loop$lines;
-    let display_idx = loop$display_idx;
-    let current_file_line = loop$current_file_line;
-    let current_file_path = loop$current_file_path;
-    let acc = loop$acc;
-    if (lines instanceof Empty) {
-      return acc;
-    } else {
-      let line = lines.head;
-      let rest = lines.tail;
-      let $ = starts_with(line, "== ");
-      if ($) {
-        let _block;
-        let _pipe = drop_start(line, 3);
-        _block = trim(_pipe);
-        let new_path = _block;
-        let entry = new DiffLineEntry(display_idx, 0, new_path, line);
-        loop$lines = rest;
-        loop$display_idx = display_idx + 1;
-        loop$current_file_line = 0;
-        loop$current_file_path = new_path;
-        loop$acc = prepend(entry, acc);
-      } else {
-        let $1 = starts_with(line, "@@");
-        if ($1) {
-          let new_line = parse_hunk_new_start(line);
-          let entry = new DiffLineEntry(display_idx, 0, current_file_path, line);
-          loop$lines = rest;
-          loop$display_idx = display_idx + 1;
-          loop$current_file_line = new_line;
-          loop$current_file_path = current_file_path;
-          loop$acc = prepend(entry, acc);
-        } else {
-          let $2 = starts_with(line, "-");
-          if ($2) {
-            let entry = new DiffLineEntry(display_idx, current_file_line, current_file_path, line);
-            loop$lines = rest;
-            loop$display_idx = display_idx + 1;
-            loop$current_file_line = current_file_line;
-            loop$current_file_path = current_file_path;
-            loop$acc = prepend(entry, acc);
-          } else {
-            let entry = new DiffLineEntry(display_idx, current_file_line, current_file_path, line);
-            loop$lines = rest;
-            loop$display_idx = display_idx + 1;
-            loop$current_file_line = current_file_line + 1;
-            loop$current_file_path = current_file_path;
-            loop$acc = prepend(entry, acc);
-          }
-        }
-      }
-    }
-  }
-}
-function index_with_file_lines(lines, chunk_file_path) {
-  let _block;
-  let $ = contains_string(chunk_file_path, " (+");
-  if ($) {
-    _block = "";
-  } else {
-    _block = chunk_file_path;
-  }
-  let initial_path = _block;
-  let _pipe = index_file_lines_acc(lines, 1, 0, initial_path, toList([]));
-  return reverse(_pipe);
-}
-function line_colors(line) {
-  if (line.startsWith("+")) {
-    return ["#dcfce7", "#22c55e"];
-  } else if (line.startsWith("-")) {
-    return ["#fee2e2", "#ef4444"];
-  } else if (line.startsWith("@@")) {
-    return ["#ede9fe", "#8b5cf6"];
-  } else if (line.startsWith("== ")) {
-    return [indigo_1, indigo_4];
-  } else {
-    return ["transparent", "transparent"];
-  }
-}
-function diff_line_row(display_line, file_line, line, grammar32) {
-  let $ = line_colors(line);
-  let bg;
-  let border_color;
-  bg = $[0];
-  border_color = $[1];
-  let _block;
-  if (file_line === 0) {
-    _block = "";
-  } else {
-    let n = file_line;
-    _block = to_string(n);
-  }
-  let gutter_text = _block;
-  let _block$1;
-  let $2 = starts_with(line, "@@");
-  if ($2) {
-    _block$1 = ["", ""];
-  } else {
-    let $3 = first2(line);
-    if ($3 instanceof Ok) {
-      let $4 = $3[0];
-      if ($4 === "+") {
-        _block$1 = ["+", drop_start(line, 1)];
-      } else if ($4 === "-") {
-        _block$1 = ["-", drop_start(line, 1)];
-      } else if ($4 === " ") {
-        _block$1 = [" ", drop_start(line, 1)];
-      } else {
-        _block$1 = ["", line];
-      }
-    } else {
-      _block$1 = ["", line];
-    }
-  }
-  let $1 = _block$1;
-  let marker;
-  let code2;
-  marker = $1[0];
-  code2 = $1[1];
-  let is_hunk_header = starts_with(line, "@@") || starts_with(line, "== ");
-  return div(toList([
-    on_click(new StartComment(display_line, file_line)),
-    styles(toList([
-      flex,
-      raw(bg),
-      raw17("3px solid " + border_color),
-      pointer,
-      raw23("filter 0.1s")
-    ]))
-  ]), toList([
-    span(toList([
-      styles(toList([
-        inline_block,
-        raw22("3.5rem"),
-        raw14("0 " + size_2),
-        right,
-        raw5(gray_5),
-        none7,
-        raw((() => {
-          if (bg === "transparent") {
-            return gray_1;
-          } else {
-            return "rgba(0,0,0,0.03)";
-          }
-        })()),
-        ["border-right", "1px solid " + gray_3],
-        raw18("0")
-      ]))
-    ]), toList([text3(gutter_text)])),
-    (() => {
-      if (is_hunk_header) {
-        let is_file_sep = starts_with(line, "== ");
-        return span(toList([
-          styles(flatten(toList([
-            toList([
-              raw14("0 " + size_3),
-              pre2,
-              raw7("1")
-            ]),
-            (() => {
-              if (is_file_sep) {
-                return toList([
-                  raw9("600"),
-                  raw5(indigo_9)
-                ]);
-              } else {
-                return toList([]);
-              }
-            })()
-          ])))
-        ]), toList([text3(line)]));
-      } else {
-        let highlighted = highlight_line(code2, grammar32);
-        return span(toList([
-          styles(toList([
-            raw14("0 " + size_3),
-            pre2,
-            raw7("1"),
-            flex
-          ]))
-        ]), toList([
-          span(toList([]), toList([text3(marker)])),
-          span(toList([]), highlighted)
-        ]));
-      }
-    })()
-  ]));
-}
-function comment_display(comment) {
-  return div(toList([
-    styles(toList([
-      raw(yellow_1),
-      raw17("3px solid " + yellow_6),
-      raw14(size_2 + " " + size_3 + " " + size_2 + " 4.25rem"),
-      ["font-family", font_system_ui],
-      raw8(font_size_1),
-      raw5(orange_9),
-      raw19("1.4"),
-      sticky,
-      ["left", "0"],
-      ["width", "100cqi"],
-      border_box
-    ]))
-  ]), toList([text3(comment.body)]));
 }
 function comment_input(text4, posting_comment) {
   let _block;
@@ -19122,7 +20094,7 @@ function comment_input(text4, posting_comment) {
       textarea(toList([
         styles(toList([
           raw7("1"),
-          raw21("3rem"),
+          raw27("3rem"),
           raw14(size_2),
           raw2("1px solid " + gray_4),
           raw4(radius_2),
@@ -19189,6 +20161,23 @@ function comment_input(text4, posting_comment) {
     ]
   ]));
 }
+function comment_display(comment) {
+  return div(toList([
+    styles(toList([
+      raw(yellow_1),
+      raw17("3px solid " + yellow_6),
+      raw14(size_2 + " " + size_3 + " " + size_2 + " 4.25rem"),
+      ["font-family", font_system_ui],
+      raw8(font_size_1),
+      raw5(orange_9),
+      raw22("1.4"),
+      sticky,
+      ["left", "0"],
+      ["width", "100cqi"],
+      border_box
+    ]))
+  ]), toList([text3(comment.body)]));
+}
 function reply_form(reply_text, is_posting) {
   let _block;
   if (is_posting) {
@@ -19199,7 +20188,7 @@ function reply_form(reply_text, is_posting) {
   let submit_label = _block;
   return div(toList([
     styles(toList([
-      raw20(size_2),
+      raw23(size_2),
       flex,
       raw10(size_2),
       flex_start
@@ -19208,7 +20197,7 @@ function reply_form(reply_text, is_posting) {
     textarea(toList([
       styles(toList([
         raw7("1"),
-        raw21("2.5rem"),
+        raw27("2.5rem"),
         raw14(size_2),
         raw2("1px solid " + blue_4),
         raw4(radius_2),
@@ -19328,7 +20317,7 @@ function github_comment_display(comment, commenting) {
       ["font-family", font_system_ui],
       raw8(font_size_1),
       raw5(blue_9),
-      raw19("1.4"),
+      raw22("1.4"),
       sticky,
       ["left", "0"],
       ["width", "100cqi"],
@@ -19384,6 +20373,223 @@ function github_comment_display(comment, commenting) {
     })()
   ]));
 }
+function line_colors(line) {
+  let $ = line.charCodeAt(0);
+  if ($ === 43) {
+    return ["#dcfce7", "#22c55e"];
+  } else if ($ === 45) {
+    return ["#fee2e2", "#ef4444"];
+  } else if (line.startsWith("@@")) {
+    return ["#ede9fe", "#8b5cf6"];
+  } else if (line.startsWith("== ")) {
+    return [indigo_1, indigo_4];
+  } else {
+    return ["transparent", "transparent"];
+  }
+}
+function diff_line_row(display_line, file_line, line, grammar32) {
+  let $ = line_colors(line);
+  let bg;
+  let border_color;
+  bg = $[0];
+  border_color = $[1];
+  let _block;
+  if (file_line === 0) {
+    _block = "";
+  } else {
+    let n = file_line;
+    _block = to_string(n);
+  }
+  let gutter_text = _block;
+  let _block$1;
+  let $2 = starts_with(line, "@@");
+  if ($2) {
+    _block$1 = ["", ""];
+  } else {
+    let $3 = first2(line);
+    if ($3 instanceof Ok) {
+      let $4 = $3[0];
+      if ($4 === "+") {
+        _block$1 = ["+", drop_start(line, 1)];
+      } else if ($4 === "-") {
+        _block$1 = ["-", drop_start(line, 1)];
+      } else if ($4 === " ") {
+        _block$1 = [" ", drop_start(line, 1)];
+      } else {
+        _block$1 = ["", line];
+      }
+    } else {
+      _block$1 = ["", line];
+    }
+  }
+  let $1 = _block$1;
+  let marker;
+  let code2;
+  marker = $1[0];
+  code2 = $1[1];
+  let is_hunk_header = starts_with(line, "@@") || starts_with(line, "== ");
+  return div(toList([
+    on_click(new StartComment(display_line, file_line)),
+    styles(toList([
+      flex,
+      raw(bg),
+      raw17("3px solid " + border_color),
+      pointer,
+      raw28("filter 0.1s")
+    ]))
+  ]), toList([
+    span(toList([
+      styles(toList([
+        inline_block,
+        raw24("3.5rem"),
+        raw14("0 " + size_2),
+        right,
+        raw5(gray_5),
+        none7,
+        raw((() => {
+          if (bg === "transparent") {
+            return gray_1;
+          } else {
+            return "rgba(0,0,0,0.03)";
+          }
+        })()),
+        ["border-right", "1px solid " + gray_3],
+        raw19("0")
+      ]))
+    ]), toList([text3(gutter_text)])),
+    (() => {
+      if (is_hunk_header) {
+        let is_file_sep = starts_with(line, "== ");
+        return span(toList([
+          styles(flatten(toList([
+            toList([
+              raw14("0 " + size_3),
+              pre2,
+              raw7("1")
+            ]),
+            (() => {
+              if (is_file_sep) {
+                return toList([
+                  raw9("600"),
+                  raw5(indigo_9)
+                ]);
+              } else {
+                return toList([]);
+              }
+            })()
+          ])))
+        ]), toList([text3(line)]));
+      } else {
+        let highlighted = highlight_line(code2, grammar32);
+        return span(toList([
+          styles(toList([
+            raw14("0 " + size_3),
+            pre2,
+            raw7("1"),
+            flex
+          ]))
+        ]), toList([
+          span(toList([]), toList([text3(marker)])),
+          span(toList([]), highlighted)
+        ]));
+      }
+    })()
+  ]));
+}
+function parse_hunk_new_start2(header2) {
+  let $ = split2(header2, "+");
+  if ($ instanceof Empty) {
+    return 1;
+  } else {
+    let $1 = $.tail;
+    if ($1 instanceof Empty) {
+      return 1;
+    } else {
+      let after_plus = $1.head;
+      let $2 = split2(after_plus, ",");
+      if ($2 instanceof Empty) {
+        return 1;
+      } else {
+        let num_str = $2.head;
+        let $3 = parse_int(num_str);
+        if ($3 instanceof Ok) {
+          let n = $3[0];
+          return n;
+        } else {
+          return 1;
+        }
+      }
+    }
+  }
+}
+function index_file_lines_acc(loop$lines, loop$display_idx, loop$current_file_line, loop$current_file_path, loop$acc) {
+  while (true) {
+    let lines = loop$lines;
+    let display_idx = loop$display_idx;
+    let current_file_line = loop$current_file_line;
+    let current_file_path = loop$current_file_path;
+    let acc = loop$acc;
+    if (lines instanceof Empty) {
+      return acc;
+    } else {
+      let line = lines.head;
+      let rest = lines.tail;
+      let $ = starts_with(line, "== ");
+      if ($) {
+        let _block;
+        let _pipe = drop_start(line, 3);
+        _block = trim(_pipe);
+        let new_path = _block;
+        let entry = new DiffLineEntry(display_idx, 0, new_path, line);
+        loop$lines = rest;
+        loop$display_idx = display_idx + 1;
+        loop$current_file_line = 0;
+        loop$current_file_path = new_path;
+        loop$acc = prepend(entry, acc);
+      } else {
+        let $1 = starts_with(line, "@@");
+        if ($1) {
+          let new_line = parse_hunk_new_start2(line);
+          let entry = new DiffLineEntry(display_idx, 0, current_file_path, line);
+          loop$lines = rest;
+          loop$display_idx = display_idx + 1;
+          loop$current_file_line = new_line;
+          loop$current_file_path = current_file_path;
+          loop$acc = prepend(entry, acc);
+        } else {
+          let $2 = starts_with(line, "-");
+          if ($2) {
+            let entry = new DiffLineEntry(display_idx, current_file_line, current_file_path, line);
+            loop$lines = rest;
+            loop$display_idx = display_idx + 1;
+            loop$current_file_line = current_file_line;
+            loop$current_file_path = current_file_path;
+            loop$acc = prepend(entry, acc);
+          } else {
+            let entry = new DiffLineEntry(display_idx, current_file_line, current_file_path, line);
+            loop$lines = rest;
+            loop$display_idx = display_idx + 1;
+            loop$current_file_line = current_file_line + 1;
+            loop$current_file_path = current_file_path;
+            loop$acc = prepend(entry, acc);
+          }
+        }
+      }
+    }
+  }
+}
+function index_with_file_lines(lines, chunk_file_path) {
+  let _block;
+  let $ = contains_string(chunk_file_path, " (+");
+  if ($) {
+    _block = "";
+  } else {
+    _block = chunk_file_path;
+  }
+  let initial_path = _block;
+  let _pipe = index_file_lines_acc(lines, 1, 0, initial_path, toList([]));
+  return reverse(_pipe);
+}
 function diff_view(chunk, commenting, chunk_comments, github_comments) {
   let lines = split2(chunk.diff_content, `
 `);
@@ -19435,7 +20641,7 @@ function diff_view(chunk, commenting, chunk_comments, github_comments) {
       ["container-type", "inline-size"],
       ["font-family", font_mono],
       raw8(font_size_1),
-      raw19("1.5")
+      raw22("1.5")
     ]))
   ]), toList([
     div2(toList([styles(toList([["min-width", "fit-content"]]))]), flat_map(file_indexed_lines, (entry) => {
@@ -19512,9 +20718,9 @@ function chunk_panel(chunk, pr_url, commenting, comments, github_comments) {
           raw2("1px solid " + blue_3),
           raw4(radius_2),
           raw14(size_3 + " " + size_4),
-          raw20(size_2),
+          raw23(size_2),
           raw8(font_size_1),
-          raw19("1.5"),
+          raw22("1.5"),
           raw5(gray_8)
         ]))
       ]), toList([text3(chunk.description)]))
@@ -19543,7 +20749,7 @@ function chunk_panel(chunk, pr_url, commenting, comments, github_comments) {
           raw8(font_size_1),
           inline_flex,
           center,
-          raw19("1")
+          raw22("1")
         ]))
       ]), toList([
         span(toList([class$("material-symbols-outlined")]), toList([text3("open_in_new")]))
@@ -19552,122 +20758,97 @@ function chunk_panel(chunk, pr_url, commenting, comments, github_comments) {
     diff_view(chunk, commenting, chunk_comments, github_comments)
   ]));
 }
-function general_comments_section(github_comments) {
-  let general_comments = filter(github_comments, (c) => {
-    return c.path === "";
+function chunk_pill(index5, current, comments) {
+  let is_active = index5 === current;
+  let has_comments = any(comments, (c) => {
+    return c.chunk_index === index5;
   });
-  if (general_comments instanceof Empty) {
-    return text3("");
+  let _block;
+  if (is_active) {
+    _block = indigo_7;
   } else {
-    return div(toList([
-      styles(toList([
-        raw("white"),
-        raw2("1px solid " + gray_3),
-        raw4(radius_3),
-        raw14(size_5 + " " + size_6),
-        raw20(size_5)
-      ]))
-    ]), toList([
-      h2(toList([
-        styles(toList([
-          raw11("0 0 " + size_3 + " 0"),
-          raw8(font_size_1),
-          raw9("600"),
-          raw5(gray_8)
-        ]))
-      ]), toList([text3("Comments")])),
-      div(toList([]), map2(general_comments, (comment) => {
-        return div(toList([
-          styles(toList([
-            raw(blue_2),
-            raw17("3px solid " + blue_6),
-            raw14(size_3 + " " + size_4),
-            raw12(size_2),
-            [
-              "border-radius",
-              "0 " + radius_2 + " " + radius_2 + " 0"
-            ],
-            raw8(font_size_1),
-            raw5(blue_9),
-            raw19("1.5")
-          ]))
-        ]), toList([
-          div(toList([
-            styles(toList([
-              flex,
-              space_between,
-              raw12("0.375rem"),
-              raw8(font_size_1),
-              raw5(gray_6)
-            ]))
-          ]), toList([
-            span(toList([
-              styles(toList([raw9("600")]))
-            ]), toList([text3(comment.author)])),
-            span(toList([]), toList([text3(comment.created_at)]))
-          ])),
-          div(toList([]), render(comment.body))
-        ]));
-      }))
-    ]));
+    _block = gray_3;
   }
+  let bg = _block;
+  return button(toList([
+    on_click(new GoToChunk(index5)),
+    styles(toList([
+      raw16("1.25rem"),
+      ["height", "1.25rem"],
+      raw4("50%"),
+      none4,
+      raw(bg),
+      pointer,
+      relative2,
+      raw14("0"),
+      raw28("background 0.15s")
+    ]))
+  ]), (() => {
+    if (has_comments) {
+      return toList([
+        span(toList([
+          styles(toList([
+            absolute,
+            ["top", "-2px"],
+            ["right", "-2px"],
+            raw16("8px"),
+            ["height", "8px"],
+            raw4("50%"),
+            raw(yellow_6),
+            raw2("1.5px solid white")
+          ]))
+        ]), toList([]))
+      ]);
+    } else {
+      return toList([]);
+    }
+  })());
 }
-function bottom_navigation(current, total) {
+function chunk_navigator(current, total, comments) {
   return div(toList([
     styles(toList([
       flex,
-      center3,
       center,
-      raw10(size_4),
-      raw14(size_4 + " 0")
+      raw10(size_3),
+      wrap
     ]))
   ]), toList([
-    nav_button("Previous Chunk", new PrevChunk, current > 0),
+    nav_button("Prev", new PrevChunk, current > 0),
     span(toList([
       styles(toList([
         raw8(font_size_1),
-        raw5(gray_6)
+        raw5(gray_6),
+        raw9("500"),
+        raw24("6rem"),
+        center2
       ]))
     ]), toList([
-      text3(to_string(current + 1) + " / " + to_string(total))
+      text3("Chunk " + to_string(current + 1) + " of " + to_string(total))
     ])),
-    nav_button("Next Chunk", new NextChunk, current < total - 1)
+    nav_button("Next", new NextChunk, current < total - 1),
+    div(toList([
+      styles(toList([
+        flex,
+        raw10("0.375rem"),
+        ["margin-left", size_2],
+        wrap
+      ]))
+    ]), (() => {
+      let _pipe = range(0, total, toList([]), (acc, i) => {
+        return prepend(chunk_pill(i, current, comments), acc);
+      });
+      return reverse(_pipe);
+    })())
   ]));
 }
-function review_action_button(label2, event_type, bg_color, submitting) {
-  let _block;
-  if (submitting) {
-    _block = "Submitting...";
-  } else {
-    _block = label2;
-  }
-  let display_label = _block;
-  return styled_button(display_label, new SubmitReview(event_type), bg_color, !submitting);
-}
-function review_submission_section(review) {
-  let _block;
-  if (review instanceof ReviewIdle) {
-    let body = review.body;
-    _block = body;
-  } else {
-    let body = review.body;
-    _block = body;
-  }
-  let review_body = _block;
-  let _block$1;
-  if (review instanceof ReviewIdle) {
-    _block$1 = false;
-  } else {
-    _block$1 = true;
-  }
-  let submitting = _block$1;
+function summary_panel(summary, current, total, comments) {
   return div(toList([
     styles(toList([
       raw("white"),
       raw2("1px solid " + gray_3),
       raw4(radius_3),
       raw14(size_5 + " " + size_6),
-      raw20(size_5)
+      raw12(size_5)
     ]))
   ]), toList([
     h2(toList([
@@ -19677,33 +20858,16 @@ function review_submission_section(review) {
         raw9("600"),
         raw5(gray_8)
       ]))
-    ]), toList([text3("Submit Review")])),
-    textarea(toList([
+    ]), toList([text3("AI Summary")])),
+    p(toList([
       styles(toList([
-        raw15("100%"),
-        raw21("4rem"),
-        raw14("0.625rem"),
-        raw2("1px solid " + gray_4),
-        raw4(radius_2),
-        ["font-family", font_system_ui],
-        raw8(font_size_1),
-        vertical,
-        none6,
-        border_box,
-        raw12(size_3)
-      ])),
-      placeholder("Leave a comment with your review (optional for approvals)..."),
-      on_input((var0) => {
-        return new SetReviewBody(var0);
-      })
-    ]), review_body),
-    div(toList([
-      styles(toList([flex, raw10(size_2), wrap]))
-    ]), toList([
-      review_action_button("Approve", "APPROVE", green_7, submitting),
-      review_action_button("Request Changes", "REQUEST_CHANGES", orange_7, submitting),
-      review_action_button("Comment", "COMMENT", indigo_7, submitting)
-    ]))
+        raw11("0 0 " + size_4 + " 0"),
+        raw5(gray_7),
+        raw22(font_lineheight_4),
+        raw8(font_size_1)
+      ]))
+    ]), toList([text3(summary)])),
+    chunk_navigator(current, total, comments)
   ]));
 }
 function analysis_view(analysis, pr_url, visible_comments, model) {
@@ -19727,45 +20891,302 @@ function analysis_view(analysis, pr_url, visible_comments, model) {
     review_submission_section(model.review)
   ]));
 }
-function loading_indicator2(heartbeats) {
-  let elapsed_seconds = heartbeats * heartbeat_interval_seconds;
-  let _block;
-  if (heartbeats === 0) {
-    _block = "Connecting to AI analysis...";
+function general_comments_section(github_comments) {
+  let general_comments = filter(github_comments, (c) => {
+    return c.path === "";
+  });
+  if (general_comments instanceof Empty) {
+    return text3("");
   } else {
-    _block = "Analyzing PR with AI... (" + to_string(elapsed_seconds) + "s elapsed)";
+    return div(toList([
+      styles(toList([
+        raw("white"),
+        raw2("1px solid " + gray_3),
+        raw4(radius_3),
+        raw14(size_5 + " " + size_6),
+        raw23(size_5)
+      ]))
+    ]), toList([
+      h2(toList([
+        styles(toList([
+          raw11("0 0 " + size_3 + " 0"),
+          raw8(font_size_1),
+          raw9("600"),
+          raw5(gray_8)
+        ]))
+      ]), toList([text3("Comments")])),
+      div(toList([]), map2(general_comments, (comment) => {
+        return div(toList([
+          styles(toList([
+            raw(blue_2),
+            raw17("3px solid " + blue_6),
+            raw14(size_3 + " " + size_4),
+            raw12(size_2),
+            [
+              "border-radius",
+              "0 " + radius_2 + " " + radius_2 + " 0"
+            ],
+            raw8(font_size_1),
+            raw5(blue_9),
+            raw22("1.5")
+          ]))
+        ]), toList([
+          div(toList([
+            styles(toList([
+              flex,
+              space_between,
+              raw12("0.375rem"),
+              raw8(font_size_1),
+              raw5(gray_6)
+            ]))
+          ]), toList([
+            span(toList([
+              styles(toList([raw9("600")]))
+            ]), toList([text3(comment.author)])),
+            span(toList([]), toList([text3(comment.created_at)]))
+          ])),
+          div(toList([]), render(comment.body))
+        ]));
+      }))
+    ]));
   }
-  let progress_text = _block;
+}
+function error_banner2(message2) {
   return div(toList([
     styles(toList([
-      center2,
-      raw14(size_10 + " " + size_7),
-      raw(gray_1),
-      raw4(radius_3),
-      raw2("1px solid " + gray_2)
+      raw14(size_3 + " " + size_4),
+      raw12(size_4),
+      raw(red_1),
+      raw2("1px solid " + red_4),
+      raw4(radius_2),
+      raw5(red_10),
+      raw8(font_size_1),
+      pre_wrap,
+      break_word
+    ]))
+  ]), toList([text3(message2)]));
+}
+function description_accordion(body, is_open) {
+  let $ = trim(body);
+  if ($ === "") {
+    return text3("");
+  } else {
+    let _block;
+    if (is_open) {
+      _block = "▾";
+    } else {
+      _block = "▸";
+    }
+    let chevron = _block;
+    return div(toList([
+      styles(toList([
+        raw("white"),
+        raw2("1px solid " + gray_3),
+        raw4(radius_3),
+        raw12(size_5),
+        hidden
+      ]))
+    ]), toList([
+      div(toList([
+        on_click(new ToggleDescription),
+        styles(toList([
+          raw14("0.875rem 1.25rem"),
+          pointer,
+          flex,
+          center,
+          raw10(size_2),
+          none7,
+          raw28("background 0.15s")
+        ]))
+      ]), toList([
+        span(toList([
+          styles(toList([
+            raw8(font_size_1),
+            raw5(gray_6),
+            raw16(size_4)
+          ]))
+        ]), toList([text3(chevron)])),
+        span(toList([
+          styles(toList([
+            raw8(font_size_1),
+            raw9("600"),
+            raw5(gray_8)
+          ]))
+        ]), toList([text3("PR Description")]))
+      ])),
+      (() => {
+        if (is_open) {
+          return div(toList([
+            styles(toList([
+              raw14("0 1.25rem 1.25rem 1.25rem"),
+              ["border-top", "1px solid " + gray_3]
+            ]))
+          ]), toList([
+            div(toList([
+              styles(toList([
+                raw23(size_4),
+                raw8(font_size_1),
+                raw22(font_lineheight_4),
+                raw5(gray_8),
+                break_word
+              ]))
+            ]), render(body))
+          ]));
+        } else {
+          return text3("");
+        }
+      })()
+    ]));
+  }
+}
+function analyze_button() {
+  return styled_button("Analyze PR", new AnalyzePr, indigo_7, true);
+}
+function back_button() {
+  return styled_button("Back to Dashboard", new BackToDashboard, gray_6, true);
+}
+function bot_comments_toggle(hidden2) {
+  let _block;
+  if (hidden2) {
+    _block = [gray_2, gray_6, "smart_toy"];
+  } else {
+    _block = [blue_2, blue_8, "smart_toy"];
+  }
+  let $ = _block;
+  let bg;
+  let fg;
+  let icon;
+  bg = $[0];
+  fg = $[1];
+  icon = $[2];
+  return button(toList([
+    on_click(new ToggleBotComments),
+    title((() => {
+      if (hidden2) {
+        return "Show bot comments";
+      } else {
+        return "Hide bot comments";
+      }
+    })()),
+    styles(toList([
+      inline_flex,
+      center,
+      raw10("0.25rem"),
+      raw14("0.375rem 0.625rem"),
+      raw(bg),
+      raw5(fg),
+      none4,
+      raw4(radius_2),
+      pointer,
+      raw8(font_size_0),
+      raw9("500")
+    ]))
+  ]), toList([
+    span(toList([
+      class$("material-symbols-outlined"),
+      styles(toList([raw8(font_size_1)]))
+    ]), toList([text3(icon)])),
+    text3((() => {
+      if (hidden2) {
+        return "Bots hidden";
+      } else {
+        return "Hide bots";
+      }
+    })())
+  ]));
+}
+function header_area(title2, number, url, head_branch, model) {
+  return div(toList([
+    styles(toList([
+      flex,
+      flex_start,
+      space_between,
+      raw12(size_5),
+      wrap,
+      raw10(size_3)
     ]))
   ]), toList([
     div(toList([
-      styles(toList([
-        inline_block,
-        raw15(size_7),
-        ["height", size_7],
-        raw2("3px solid " + gray_2),
-        ["border-top-color", indigo_7],
-        raw4("50%"),
-        raw16("spin 0.8s linear infinite"),
-        raw12(size_4)
+      styles(toList([raw7("1"), raw24("0")]))
+    ]), toList([
+      h1(toList([
+        styles(toList([
+          raw11("0"),
+          raw8(font_size_4),
+          raw9("600"),
+          raw5(indigo_12),
+          flex,
+          center,
+          raw10(size_2)
+        ]))
+      ]), toList([
+        a(toList([
+          href(url),
+          target("_blank"),
+          title(url),
+          styles(toList([
+            raw5(gray_6),
+            raw9("400"),
+            none5
+          ]))
+        ]), toList([text3("#" + to_string(number))])),
+        text3(title2),
+        a(toList([
+          href(url),
+          target("_blank"),
+          title(url),
+          styles(toList([
+            raw5(gray_5),
+            none5,
+            raw8(font_size_3),
+            inline_flex,
+            center
+          ]))
+        ]), toList([
+          span(toList([class$("material-symbols-outlined")]), toList([text3("open_in_new")]))
+        ]))
+      ])),
+      div(toList([
+        styles(toList([
+          inline_flex,
+          center,
+          raw10("0.375rem"),
+          raw23(size_2),
+          raw14("0.25rem 0.625rem"),
+          raw(violet_2),
+          raw4("999px"),
+          ["font-family", font_mono],
+          raw8(font_size_0),
+          raw5(violet_9),
+          raw22("1.4")
+        ]))
+      ]), toList([
+        span(toList([
+          class$("material-symbols-outlined"),
+          styles(toList([raw8(font_size_0)]))
+        ]), toList([text3("account_tree")])),
+        text3(head_branch)
       ]))
-    ]), toList([])),
-    p(toList([
-      styles(toList([
-        raw5(gray_6),
-        raw8(font_size_1)
-      ]))
-    ]), toList([text3(progress_text)]))
+    ])),
+    div(toList([
+      styles(toList([flex, raw10(size_2), center]))
+    ]), toList([
+      bot_comments_toggle(model.hide_bot_comments),
+      back_button(),
+      (() => {
+        let $ = model.analysis_state;
+        if ($ instanceof NotAnalyzed) {
+          return analyze_button();
+        } else if ($ instanceof Analyzing) {
+          return text3("");
+        } else {
+          return analyze_button();
+        }
+      })()
+    ]))
   ]));
 }
-function view3(model) {
+function view4(model) {
   let $ = model.selected_pr;
   if ($ instanceof Some) {
     let detail = $[0];
@@ -19838,27 +21259,26 @@ class PrRoute extends CustomType {
     this[0] = $0;
   }
 }
+
+class PrFeedbackRoute extends CustomType {
+  constructor($0) {
+    super();
+    this[0] = $0;
+  }
+}
 var default_repo = "GC-AI-Inc/app-gc-ai";
-function format_error(err) {
-  if (err instanceof BadBody) {
-    return "Bad response body";
-  } else if (err instanceof BadUrl) {
-    let url = err[0];
-    return "Bad URL: " + url;
-  } else if (err instanceof HttpError) {
-    let response = err[0];
-    return "Server error (" + to_string(response.status) + "): " + response.body;
-  } else if (err instanceof JsonError) {
-    return "Failed to parse server response";
-  } else if (err instanceof NetworkError2) {
-    return "Network error — is the server running?";
+function view5(model) {
+  let $ = model.view;
+  if ($ instanceof Dashboard) {
+    return view2(model);
+  } else if ($ instanceof PrReview) {
+    return view4(model);
   } else {
-    let response = err[0];
-    return "Unexpected response (" + to_string(response.status) + ")";
+    return view3(model);
   }
 }
 function reset_pr_state(model) {
-  return new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, new NotAnalyzed, 0, toList([]), new NotCommenting, toList([]), model.description_open, new ReviewIdle(""), model.hide_bot_comments);
+  return new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, new NotAnalyzed, 0, toList([]), new NotCommenting, toList([]), model.description_open, new ReviewIdle(""), model.hide_bot_comments, initial_feedback_state());
 }
 function parse_route(uri) {
   let path = uri.path;
@@ -19892,9 +21312,179 @@ function parse_route(uri) {
           return new DashboardRoute;
         }
       } else {
-        return new DashboardRoute;
+        let $2 = $1.tail;
+        if ($2 instanceof Empty) {
+          let $3 = segments.head;
+          if ($3 === "pr") {
+            let $4 = $1.head;
+            if ($4 === "feedback") {
+              let number_str = $.head;
+              let $5 = parse_int(number_str);
+              if ($5 instanceof Ok) {
+                let number = $5[0];
+                return new PrFeedbackRoute(number);
+              } else {
+                return new DashboardRoute;
+              }
+            } else {
+              return new DashboardRoute;
+            }
+          } else {
+            return new DashboardRoute;
+          }
+        } else {
+          return new DashboardRoute;
+        }
       }
     }
+  }
+}
+function handle_url_changed(model, uri) {
+  let $ = parse_route(uri);
+  if ($ instanceof DashboardRoute) {
+    let $1 = model.view;
+    if ($1 instanceof Dashboard) {
+      return [model, none()];
+    } else {
+      let new_model = reset_pr_state(model);
+      return [
+        new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new None, new_model.loading, new Dashboard, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments, new_model.feedback),
+        none()
+      ];
+    }
+  } else if ($ instanceof PrRoute) {
+    let number = $[0];
+    let $1 = model.selected_pr;
+    let $2 = model.view;
+    if ($1 instanceof Some) {
+      if ($2 instanceof PrReview) {
+        let detail = $1[0];
+        if (detail.number === number) {
+          return [model, none()];
+        } else {
+          let detail2 = $1[0];
+          if (detail2.number === number) {
+            return [
+              new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, new PrReview, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
+              none()
+            ];
+          } else {
+            let new_model = reset_pr_state(model);
+            return [
+              new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments, new_model.feedback),
+              fetch_pr_detail(model.active_repo, number)
+            ];
+          }
+        }
+      } else {
+        let detail = $1[0];
+        if (detail.number === number) {
+          return [
+            new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, new PrReview, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
+            none()
+          ];
+        } else {
+          let new_model = reset_pr_state(model);
+          return [
+            new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments, new_model.feedback),
+            fetch_pr_detail(model.active_repo, number)
+          ];
+        }
+      }
+    } else {
+      let new_model = reset_pr_state(model);
+      return [
+        new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments, new_model.feedback),
+        fetch_pr_detail(model.active_repo, number)
+      ];
+    }
+  } else {
+    let number = $[0];
+    let $1 = model.selected_pr;
+    let $2 = model.view;
+    if ($1 instanceof Some) {
+      if ($2 instanceof PrFeedback) {
+        let detail = $1[0];
+        if (detail.number === number) {
+          return [model, none()];
+        } else {
+          let detail2 = $1[0];
+          if (detail2.number === number) {
+            return [
+              new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, new PrFeedback, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
+              none()
+            ];
+          } else {
+            let new_model = reset_pr_state(model);
+            return [
+              new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrFeedback, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments, new_model.feedback),
+              fetch_pr_detail(model.active_repo, number)
+            ];
+          }
+        }
+      } else {
+        let detail = $1[0];
+        if (detail.number === number) {
+          return [
+            new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, new PrFeedback, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
+            none()
+          ];
+        } else {
+          let new_model = reset_pr_state(model);
+          return [
+            new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrFeedback, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments, new_model.feedback),
+            fetch_pr_detail(model.active_repo, number)
+          ];
+        }
+      }
+    } else {
+      let new_model = reset_pr_state(model);
+      return [
+        new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrFeedback, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments, new_model.feedback),
+        fetch_pr_detail(model.active_repo, number)
+      ];
+    }
+  }
+}
+function format_error(err) {
+  if (err instanceof BadBody) {
+    return "Bad response body";
+  } else if (err instanceof BadUrl) {
+    let url = err[0];
+    return "Bad URL: " + url;
+  } else if (err instanceof HttpError) {
+    let response = err[0];
+    return "Server error (" + to_string(response.status) + "): " + response.body;
+  } else if (err instanceof JsonError) {
+    return "Failed to parse server response";
+  } else if (err instanceof NetworkError2) {
+    return "Network error — is the server running?";
+  } else {
+    let response = err[0];
+    return "Unexpected response (" + to_string(response.status) + ")";
+  }
+}
+function handle_submit_review(model, event4) {
+  let $ = model.selected_pr;
+  let $1 = model.review;
+  if ($ instanceof Some) {
+    if ($1 instanceof ReviewIdle) {
+      let detail = $[0];
+      let body = $1.body;
+      return [
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new SubmittingReview(body), model.hide_bot_comments, model.feedback),
+        submit_review(model.active_repo, detail.number, event4, body)
+      ];
+    } else {
+      let detail = $[0];
+      let body = $1.body;
+      return [
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new SubmittingReview(body), model.hide_bot_comments, model.feedback),
+        submit_review(model.active_repo, detail.number, event4, body)
+      ];
+    }
+  } else {
+    return [model, none()];
   }
 }
 function handle_submit_comment(model) {
@@ -19929,7 +21519,7 @@ function handle_submit_comment(model) {
         }
         let file_path = _block;
         return [
-          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, prepend(comment, model.comments), new PostingComment(display_line, file_line, text4), model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, prepend(comment, model.comments), new PostingComment(display_line, file_line, text4), model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
           post_github_comment(model.active_repo, detail.number, text4, file_path, file_line)
         ];
       } else {
@@ -19940,7 +21530,7 @@ function handle_submit_comment(model) {
       let text4 = $.text;
       let comment = new LineComment(model.current_chunk, display_line, text4);
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, prepend(comment, model.comments), new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, prepend(comment, model.comments), new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
         none()
       ];
     } else {
@@ -19950,72 +21540,91 @@ function handle_submit_comment(model) {
     return [model, none()];
   }
 }
-function handle_submit_review(model, event4) {
-  let $ = model.selected_pr;
-  let $1 = model.review;
-  if ($ instanceof Some) {
-    if ($1 instanceof ReviewIdle) {
-      let detail = $[0];
-      let body = $1.body;
-      return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new SubmittingReview(body), model.hide_bot_comments),
-        submit_review(model.active_repo, detail.number, event4, body)
-      ];
-    } else {
-      let detail = $[0];
-      let body = $1.body;
-      return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new SubmittingReview(body), model.hide_bot_comments),
-        submit_review(model.active_repo, detail.number, event4, body)
-      ];
-    }
-  } else {
-    return [model, none()];
-  }
-}
-function handle_url_changed(model, uri) {
-  let $ = parse_route(uri);
-  if ($ instanceof DashboardRoute) {
-    let $1 = model.view;
-    if ($1 instanceof Dashboard) {
-      return [model, none()];
-    } else {
-      let new_model = reset_pr_state(model);
-      return [
-        new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new None, new_model.loading, new Dashboard, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments),
-        none()
-      ];
-    }
-  } else {
-    let number = $[0];
-    let $1 = model.view;
-    if ($1 instanceof Dashboard) {
-      let new_model = reset_pr_state(model);
-      return [
-        new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments),
-        fetch_pr_detail(model.active_repo, number)
-      ];
-    } else {
-      let $2 = model.selected_pr;
-      if ($2 instanceof Some) {
-        let detail = $2[0];
-        if (detail.number === number) {
-          return [model, none()];
-        } else {
-          let new_model = reset_pr_state(model);
-          return [
-            new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments),
-            fetch_pr_detail(model.active_repo, number)
-          ];
-        }
+function move_feedback(model, direction) {
+  let threads = thread_ids(model.github_comments);
+  let $ = model.feedback.selected_comment_id;
+  if (threads instanceof Empty) {
+    return model;
+  } else if ($ instanceof Some) {
+    let current = $[0];
+    let $1 = fold2(threads, [0, -1], (acc, id2) => {
+      let i;
+      let found;
+      i = acc[0];
+      found = acc[1];
+      let $22 = found === -1 && id2 === current;
+      if ($22) {
+        return [i + 1, i];
       } else {
-        let new_model = reset_pr_state(model);
-        return [
-          new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments),
-          fetch_pr_detail(model.active_repo, number)
-        ];
+        return [i + 1, found];
       }
+    });
+    let idx;
+    idx = $1[1];
+    let next_idx = idx + direction;
+    let count2 = length(threads);
+    let _block;
+    let $2 = next_idx < 0;
+    let $3 = next_idx >= count2;
+    if ($2) {
+      _block = 0;
+    } else if ($3) {
+      _block = count2 - 1;
+    } else {
+      _block = next_idx;
     }
+    let clamped = _block;
+    let $4 = (() => {
+      let _pipe = drop(threads, clamped);
+      return first(_pipe);
+    })();
+    if ($4 instanceof Ok) {
+      let id2 = $4[0];
+      return new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, new FeedbackState(new Some(id2), 0, 0, false));
+    } else {
+      return model;
+    }
+  } else {
+    let $1 = first(threads);
+    if ($1 instanceof Ok) {
+      let id2 = $1[0];
+      return new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, new FeedbackState(new Some(id2), 0, 0, false));
+    } else {
+      return model;
+    }
+  }
+}
+function prefer_non_empty(fresh, old) {
+  if (fresh instanceof Empty) {
+    if (old instanceof Empty) {
+      return fresh;
+    } else {
+      return old;
+    }
+  } else {
+    return fresh;
+  }
+}
+function merge_pr_groups(previous, fresh) {
+  if (previous instanceof Some) {
+    let old = previous[0];
+    return new PrGroups(prefer_non_empty(fresh.created_by_me, old.created_by_me), prefer_non_empty(fresh.review_requested, old.review_requested), prefer_non_empty(fresh.all_open, old.all_open), (() => {
+      let $ = fresh.all_open;
+      if ($ instanceof Empty) {
+        return old.all_open_total;
+      } else {
+        return fresh.all_open_total;
+      }
+    })(), (() => {
+      let $ = fresh.production_pr;
+      if ($ instanceof Some) {
+        return fresh.production_pr;
+      } else {
+        return old.production_pr;
+      }
+    })());
+  } else {
+    return fresh;
   }
 }
 function update2(model, msg) {
@@ -20023,32 +21632,59 @@ function update2(model, msg) {
     let $ = msg[0];
     if ($ instanceof Ok) {
       let groups = $[0];
+      let _block;
+      let $1 = model.view;
+      if ($1 instanceof Dashboard) {
+        _block = false;
+      } else {
+        _block = is_none(model.selected_pr);
+      }
+      let still_loading = _block;
       return [
-        new Model(model.repos, model.active_repo, new Some(groups), model.selected_pr, false, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+        new Model(model.repos, model.active_repo, new Some(groups), model.selected_pr, still_loading, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
         none()
       ];
     } else {
       let err = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
         none()
       ];
+    }
+  } else if (msg instanceof RefreshedPrs) {
+    let $ = msg[0];
+    if ($ instanceof Ok) {
+      let groups = $[0];
+      return [
+        new Model(model.repos, model.active_repo, new Some(merge_pr_groups(model.pr_groups, groups)), model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
+        none()
+      ];
+    } else {
+      return [model, none()];
     }
   } else if (msg instanceof GotPrDetail) {
     let $ = msg[0];
     if ($ instanceof Ok) {
       let detail = $[0];
-      return [
-        new Model(model.repos, model.active_repo, model.pr_groups, new Some(detail), true, model.view, new None, new Analyzing(0), model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
-        batch(toList([
-          fetch_github_comments(model.active_repo, detail.number),
-          analyze_pr_stream(model.active_repo, detail.number)
-        ]))
-      ];
+      let $1 = model.view;
+      if ($1 instanceof PrFeedback) {
+        return [
+          new Model(model.repos, model.active_repo, model.pr_groups, new Some(detail), false, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
+          fetch_github_comments(model.active_repo, detail.number)
+        ];
+      } else {
+        return [
+          new Model(model.repos, model.active_repo, model.pr_groups, new Some(detail), true, model.view, new None, new Analyzing(0), model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
+          batch(toList([
+            fetch_github_comments(model.active_repo, detail.number),
+            analyze_pr_stream(model.active_repo, detail.number)
+          ]))
+        ];
+      }
     } else {
       let err = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
         none()
       ];
     }
@@ -20056,27 +21692,105 @@ function update2(model, msg) {
     let number = msg[0];
     let new_model = reset_pr_state(model);
     return [
-      new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments),
+      new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrReview, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments, new_model.feedback),
       batch(toList([
         push_url("/pr/" + to_string(number)),
         fetch_pr_detail(model.active_repo, number)
       ]))
     ];
+  } else if (msg instanceof SelectPrForFeedback) {
+    let number = msg[0];
+    let new_model = reset_pr_state(model);
+    return [
+      new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new_model.selected_pr, true, new PrFeedback, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments, new_model.feedback),
+      batch(toList([
+        push_url("/pr/" + to_string(number) + "/feedback"),
+        fetch_pr_detail(model.active_repo, number)
+      ]))
+    ];
+  } else if (msg instanceof SelectFeedbackComment) {
+    let id2 = msg[0];
+    return [
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, new FeedbackState(new Some(id2), 0, 0, false)),
+      none()
+    ];
+  } else if (msg instanceof ExpandFeedbackUp) {
+    return [
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, (() => {
+        let _record = model.feedback;
+        return new FeedbackState(_record.selected_comment_id, model.feedback.expand_up + feedback_default_radius, _record.expand_down, _record.whole_file);
+      })()),
+      none()
+    ];
+  } else if (msg instanceof ExpandFeedbackDown) {
+    return [
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, (() => {
+        let _record = model.feedback;
+        return new FeedbackState(_record.selected_comment_id, _record.expand_up, model.feedback.expand_down + feedback_default_radius, _record.whole_file);
+      })()),
+      none()
+    ];
+  } else if (msg instanceof ShowWholeFile) {
+    return [
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, (() => {
+        let _record = model.feedback;
+        return new FeedbackState(_record.selected_comment_id, _record.expand_up, _record.expand_down, true);
+      })()),
+      none()
+    ];
+  } else if (msg instanceof NextFeedback) {
+    return [move_feedback(model, 1), none()];
+  } else if (msg instanceof PrevFeedback) {
+    return [move_feedback(model, -1), none()];
+  } else if (msg instanceof SwitchToAnalysis) {
+    let $ = model.selected_pr;
+    let $1 = model.analysis_state;
+    if ($ instanceof Some) {
+      if ($1 instanceof NotAnalyzed) {
+        let detail = $[0];
+        return [
+          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, new PrReview, model.error, new Analyzing(0), model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
+          batch(toList([
+            push_url("/pr/" + to_string(detail.number)),
+            analyze_pr_stream(model.active_repo, detail.number)
+          ]))
+        ];
+      } else {
+        let detail = $[0];
+        return [
+          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, new PrReview, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
+          push_url("/pr/" + to_string(detail.number))
+        ];
+      }
+    } else {
+      return [model, none()];
+    }
+  } else if (msg instanceof SwitchToFeedback) {
+    let $ = model.selected_pr;
+    if ($ instanceof Some) {
+      let detail = $[0];
+      return [
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, new PrFeedback, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
+        push_url("/pr/" + to_string(detail.number) + "/feedback")
+      ];
+    } else {
+      return [model, none()];
+    }
   } else if (msg instanceof SetRepo) {
     let repo = msg[0];
     return [
-      new Model(model.repos, repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+      new Model(model.repos, repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
       none()
     ];
   } else if (msg instanceof BackToDashboard) {
     let new_model = reset_pr_state(model);
     return [
-      new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new None, new_model.loading, new Dashboard, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments),
+      new Model(new_model.repos, new_model.active_repo, new_model.pr_groups, new None, new_model.loading, new Dashboard, new None, new_model.analysis_state, new_model.current_chunk, new_model.comments, new_model.commenting, new_model.github_comments, new_model.description_open, new_model.review, new_model.hide_bot_comments, new_model.feedback),
       push_url("/")
     ];
   } else if (msg instanceof FetchPrs) {
     return [
-      new Model(model.repos, model.active_repo, new None, model.selected_pr, true, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+      new Model(model.repos, model.active_repo, new None, model.selected_pr, true, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
       fetch_prs(model.active_repo)
     ];
   } else if (msg instanceof AnalyzePr) {
@@ -20084,7 +21798,7 @@ function update2(model, msg) {
     if ($ instanceof Some) {
       let detail = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, true, model.view, new None, new Analyzing(0), model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, true, model.view, new None, new Analyzing(0), model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
         analyze_pr_stream(model.active_repo, detail.number)
       ];
     } else {
@@ -20095,13 +21809,13 @@ function update2(model, msg) {
     if ($ instanceof Ok) {
       let analysis = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new None, new Analyzed(analysis), 0, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new None, new Analyzed(analysis), 0, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
         none()
       ];
     } else {
       let err = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
         none()
       ];
     }
@@ -20111,12 +21825,12 @@ function update2(model, msg) {
     if ($ instanceof Ok) {
       let analysis = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new None, new Analyzed(analysis), 0, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new None, new Analyzed(analysis), 0, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
         none()
       ];
     } else {
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some("Failed to parse analysis response"), new NotAnalyzed, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some("Failed to parse analysis response"), new NotAnalyzed, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
         none()
       ];
     }
@@ -20134,7 +21848,7 @@ function update2(model, msg) {
     }
     let error_msg = _block;
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some("Analysis failed: " + error_msg), new NotAnalyzed, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some("Analysis failed: " + error_msg), new NotAnalyzed, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
       none()
     ];
   } else if (msg instanceof SseHeartbeat) {
@@ -20142,7 +21856,7 @@ function update2(model, msg) {
     if ($ instanceof Analyzing) {
       let n = $.heartbeats;
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, new Analyzing(n + 1), model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, new Analyzing(n + 1), model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
         none()
       ];
     } else {
@@ -20151,7 +21865,7 @@ function update2(model, msg) {
   } else if (msg instanceof SseConnectionError) {
     let msg$1 = msg[0];
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some("Connection error: " + msg$1), new NotAnalyzed, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, false, model.view, new Some("Connection error: " + msg$1), new NotAnalyzed, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
       none()
     ];
   } else if (msg instanceof NextChunk) {
@@ -20174,9 +21888,17 @@ function update2(model, msg) {
       _block$1 = model.current_chunk;
     }
     let next = _block$1;
+    let _block$2;
+    let $2 = next === model.current_chunk;
+    if ($2) {
+      _block$2 = none();
+    } else {
+      _block$2 = scroll_to_top();
+    }
+    let scroll = _block$2;
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, next, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
-      none()
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, next, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
+      scroll
     ];
   } else if (msg instanceof PrevChunk) {
     let _block;
@@ -20187,26 +21909,41 @@ function update2(model, msg) {
       _block = 0;
     }
     let prev = _block;
+    let _block$1;
+    let $1 = prev === model.current_chunk;
+    if ($1) {
+      _block$1 = none();
+    } else {
+      _block$1 = scroll_to_top();
+    }
+    let scroll = _block$1;
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, prev, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
-      none()
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, prev, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
+      scroll
     ];
   } else if (msg instanceof GoToChunk) {
     let n = msg[0];
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, n, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
-      none()
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, n, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
+      (() => {
+        let $ = n === model.current_chunk;
+        if ($) {
+          return none();
+        } else {
+          return scroll_to_top();
+        }
+      })()
     ];
   } else if (msg instanceof StartComment) {
     let display_line = msg[0];
     let file_line = msg[1];
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new Commenting(display_line, file_line, ""), model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new Commenting(display_line, file_line, ""), model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
       none()
     ];
   } else if (msg instanceof CancelComment) {
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
       none()
     ];
   } else if (msg instanceof UpdateCommentText) {
@@ -20218,26 +21955,26 @@ function update2(model, msg) {
       let dl = $.display_line;
       let fl = $.file_line;
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new Commenting(dl, fl, text4), model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new Commenting(dl, fl, text4), model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
         none()
       ];
     } else if ($ instanceof PostingComment) {
       let dl = $.display_line;
       let fl = $.file_line;
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new PostingComment(dl, fl, text4), model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new PostingComment(dl, fl, text4), model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
         none()
       ];
     } else if ($ instanceof Replying) {
       let id2 = $.comment_id;
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new Replying(id2, text4), model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new Replying(id2, text4), model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
         none()
       ];
     } else {
       let id2 = $.comment_id;
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new PostingReply(id2, text4), model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new PostingReply(id2, text4), model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
         none()
       ];
     }
@@ -20248,13 +21985,13 @@ function update2(model, msg) {
     if ($ instanceof Ok) {
       let comments = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, comments, model.description_open, model.review, model.hide_bot_comments),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
         none()
       ];
     } else {
       let err = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
         none()
       ];
     }
@@ -20265,26 +22002,26 @@ function update2(model, msg) {
       if ($1 instanceof Some) {
         let detail = $1[0];
         return [
-          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
           fetch_github_comments(model.active_repo, detail.number)
         ];
       } else {
         return [
-          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
           none()
         ];
       }
     } else {
       let err = $[0];
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new Some(format_error(err)), model.analysis_state, model.current_chunk, model.comments, new NotCommenting, model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
         none()
       ];
     }
   } else if (msg instanceof StartReply) {
     let comment_id = msg[0];
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new Replying(comment_id, ""), model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new Replying(comment_id, ""), model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
       none()
     ];
   } else if (msg instanceof SubmitReply) {
@@ -20295,7 +22032,7 @@ function update2(model, msg) {
       let comment_id = $.comment_id;
       let text4 = $.text;
       return [
-        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new PostingReply(comment_id, text4), model.github_comments, model.description_open, model.review, model.hide_bot_comments),
+        new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, new PostingReply(comment_id, text4), model.github_comments, model.description_open, model.review, model.hide_bot_comments, model.feedback),
         reply_to_comment(model.active_repo, detail.number, comment_id, text4)
       ];
     } else {
@@ -20306,12 +22043,12 @@ function update2(model, msg) {
     return handle_url_changed(model, uri);
   } else if (msg instanceof ToggleDescription) {
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, !model.description_open, model.review, model.hide_bot_comments),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, !model.description_open, model.review, model.hide_bot_comments, model.feedback),
       none()
     ];
   } else if (msg instanceof ToggleBotComments) {
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, !model.hide_bot_comments),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, model.review, !model.hide_bot_comments, model.feedback),
       none()
     ];
   } else if (msg instanceof SubmitReview) {
@@ -20320,7 +22057,7 @@ function update2(model, msg) {
   } else if (msg instanceof SetReviewBody) {
     let text4 = msg[0];
     return [
-      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new ReviewIdle(text4), model.hide_bot_comments),
+      new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new ReviewIdle(text4), model.hide_bot_comments, model.feedback),
       none()
     ];
   } else if (msg instanceof ReviewSubmitted) {
@@ -20330,12 +22067,12 @@ function update2(model, msg) {
       if ($1 instanceof Some) {
         let detail = $1[0];
         return [
-          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new ReviewIdle(""), model.hide_bot_comments),
+          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, new None, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new ReviewIdle(""), model.hide_bot_comments, model.feedback),
           fetch_github_comments(model.active_repo, detail.number)
         ];
       } else {
         return [
-          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new ReviewIdle(""), model.hide_bot_comments),
+          new Model(model.repos, model.active_repo, model.pr_groups, model.selected_pr, model.loading, model.view, model.error, model.analysis_state, model.current_chunk, model.comments, model.commenting, model.github_comments, model.description_open, new ReviewIdle(""), model.hide_bot_comments, model.feedback),
           none()
         ];
       }
@@ -20351,20 +22088,12 @@ function update2(model, msg) {
             let body = $1.body;
             return body;
           }
-        })()), model.hide_bot_comments),
+        })()), model.hide_bot_comments, model.feedback),
         none()
       ];
     }
   } else {
-    return [model, fetch_prs(model.active_repo)];
-  }
-}
-function view4(model) {
-  let $ = model.view;
-  if ($ instanceof Dashboard) {
-    return view2(model);
-  } else {
-    return view3(model);
+    return [model, refresh_prs(model.active_repo)];
   }
 }
 function init2(_) {
@@ -20375,10 +22104,20 @@ function init2(_) {
     let $2 = parse_route(uri);
     if ($2 instanceof DashboardRoute) {
       _block = [new Dashboard, true, fetch_prs(default_repo)];
-    } else {
+    } else if ($2 instanceof PrRoute) {
       let number = $2[0];
       _block = [
         new PrReview,
+        true,
+        batch(toList([
+          fetch_prs(default_repo),
+          fetch_pr_detail(default_repo, number)
+        ]))
+      ];
+    } else {
+      let number = $2[0];
+      _block = [
+        new PrFeedback,
         true,
         batch(toList([
           fetch_prs(default_repo),
@@ -20397,7 +22136,7 @@ function init2(_) {
   initial_loading = $[1];
   initial_effect = $[2];
   return [
-    new Model(toList([default_repo]), default_repo, new None, new None, initial_loading, initial_view, new None, new NotAnalyzed, 0, toList([]), new NotCommenting, toList([]), false, new ReviewIdle(""), false),
+    new Model(toList([default_repo]), default_repo, new None, new None, initial_loading, initial_view, new None, new NotAnalyzed, 0, toList([]), new NotCommenting, toList([]), false, new ReviewIdle(""), false, initial_feedback_state()),
     batch(toList([
       init((var0) => {
         return new UrlChanged(var0);
@@ -20408,15 +22147,15 @@ function init2(_) {
   ];
 }
 function main() {
-  let app = application(init2, update2, view4);
+  let app = application(init2, update2, view5);
   let $ = start4(app, "#app", undefined);
   if (!($ instanceof Ok)) {
-    throw makeError("let_assert", FILEPATH8, "client", 34, "main", "Pattern match failed, no pattern matched the value.", {
+    throw makeError("let_assert", FILEPATH8, "client", 38, "main", "Pattern match failed, no pattern matched the value.", {
       value: $,
-      start: 1100,
-      end: 1149,
-      pattern_start: 1111,
-      pattern_end: 1116
+      start: 1389,
+      end: 1438,
+      pattern_start: 1400,
+      pattern_end: 1405
     });
   }
   return;

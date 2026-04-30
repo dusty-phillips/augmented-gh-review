@@ -35,6 +35,10 @@ pub type PrGroups {
     created_by_me: List(PullRequest),
     review_requested: List(PullRequest),
     all_open: List(PullRequest),
+    /// Total count of open PRs in the repo. May exceed `list.length(all_open)`
+    /// when GitHub returns more than the per-list cap; in that case the server
+    /// fetches the count separately so the UI can show a truthful total.
+    all_open_total: Int,
     production_pr: option.Option(PullRequest),
   )
 }
@@ -80,6 +84,8 @@ pub type PrComment {
     line: Int,
     created_at: String,
     in_reply_to_id: Int,
+    is_human: Bool,
+    is_resolved: Bool,
   )
 }
 
@@ -122,6 +128,7 @@ pub fn encode_pr_groups(groups: PrGroups) -> json.Json {
       json.array(groups.review_requested, encode_pull_request),
     ),
     #("all_open", json.array(groups.all_open, encode_pull_request)),
+    #("all_open_total", json.int(groups.all_open_total)),
     #("production_pr", case groups.production_pr {
       option.Some(pr) -> encode_pull_request(pr)
       option.None -> json.null()
@@ -189,6 +196,8 @@ pub fn encode_pr_comment(comment: PrComment) -> json.Json {
     #("line", json.int(comment.line)),
     #("created_at", json.string(comment.created_at)),
     #("in_reply_to_id", json.int(comment.in_reply_to_id)),
+    #("is_human", json.bool(comment.is_human)),
+    #("is_resolved", json.bool(comment.is_resolved)),
   ])
 }
 
@@ -253,6 +262,11 @@ pub fn pr_groups_decoder() -> decode.Decoder(PrGroups) {
     decode.list(pull_request_decoder()),
   )
   use all_open <- decode.field("all_open", decode.list(pull_request_decoder()))
+  use all_open_total <- decode.optional_field(
+    "all_open_total",
+    0,
+    decode.int,
+  )
   use production_pr <- decode.field(
     "production_pr",
     decode.one_of(decode.map(pull_request_decoder(), option.Some), [
@@ -263,6 +277,7 @@ pub fn pr_groups_decoder() -> decode.Decoder(PrGroups) {
     created_by_me: created_by_me,
     review_requested: review_requested,
     all_open: all_open,
+    all_open_total: all_open_total,
     production_pr: production_pr,
   ))
 }
@@ -341,6 +356,8 @@ pub fn pr_comment_decoder() -> decode.Decoder(PrComment) {
   use line <- decode.field("line", decode.int)
   use created_at <- decode.field("created_at", decode.string)
   use in_reply_to_id <- decode.field("in_reply_to_id", decode.int)
+  use is_human <- decode.optional_field("is_human", True, decode.bool)
+  use is_resolved <- decode.optional_field("is_resolved", False, decode.bool)
   decode.success(PrComment(
     id: id,
     author: author,
@@ -349,6 +366,8 @@ pub fn pr_comment_decoder() -> decode.Decoder(PrComment) {
     line: line,
     created_at: created_at,
     in_reply_to_id: in_reply_to_id,
+    is_human: is_human,
+    is_resolved: is_resolved,
   ))
 }
 

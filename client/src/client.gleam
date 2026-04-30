@@ -1,17 +1,21 @@
 import client/effects
 import client/model.{
   type Model, type Msg, Analyzed, Analyzing, AnalyzePr, BackToDashboard,
-  CancelComment, CommentPosted, Commenting, Dashboard, FetchPrs, GoToChunk,
-  GotAnalysis, GotGithubComments, GotPrDetail, GotPrs, Model, NextChunk,
-  NotAnalyzed, NotCommenting, PostingComment, PostingReply, PrevChunk, PrReview,
-  RefreshPrs, Replying, ReviewIdle, ReviewSubmitted, SelectPr, SetRepo,
-  SetReviewBody, SseAnalysisComplete, SseAnalysisError, SseConnectionError,
-  SseHeartbeat, StartComment, StartReply, SubmitComment, SubmitReply,
-  SubmitReview, SubmittingReview, ToggleBotComments, ToggleDescription,
-  UpdateCommentText,
-  UrlChanged,
+  CancelComment, CommentPosted, Commenting, Dashboard, ExpandFeedbackDown,
+  ExpandFeedbackUp, FeedbackState, FetchPrs, GoToChunk, GotAnalysis,
+  GotGithubComments, GotPrDetail, GotPrs, Model, NextChunk, NextFeedback,
+  NotAnalyzed, NotCommenting, PostingComment, PostingReply, PrevChunk,
+  PrevFeedback, PrFeedback, PrReview, RefreshPrs, RefreshedPrs, Replying,
+  ReviewIdle, ReviewSubmitted, SelectFeedbackComment, SelectPr,
+  SelectPrForFeedback,
+  SetRepo, SetReviewBody, ShowWholeFile, SseAnalysisComplete, SseAnalysisError,
+  SseConnectionError, SseHeartbeat, StartComment, StartReply, SubmitComment,
+  SubmitReply, SubmitReview, SubmittingReview, SwitchToAnalysis,
+  SwitchToFeedback, ToggleBotComments, ToggleDescription, UpdateCommentText,
+  UrlChanged, feedback_default_radius, initial_feedback_state,
 }
 import client/views/dashboard
+import client/views/pr_feedback
 import client/views/pr_review
 import gleam/dynamic/decode
 import gleam/int
@@ -58,6 +62,7 @@ fn reset_pr_state(model: Model) -> Model {
     commenting: NotCommenting,
     github_comments: [],
     review: ReviewIdle(body: ""),
+    feedback: initial_feedback_state(),
   )
 }
 
@@ -69,6 +74,14 @@ fn init(_flags: Nil) -> #(Model, effect.Effect(Msg)) {
         case parse_route(uri) {
           PrRoute(number) -> #(
             PrReview,
+            True,
+            effect.batch([
+              effects.fetch_prs(default_repo),
+              effects.fetch_pr_detail(default_repo, number),
+            ]),
+          )
+          PrFeedbackRoute(number) -> #(
+            PrFeedback,
             True,
             effect.batch([
               effects.fetch_prs(default_repo),
@@ -101,6 +114,7 @@ fn init(_flags: Nil) -> #(Model, effect.Effect(Msg)) {
       description_open: False,
       review: ReviewIdle(body: ""),
       hide_bot_comments: False,
+      feedback: initial_feedback_state(),
     ),
     effect.batch([
       modem.init(UrlChanged),
@@ -113,6 +127,7 @@ fn init(_flags: Nil) -> #(Model, effect.Effect(Msg)) {
 type Route {
   DashboardRoute
   PrRoute(Int)
+  PrFeedbackRoute(Int)
 }
 
 fn parse_route(uri: uri.Uri) -> Route {
@@ -128,6 +143,11 @@ fn parse_route(uri: uri.Uri) -> Route {
         Ok(number) -> PrRoute(number)
         Error(_) -> DashboardRoute
       }
+    ["pr", number_str, "feedback"] ->
+      case int.parse(number_str) {
+        Ok(number) -> PrFeedbackRoute(number)
+        Error(_) -> DashboardRoute
+      }
     _ -> DashboardRoute
   }
 }
@@ -140,19 +160,41 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     )
 
     // Silent background refresh — no loading state, no clearing existing data
-    RefreshPrs -> #(model, effects.fetch_prs(model.active_repo))
+    RefreshPrs -> #(model, effects.refresh_prs(model.active_repo))
 
     SetRepo(repo) -> #(Model(..model, active_repo: repo), effect.none())
 
-    GotPrs(Ok(groups)) -> #(
-      Model(..model, pr_groups: option.Some(groups), loading: False, error: option.None),
-      effect.none(),
-    )
+    GotPrs(Ok(groups)) -> {
+      // Don't flip loading off if we're still waiting on a PR detail fetch.
+      let still_loading = case model.view {
+        Dashboard -> False
+        _ -> option.is_none(model.selected_pr)
+      }
+      #(
+        Model(
+          ..model,
+          pr_groups: option.Some(groups),
+          loading: still_loading,
+          error: option.None,
+        ),
+        effect.none(),
+      )
+    }
 
     GotPrs(Error(err)) -> #(
       Model(..model, loading: False, error: option.Some(format_error(err))),
       effect.none(),
     )
+
+    // Background refresh result. Merge with the prior state so a transient
+    // empty group from gh / GitHub search doesn't blank out the dashboard,
+    // and don't surface errors to the user — the next refresh will retry.
+    RefreshedPrs(Ok(groups)) -> #(
+      Model(..model, pr_groups: option.Some(merge_pr_groups(model.pr_groups, groups))),
+      effect.none(),
+    )
+
+    RefreshedPrs(Error(_)) -> #(model, effect.none())
 
     SelectPr(number) -> {
       let new_model = reset_pr_state(model)
@@ -170,19 +212,122 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       )
     }
 
-    GotPrDetail(Ok(detail)) -> #(
+    SelectPrForFeedback(number) -> {
+      let new_model = reset_pr_state(model)
+      #(
+        Model(
+          ..new_model,
+          loading: True,
+          view: PrFeedback,
+          error: option.None,
+        ),
+        effect.batch([
+          effects.push_url("/pr/" <> int.to_string(number) <> "/feedback"),
+          effects.fetch_pr_detail(model.active_repo, number),
+        ]),
+      )
+    }
+
+    SelectFeedbackComment(id) -> #(
       Model(
         ..model,
-        selected_pr: option.Some(detail),
-        loading: True,
-        error: option.None,
-        analysis_state: Analyzing(heartbeats: 0),
+        feedback: FeedbackState(
+          selected_comment_id: option.Some(id),
+          expand_up: 0,
+          expand_down: 0,
+          whole_file: False,
+        ),
       ),
-      effect.batch([
-        effects.fetch_github_comments(model.active_repo, detail.number),
-        effects.analyze_pr_stream(model.active_repo, detail.number),
-      ]),
+      effect.none(),
     )
+
+    ExpandFeedbackUp -> #(
+      Model(
+        ..model,
+        feedback: FeedbackState(
+          ..model.feedback,
+          expand_up: model.feedback.expand_up + feedback_default_radius,
+        ),
+      ),
+      effect.none(),
+    )
+
+    ExpandFeedbackDown -> #(
+      Model(
+        ..model,
+        feedback: FeedbackState(
+          ..model.feedback,
+          expand_down: model.feedback.expand_down + feedback_default_radius,
+        ),
+      ),
+      effect.none(),
+    )
+
+    ShowWholeFile -> #(
+      Model(
+        ..model,
+        feedback: FeedbackState(..model.feedback, whole_file: True),
+      ),
+      effect.none(),
+    )
+
+    NextFeedback -> #(move_feedback(model, 1), effect.none())
+    PrevFeedback -> #(move_feedback(model, -1), effect.none())
+
+    SwitchToAnalysis ->
+      case model.selected_pr, model.analysis_state {
+        option.Some(detail), NotAnalyzed -> #(
+          Model(
+            ..model,
+            view: PrReview,
+            analysis_state: Analyzing(heartbeats: 0),
+          ),
+          effect.batch([
+            effects.push_url("/pr/" <> int.to_string(detail.number)),
+            effects.analyze_pr_stream(model.active_repo, detail.number),
+          ]),
+        )
+        option.Some(detail), _ -> #(
+          Model(..model, view: PrReview),
+          effects.push_url("/pr/" <> int.to_string(detail.number)),
+        )
+        option.None, _ -> #(model, effect.none())
+      }
+
+    SwitchToFeedback ->
+      case model.selected_pr {
+        option.Some(detail) -> #(
+          Model(..model, view: PrFeedback),
+          effects.push_url("/pr/" <> int.to_string(detail.number) <> "/feedback"),
+        )
+        option.None -> #(model, effect.none())
+      }
+
+    GotPrDetail(Ok(detail)) ->
+      case model.view {
+        PrFeedback -> #(
+          Model(
+            ..model,
+            selected_pr: option.Some(detail),
+            loading: False,
+            error: option.None,
+          ),
+          effects.fetch_github_comments(model.active_repo, detail.number),
+        )
+        _ -> #(
+          Model(
+            ..model,
+            selected_pr: option.Some(detail),
+            loading: True,
+            error: option.None,
+            analysis_state: Analyzing(heartbeats: 0),
+          ),
+          effect.batch([
+            effects.fetch_github_comments(model.active_repo, detail.number),
+            effects.analyze_pr_stream(model.active_repo, detail.number),
+          ]),
+        )
+      }
 
     GotPrDetail(Error(err)) -> #(
       Model(..model, loading: False, error: option.Some(format_error(err))),
@@ -305,10 +450,11 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         True -> model.current_chunk + 1
         False -> model.current_chunk
       }
-      #(
-        Model(..model, current_chunk: next, commenting: NotCommenting),
-        effect.none(),
-      )
+      let scroll = case next == model.current_chunk {
+        True -> effect.none()
+        False -> effects.scroll_to_top()
+      }
+      #(Model(..model, current_chunk: next, commenting: NotCommenting), scroll)
     }
 
     PrevChunk -> {
@@ -316,15 +462,19 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         True -> model.current_chunk - 1
         False -> 0
       }
-      #(
-        Model(..model, current_chunk: prev, commenting: NotCommenting),
-        effect.none(),
-      )
+      let scroll = case prev == model.current_chunk {
+        True -> effect.none()
+        False -> effects.scroll_to_top()
+      }
+      #(Model(..model, current_chunk: prev, commenting: NotCommenting), scroll)
     }
 
     GoToChunk(n) -> #(
       Model(..model, current_chunk: n, commenting: NotCommenting),
-      effect.none(),
+      case n == model.current_chunk {
+        True -> effect.none()
+        False -> effects.scroll_to_top()
+      },
     )
 
     StartComment(display_line, file_line) -> #(
@@ -560,28 +710,16 @@ fn handle_url_changed(
 ) -> #(Model, effect.Effect(Msg)) {
   case parse_route(uri) {
     PrRoute(number) ->
-      case model.view {
-        // Already viewing this PR, no-op
-        PrReview ->
-          case model.selected_pr {
-            option.Some(detail) if detail.number == number -> #(
-              model,
-              effect.none(),
-            )
-            _ -> {
-              let new_model = reset_pr_state(model)
-              #(
-                Model(
-                  ..new_model,
-                  loading: True,
-                  view: PrReview,
-                  error: option.None,
-                ),
-                effects.fetch_pr_detail(model.active_repo, number),
-              )
-            }
-          }
-        Dashboard -> {
+      case model.selected_pr, model.view {
+        option.Some(detail), PrReview if detail.number == number -> #(
+          model,
+          effect.none(),
+        )
+        option.Some(detail), _ if detail.number == number -> #(
+          Model(..model, view: PrReview),
+          effect.none(),
+        )
+        _, _ -> {
           let new_model = reset_pr_state(model)
           #(
             Model(
@@ -594,10 +732,33 @@ fn handle_url_changed(
           )
         }
       }
+    PrFeedbackRoute(number) ->
+      case model.selected_pr, model.view {
+        option.Some(detail), PrFeedback if detail.number == number -> #(
+          model,
+          effect.none(),
+        )
+        option.Some(detail), _ if detail.number == number -> #(
+          Model(..model, view: PrFeedback),
+          effect.none(),
+        )
+        _, _ -> {
+          let new_model = reset_pr_state(model)
+          #(
+            Model(
+              ..new_model,
+              loading: True,
+              view: PrFeedback,
+              error: option.None,
+            ),
+            effects.fetch_pr_detail(model.active_repo, number),
+          )
+        }
+      }
     DashboardRoute ->
       case model.view {
         Dashboard -> #(model, effect.none())
-        PrReview -> {
+        _ -> {
           let new_model = reset_pr_state(model)
           #(
             Model(
@@ -617,5 +778,95 @@ fn view(model: Model) -> Element(Msg) {
   case model.view {
     Dashboard -> dashboard.view(model)
     PrReview -> pr_review.view(model)
+    PrFeedback -> pr_feedback.view(model)
+  }
+}
+
+/// Merge a freshly-fetched PrGroups onto whatever we already had, preferring
+/// the previous list whenever a group came back empty. gh's `pr list --search`
+/// can occasionally return 0 results for transient reasons (search index lag,
+/// rate-limit edge cases) and a silent background refresh shouldn't be allowed
+/// to wipe the dashboard.
+fn merge_pr_groups(
+  previous: option.Option(pr.PrGroups),
+  fresh: pr.PrGroups,
+) -> pr.PrGroups {
+  case previous {
+    option.None -> fresh
+    option.Some(old) ->
+      pr.PrGroups(
+        created_by_me: prefer_non_empty(fresh.created_by_me, old.created_by_me),
+        review_requested: prefer_non_empty(
+          fresh.review_requested,
+          old.review_requested,
+        ),
+        all_open: prefer_non_empty(fresh.all_open, old.all_open),
+        all_open_total: case fresh.all_open {
+          [] -> old.all_open_total
+          _ -> fresh.all_open_total
+        },
+        production_pr: case fresh.production_pr {
+          option.Some(_) -> fresh.production_pr
+          option.None -> old.production_pr
+        },
+      )
+  }
+}
+
+fn prefer_non_empty(fresh: List(a), old: List(a)) -> List(a) {
+  case fresh, old {
+    [], [_, ..] -> old
+    _, _ -> fresh
+  }
+}
+
+fn move_feedback(model: Model, direction: Int) -> Model {
+  let threads = pr_feedback.thread_ids(model.github_comments)
+  case threads, model.feedback.selected_comment_id {
+    [], _ -> model
+    _, option.None ->
+      case list.first(threads) {
+        Ok(id) ->
+          Model(
+            ..model,
+            feedback: FeedbackState(
+              selected_comment_id: option.Some(id),
+              expand_up: 0,
+              expand_down: 0,
+              whole_file: False,
+            ),
+          )
+        Error(_) -> model
+      }
+    _, option.Some(current) -> {
+      let #(_, idx) =
+        list.fold(threads, #(0, -1), fn(acc, id) {
+          let #(i, found) = acc
+          case found == -1 && id == current {
+            True -> #(i + 1, i)
+            False -> #(i + 1, found)
+          }
+        })
+      let next_idx = idx + direction
+      let count = list.length(threads)
+      let clamped = case next_idx < 0, next_idx >= count {
+        True, _ -> 0
+        _, True -> count - 1
+        _, _ -> next_idx
+      }
+      case list.drop(threads, clamped) |> list.first {
+        Ok(id) ->
+          Model(
+            ..model,
+            feedback: FeedbackState(
+              selected_comment_id: option.Some(id),
+              expand_up: 0,
+              expand_down: 0,
+              whole_file: False,
+            ),
+          )
+        Error(_) -> model
+      }
+    }
   }
 }

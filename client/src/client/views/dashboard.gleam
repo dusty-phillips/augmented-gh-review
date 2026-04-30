@@ -1,4 +1,6 @@
-import client/model.{type Model, type Msg, FetchPrs, SelectPr, SetRepo}
+import client/model.{
+  type Model, type Msg, FetchPrs, SelectPr, SelectPrForFeedback, SetRepo,
+}
 import client/stack_tree.{type FlatEntry, FlatEntry}
 import gleam/int
 import gleam/list
@@ -212,10 +214,30 @@ fn pr_sections(groups: option.Option(PrGroups)) -> Element(Msg) {
       }
       let all_open =
         list.filter(g.all_open, fn(p) { p.number != prod_number })
+      let all_open_loaded = list.length(all_open)
+      // The server reports `all_open_total` independently of the loaded list,
+      // so we can show the truthful total even when GitHub returned only the
+      // most-recent 100. Subtract 1 if we filtered the production PR out, so
+      // the badge matches what's actually rendered in the table below.
+      let all_open_total = case g.all_open_total > 0, prod_number {
+        True, -1 -> g.all_open_total
+        True, _ -> g.all_open_total - 1
+        False, _ -> all_open_loaded
+      }
       html.div([], [
-        pr_section("Created by Me", g.created_by_me, True),
-        pr_section("My Review Requested", g.review_requested, False),
-        pr_section("All Open PRs", all_open, False),
+        pr_section(
+          "Created by Me",
+          g.created_by_me,
+          True,
+          list.length(g.created_by_me),
+        ),
+        pr_section(
+          "My Review Requested",
+          g.review_requested,
+          False,
+          list.length(g.review_requested),
+        ),
+        pr_section("All Open PRs", all_open, False, all_open_total),
       ])
     }
   }
@@ -225,8 +247,9 @@ fn pr_section(
   title: String,
   prs: List(PullRequest),
   show_branch: Bool,
+  total: Int,
 ) -> Element(Msg) {
-  let count = list.length(prs)
+  let loaded = list.length(prs)
   html.div(
     [
       attribute.styles([
@@ -234,8 +257,8 @@ fn pr_section(
       ]),
     ],
     [
-      section_header(title, count, prs),
-      case count {
+      section_header(title, total, loaded, prs),
+      case loaded {
         0 -> empty_section_message()
         _ -> pr_table(prs, show_branch)
       },
@@ -289,7 +312,8 @@ fn state_count_badge(
 
 fn section_header(
   title: String,
-  count: Int,
+  total: Int,
+  loaded: Int,
   prs: List(PullRequest),
 ) -> Element(Msg) {
   html.div(
@@ -325,8 +349,21 @@ fn section_header(
               font_weight.raw("600"),
             ]),
           ],
-          [html.text(int.to_string(count))],
+          [html.text(int.to_string(total))],
         ),
+        case total > loaded {
+          True ->
+            html.span(
+              [
+                attribute.styles([
+                  color.raw(colors.gray_6),
+                  font_size.raw(fonts.font_size_0),
+                ]),
+              ],
+              [html.text("(showing " <> int.to_string(loaded) <> ")")],
+            )
+          False -> html.text("")
+        },
       ],
       list.map(count_by_state(prs), fn(entry) {
         state_count_badge(entry.0, entry.1, entry.2, entry.3)
@@ -358,9 +395,17 @@ fn pr_table(prs: List(PullRequest), show_branch: Bool) -> Element(Msg) {
       attribute.styles([
         width.raw("100%"),
         border_collapse.collapse,
+        #("table-layout", "fixed"),
       ]),
     ],
     [
+      html.colgroup([], [
+        html.col([attribute.styles([#("width", "5rem")])]),
+        html.col([]),
+        html.col([attribute.styles([#("width", "20rem")])]),
+        html.col([attribute.styles([#("width", "5rem")])]),
+        html.col([attribute.styles([#("width", "14rem")])]),
+      ]),
       html.thead([], [
         html.tr(
           [
@@ -393,6 +438,7 @@ fn header_cell(label: String) -> Element(Msg) {
         padding.raw(sizes.size_1 <> " " <> sizes.size_3),
         border_bottom.raw("2px solid " <> colors.gray_3),
         font_weight.raw("600"),
+        #("vertical-align", "middle"),
       ]),
     ],
     [html.text(label)],
@@ -405,9 +451,13 @@ fn pr_row(entry: FlatEntry, show_branch: Bool) -> Element(Msg) {
     True -> background.raw("rgba(99, 102, 241, 0.04)")
     False -> background.raw("transparent")
   }
+  let click_msg = case show_branch {
+    True -> SelectPrForFeedback(pull_request.number)
+    False -> SelectPr(pull_request.number)
+  }
   html.tr(
     [
-      event.on_click(SelectPr(pull_request.number)),
+      event.on_click(click_msg),
       attribute.styles([
         cursor.pointer,
         border_bottom.raw("1px solid " <> colors.gray_2),
@@ -474,7 +524,15 @@ fn pr_row(entry: FlatEntry, show_branch: Bool) -> Element(Msg) {
         )
       },
       html.td(
-        [attribute.styles([padding.raw(sizes.size_1 <> " " <> sizes.size_3)])],
+        [
+          attribute.styles([
+            padding.raw(sizes.size_1 <> " " <> sizes.size_3),
+            display.flex,
+            align_items.center,
+            gap.raw(sizes.size_2),
+            #("flex-wrap", "wrap"),
+          ]),
+        ],
         case show_branch {
           True -> [
             case pull_request.reviewers {
@@ -485,6 +543,7 @@ fn pr_row(entry: FlatEntry, show_branch: Bool) -> Element(Msg) {
                 )
               reviewers -> html.text(string.join(reviewers, ", "))
             },
+            ..list.map(pull_request.feedback, feedback_badge)
           ]
           False -> [
             html.text(pull_request.author),
@@ -525,7 +584,10 @@ fn pr_row(entry: FlatEntry, show_branch: Bool) -> Element(Msg) {
         ],
         [
           review_badge(pull_request.review_decision, pull_request.draft),
-          ..list.map(pull_request.feedback, feedback_badge)
+          ..case show_branch {
+            True -> []
+            False -> list.map(pull_request.feedback, feedback_badge)
+          }
         ],
       ),
     ],

@@ -1,8 +1,8 @@
 import client/event_source
 import client/model.{
   type Msg, CommentPosted, GotAnalysis, GotGithubComments, GotPrDetail, GotPrs,
-  RefreshPrs, ReviewSubmitted, SseAnalysisComplete, SseAnalysisError,
-  SseConnectionError, SseHeartbeat,
+  RefreshPrs, RefreshedPrs, ReviewSubmitted, SseAnalysisComplete,
+  SseAnalysisError, SseConnectionError, SseHeartbeat,
 }
 import gleam/dynamic/decode
 import gleam/int
@@ -19,6 +19,16 @@ pub fn fetch_prs(repo: String) -> effect.Effect(Msg) {
   rsvp.get(
     "/api/prs?repo=" <> repo,
     rsvp.expect_json(pr.pr_groups_decoder(), GotPrs),
+  )
+}
+
+/// Like `fetch_prs`, but dispatches `RefreshedPrs` so the update loop can
+/// merge the response with existing state instead of replacing it wholesale.
+/// Used by the silent background refresh.
+pub fn refresh_prs(repo: String) -> effect.Effect(Msg) {
+  rsvp.get(
+    "/api/prs?repo=" <> repo,
+    rsvp.expect_json(pr.pr_groups_decoder(), RefreshedPrs),
   )
 }
 
@@ -126,6 +136,13 @@ pub fn submit_review(
       ReviewSubmitted(result.map(resp, fn(_response) { Nil }))
     }),
   )
+}
+
+@external(javascript, "./scroll_ffi.mjs", "scrollToTop")
+fn do_scroll_to_top() -> Nil
+
+pub fn scroll_to_top() -> effect.Effect(Msg) {
+  effect.from(fn(_dispatch) { do_scroll_to_top() })
 }
 
 /// Start a background timer that dispatches RefreshPrs every 2 minutes.

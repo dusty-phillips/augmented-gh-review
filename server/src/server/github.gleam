@@ -1,5 +1,6 @@
 import gleam/dict
 import gleam/dynamic/decode
+import gleam/erlang/atom
 import gleam/erlang/process
 import gleam/int
 import gleam/json
@@ -18,15 +19,42 @@ import simplifile
 import wisp
 
 /// JSON fields requested when listing PRs via `gh pr list`.
+///
+/// `statusCheckRollup` and `reviewRequests` are the two GraphQL-expensive
+/// fields on a PR — the former forces GitHub to walk every check run on
+/// every PR's commits, the latter does an extra join for requested reviewers.
+/// They're worth it on lists the user looks at closely (their own PRs, ones
+/// awaiting their review) but not on the broad "all open in the repo"
+/// overview, where they push the query past GitHub's GraphQL timeout.
 const pr_list_json_fields = "number,title,author,url,createdAt,reviewDecision,isDraft,statusCheckRollup,reviewRequests,baseRefName,headRefName"
 
+const pr_list_lean_json_fields = "number,title,author,url,createdAt,reviewDecision,isDraft,baseRefName,headRefName"
 
-/// Run the `gh` CLI with the given arguments, retrying up to 2 times on
+
+/// Run the `gh` CLI with the given arguments, retrying up to 3 times on
 /// transient errors (stream resets, HTTP 5xx). Maps failures to a
 /// human-readable error that includes the provided context string.
 fn run_gh(args: List(String), context: String) -> Result(String, String) {
-  run_gh_with_retries(args, context, 2)
+  run_gh_with_retries(args, context, 3)
 }
+
+const max_gh_retries = 3
+
+/// Sleep duration before the next retry. Linear backoff (250ms / 750ms /
+/// 1500ms) plus 0..250ms jitter, so a cluster of failing requests doesn't
+/// retry in lockstep into the same congested window on GitHub's side.
+fn retry_backoff_ms(retries_left: Int) -> Int {
+  let attempt_index = max_gh_retries - retries_left
+  let base = case attempt_index {
+    0 -> 250
+    1 -> 750
+    _ -> 1500
+  }
+  base + rand_uniform(250)
+}
+
+@external(erlang, "rand", "uniform")
+fn rand_uniform(n: Int) -> Int
 
 fn is_transient_error(msg: String) -> Bool {
   string.contains(msg, "stream error")
@@ -44,13 +72,30 @@ fn run_gh_with_retries(
 ) -> Result(String, String) {
   case shellout.command(run: "gh", with: args, in: ".", opt: []) {
     Ok(output) -> Ok(output)
-    Error(#(code, msg)) ->
+    Error(#(code, msg)) -> {
+      let trimmed = string.slice(msg, 0, 500)
       case retries_left > 0 && is_transient_error(msg) {
         True -> {
-          process.sleep(1000)
+          wisp.log_warning(
+            context
+            <> " transient error (exit "
+            <> int.to_string(code)
+            <> ", "
+            <> int.to_string(retries_left)
+            <> " retries left): "
+            <> trimmed,
+          )
+          process.sleep(retry_backoff_ms(retries_left))
           run_gh_with_retries(args, context, retries_left - 1)
         }
-        False ->
+        False -> {
+          wisp.log_error(
+            context
+            <> " failed (exit "
+            <> int.to_string(code)
+            <> "): "
+            <> trimmed,
+          )
           Error(
             context
             <> " failed (exit "
@@ -58,7 +103,9 @@ fn run_gh_with_retries(
             <> "): "
             <> msg,
           )
+        }
       }
+    }
   }
 }
 
@@ -70,6 +117,14 @@ fn unique_tmp_path(prefix: String) -> String {
 /// Parse the `author` field from gh CLI JSON output, which is an object like `{"login": "username"}`.
 fn author_decoder() -> decode.Decoder(String) {
   decode.at(["login"], decode.string)
+}
+
+/// Parse a GitHub API user object into a #(login, is_human) pair. The `type`
+/// field is "User" for regular users and "Bot" for GitHub Apps / bot accounts.
+fn user_decoder() -> decode.Decoder(#(String, Bool)) {
+  use login <- decode.field("login", decode.string)
+  use type_ <- decode.optional_field("type", "User", decode.string)
+  decode.success(#(login, type_ == "User"))
 }
 
 /// Compute overall checks status from a list of conclusion strings.
@@ -150,13 +205,36 @@ fn count_feedback(
 }
 
 /// Check if a GitHub login is a human User account (not a Bot, Organization, etc.).
+///
+/// Successful classifications are cached in `:persistent_term` for the lifetime
+/// of the server process — author types ~never change, and re-classifying every
+/// commenter on every dashboard load was a major source of `gh api` traffic.
+/// Failed lookups are NOT cached so a transient GitHub error doesn't
+/// permanently stamp someone as a bot.
 fn is_human_user(login: String) -> Bool {
-  case run_gh(["api", "users/" <> login, "--jq", ".type"], "gh api user type") {
-    Ok(output) -> string.trim(output) == "User"
-    // If lookup fails (e.g. GitHub App not visible via users API), assume not human
-    Error(_) -> False
+  let key = #("human_user_cache", login)
+  case pt_get(key, Error(Nil)) {
+    Ok(known) -> known
+    Error(Nil) ->
+      case run_gh(["api", "users/" <> login, "--jq", ".type"], "gh api user type") {
+        Ok(output) -> {
+          let is_user = string.trim(output) == "User"
+          let _ = pt_put(key, Ok(is_user))
+          is_user
+        }
+        Error(_) -> False
+      }
   }
 }
+
+@external(erlang, "persistent_term", "get")
+fn pt_get(
+  key: #(String, String),
+  default: Result(Bool, Nil),
+) -> Result(Bool, Nil)
+
+@external(erlang, "persistent_term", "put")
+fn pt_put(key: #(String, String), value: Result(Bool, Nil)) -> atom.Atom
 
 /// Collect all unique feedback authors across a list of PRs.
 fn collect_feedback_authors(prs: List(PullRequest)) -> List(String) {
@@ -246,8 +324,9 @@ fn gh_pull_request_decoder() -> decode.Decoder(PullRequest) {
     decode.one_of(decode.string, [decode.success("")]),
   )
   use draft <- decode.field("isDraft", decode.bool)
-  use checks <- decode.field(
+  use checks <- decode.optional_field(
     "statusCheckRollup",
+    [],
     decode.one_of(decode.list(check_info_decoder()), [
       decode.success([]),
     ]),
@@ -319,14 +398,14 @@ fn gh_pr_file_decoder() -> decode.Decoder(PrFile) {
 fn list_prs(
   repo: String,
   search_filter: option.Option(String),
+  fields: String,
 ) -> Result(List(PullRequest), String) {
   let base_args = ["pr", "list", "-R", repo, "--limit", "100"]
   let search_args = case search_filter {
     option.Some(filter) -> ["--search", filter]
     option.None -> []
   }
-  let args =
-    list.flatten([base_args, search_args, ["--json", pr_list_json_fields]])
+  let args = list.flatten([base_args, search_args, ["--json", fields]])
 
   use output <- result.try(run_gh(args, "gh pr list"))
 
@@ -338,82 +417,133 @@ fn list_prs(
 
 /// List PRs where review is requested from the current user.
 pub fn list_review_prs(repo: String) -> Result(List(PullRequest), String) {
-  list_prs(repo, option.Some("review-requested:@me"))
+  list_prs(repo, option.Some("review-requested:@me"), pr_list_json_fields)
 }
 
 /// List PRs created by the current user (with feedback counts, bots filtered out).
 pub fn list_my_prs(repo: String) -> Result(List(PullRequest), String) {
   use prs <- result.try(
-    list_prs(repo, option.Some("author:@me")),
+    list_prs(repo, option.Some("author:@me"), pr_list_json_fields),
   )
   let enriched = list.map(prs, fn(p) { enrich_with_feedback(repo, p) })
   Ok(filter_bot_feedback(enriched))
 }
 
 /// List all open PRs in the repo, ordered by last updated.
+///
+/// Uses the lean field set: this view scans every open PR in the repo, and
+/// the heavy `statusCheckRollup` / `reviewRequests` fields would push the
+/// query into GitHub's 504 territory. The dashboard table will show empty
+/// check / reviewer cells for these rows, which is the right tradeoff for
+/// a broad overview.
 pub fn list_all_open_prs(repo: String) -> Result(List(PullRequest), String) {
-  list_prs(repo, option.Some("sort:updated-desc"))
+  list_prs(
+    repo,
+    option.Some("sort:updated-desc"),
+    pr_list_lean_json_fields,
+  )
+}
+
+/// Cheap REST count of all open PRs in the repo. Used only when the
+/// per-list cap (--limit 100) is hit, so the UI can show a truthful total
+/// even though we still only render the most-recently-updated 100.
+fn count_open_prs(repo: String) -> Result(Int, String) {
+  let args = [
+    "api",
+    "search/issues",
+    "-X",
+    "GET",
+    "-f",
+    "q=is:pr is:open repo:" <> repo,
+    "-f",
+    "per_page=1",
+    "--jq",
+    ".total_count",
+  ]
+  use output <- result.try(run_gh(args, "gh api search/issues count"))
+  case int.parse(string.trim(output)) {
+    Ok(n) -> Ok(n)
+    Error(_) -> Error("Failed to parse total_count from: " <> output)
+  }
 }
 
 /// Find the open "Production Release" PR, if any.
 pub fn find_production_pr(
   repo: String,
 ) -> Result(option.Option(PullRequest), String) {
-  case list_prs(repo, option.Some("Production Release in:title")) {
+  case
+    list_prs(
+      repo,
+      option.Some("Production Release in:title"),
+      pr_list_lean_json_fields,
+    )
+  {
     Ok([first, ..]) -> Ok(option.Some(first))
     Ok([]) -> Ok(option.None)
     Error(msg) -> Error(msg)
   }
 }
 
-/// Fetch all PR groups (including production PR) concurrently.
+/// Fetch all PR groups (including production PR) sequentially.
+///
+/// Previously this fanned out four `gh pr list` calls in parallel. When
+/// GitHub's GraphQL gateway was degraded, three concurrent expensive queries
+/// from the same client were enough to push us over the timeout threshold
+/// even on requests that would have succeeded individually. Serializing
+/// trades a few hundred ms on happy days for far better resilience when
+/// GitHub is struggling.
 pub fn list_all_pr_groups(repo: String) -> Result(PrGroups, String) {
-  let created_subject = process.new_subject()
-  let review_subject = process.new_subject()
-  let all_subject = process.new_subject()
-  let prod_subject = process.new_subject()
+  use created <- result.try(list_my_prs(repo))
+  use review <- result.try(list_review_prs(repo))
+  use all_open <- result.try(list_all_open_prs(repo))
+  let all_open_loaded = list.length(all_open)
+  // Only call the count endpoint when we're actually capped at 100; for
+  // smaller repos the loaded length is the truth.
+  let all_open_total = case all_open_loaded >= 100 {
+    True ->
+      case count_open_prs(repo) {
+        Ok(n) -> n
+        Error(msg) -> {
+          wisp.log_warning(
+            "count_open_prs failed for " <> repo <> ": " <> msg,
+          )
+          all_open_loaded
+        }
+      }
+    False -> all_open_loaded
+  }
+  // Production PR is optional — log and continue if it errors.
+  let production_pr = case find_production_pr(repo) {
+    Ok(pr) -> pr
+    Error(msg) -> {
+      wisp.log_warning(
+        "find_production_pr returned error for " <> repo <> ": " <> msg,
+      )
+      option.None
+    }
+  }
 
-  process.spawn(fn() {
-    process.send(created_subject, list_my_prs(repo))
-  })
-  process.spawn(fn() {
-    process.send(review_subject, list_review_prs(repo))
-  })
-  process.spawn(fn() {
-    process.send(all_subject, list_all_open_prs(repo))
-  })
-  process.spawn(fn() {
-    process.send(prod_subject, find_production_pr(repo))
-  })
-
-  let timeout = 30_000
-  let created_result = process.receive(created_subject, timeout)
-  let review_result = process.receive(review_subject, timeout)
-  let all_result = process.receive(all_subject, timeout)
-  let prod_result = process.receive(prod_subject, timeout)
-
-  use created <- result.try(case created_result {
-    Ok(r) -> r
-    Error(Nil) -> Error("Timeout fetching created-by-me PRs")
-  })
-  use review <- result.try(case review_result {
-    Ok(r) -> r
-    Error(Nil) -> Error("Timeout fetching review-requested PRs")
-  })
-  use all_open <- result.try(case all_result {
-    Ok(r) -> r
-    Error(Nil) -> Error("Timeout fetching all open PRs")
-  })
-  // Production PR is optional — don't fail if it times out
-  let production_pr = case prod_result {
-    Ok(Ok(pr)) -> pr
-    _ -> option.None
+  // Surface suspiciously-empty results — gh can return Ok([]) on its own when
+  // GitHub's search index is lagging, and the dashboard has no other signal
+  // that something went wrong.
+  case created {
+    [] -> wisp.log_warning("list_my_prs returned 0 PRs for " <> repo)
+    _ -> Nil
+  }
+  case review {
+    [] -> wisp.log_info("list_review_prs returned 0 PRs for " <> repo)
+    _ -> Nil
+  }
+  case all_open {
+    [] -> wisp.log_warning("list_all_open_prs returned 0 PRs for " <> repo)
+    _ -> Nil
   }
 
   Ok(PrGroups(
     created_by_me: created,
     review_requested: review,
     all_open: all_open,
+    all_open_total: all_open_total,
     production_pr: production_pr,
   ))
 }
@@ -469,7 +599,7 @@ pub fn get_pr_files(
 /// Decoder for review comments (line-level) from GitHub API.
 fn gh_review_comment_decoder() -> decode.Decoder(PrComment) {
   use id <- decode.field("id", decode.int)
-  use author <- decode.field("user", author_decoder())
+  use user <- decode.field("user", user_decoder())
   use body <- decode.field("body", decode.string)
   use path <- decode.field(
     "path",
@@ -485,6 +615,7 @@ fn gh_review_comment_decoder() -> decode.Decoder(PrComment) {
     0,
     decode.int,
   )
+  let #(author, is_human) = user
   decode.success(PrComment(
     id: id,
     author: author,
@@ -493,15 +624,18 @@ fn gh_review_comment_decoder() -> decode.Decoder(PrComment) {
     line: line,
     created_at: created_at,
     in_reply_to_id: in_reply_to_id,
+    is_human: is_human,
+    is_resolved: False,
   ))
 }
 
 /// Decoder for issue comments (general PR comments) from GitHub API.
 fn gh_issue_comment_decoder() -> decode.Decoder(PrComment) {
   use id <- decode.field("id", decode.int)
-  use author <- decode.field("user", author_decoder())
+  use user <- decode.field("user", user_decoder())
   use body <- decode.field("body", decode.string)
   use created_at <- decode.field("created_at", decode.string)
+  let #(author, is_human) = user
   decode.success(PrComment(
     id: id,
     author: author,
@@ -510,7 +644,112 @@ fn gh_issue_comment_decoder() -> decode.Decoder(PrComment) {
     line: 0,
     created_at: created_at,
     in_reply_to_id: 0,
+    is_human: is_human,
+    is_resolved: False,
   ))
+}
+
+/// Decoder for review-body entries from GitHub `/reviews` API.
+/// Maps to a PrComment with path="" so the client treats it as PR-level.
+fn gh_review_body_decoder() -> decode.Decoder(PrComment) {
+  use id <- decode.field("id", decode.int)
+  use user <- decode.field("user", user_decoder())
+  use body <- decode.optional_field(
+    "body",
+    "",
+    decode.one_of(decode.string, [decode.success("")]),
+  )
+  use submitted_at <- decode.optional_field(
+    "submitted_at",
+    "",
+    decode.one_of(decode.string, [decode.success("")]),
+  )
+  let #(author, is_human) = user
+  decode.success(PrComment(
+    id: id,
+    author: author,
+    body: body,
+    path: "",
+    line: 0,
+    created_at: submitted_at,
+    in_reply_to_id: 0,
+    is_human: is_human,
+    is_resolved: False,
+  ))
+}
+
+/// Decoder for review thread nodes from the GraphQL response.
+/// Returns #(is_resolved, [comment_database_ids...]) for each thread.
+fn review_thread_decoder() -> decode.Decoder(#(Bool, List(Int))) {
+  use is_resolved <- decode.field("isResolved", decode.bool)
+  use comment_ids <- decode.subfield(
+    ["comments", "nodes"],
+    decode.list({
+      use id <- decode.field("databaseId", decode.int)
+      decode.success(id)
+    }),
+  )
+  decode.success(#(is_resolved, comment_ids))
+}
+
+/// Top-level decoder for the review-threads GraphQL query.
+fn review_threads_decoder() -> decode.Decoder(List(#(Bool, List(Int)))) {
+  decode.at(
+    ["data", "repository", "pullRequest", "reviewThreads", "nodes"],
+    decode.list(review_thread_decoder()),
+  )
+}
+
+/// Fetch the set of review-comment IDs that belong to resolved threads.
+/// Uses the GraphQL API since the REST `/pulls/{n}/comments` endpoint does
+/// not expose resolved status. Returns an empty dict on failure (best
+/// effort — comments will simply render as unresolved).
+fn fetch_resolved_comment_ids(
+  repo: String,
+  number: Int,
+) -> dict.Dict(Int, Bool) {
+  case string.split(repo, "/") {
+    [owner, name] -> {
+      let query =
+        "query($owner: String!, $name: String!, $number: Int!) {
+          repository(owner: $owner, name: $name) {
+            pullRequest(number: $number) {
+              reviewThreads(first: 100) {
+                nodes {
+                  isResolved
+                  comments(first: 100) { nodes { databaseId } }
+                }
+              }
+            }
+          }
+        }"
+      let args = [
+        "api", "graphql",
+        "-f", "query=" <> query,
+        "-F", "owner=" <> owner,
+        "-F", "name=" <> name,
+        "-F", "number=" <> int.to_string(number),
+      ]
+      case run_gh(args, "gh api graphql review threads") {
+        Ok(output) ->
+          case json.parse(output, review_threads_decoder()) {
+            Ok(threads) -> {
+              list.fold(threads, dict.new(), fn(acc, thread) {
+                let #(is_resolved, ids) = thread
+                case is_resolved {
+                  True ->
+                    list.fold(ids, acc, fn(a, id) { dict.insert(a, id, True) })
+                  False -> acc
+                }
+              })
+            }
+            Error(_) -> dict.new()
+          }
+        Error(_) -> dict.new()
+      }
+    }
+    _ -> dict.new()
+  }
 }
 
 /// Fetch all comments (review + issue) for a PR, sorted by created_at.
@@ -530,14 +769,22 @@ pub fn get_pr_comments(
     "api", "repos/" <> repo <> "/issues/" <> number_str <> "/comments",
   ]
 
+  // Fetch review bodies (approve/request-changes/comment with body text)
+  let review_body_args = [
+    "api", "repos/" <> repo <> "/pulls/" <> number_str <> "/reviews",
+  ]
+
   use review_output <- result.try(
     run_gh(review_args, "gh api review comments"),
   )
   use issue_output <- result.try(
     run_gh(issue_args, "gh api issue comments"),
   )
+  use review_body_output <- result.try(
+    run_gh(review_body_args, "gh api review bodies"),
+  )
 
-  use review_comments <- result.try(
+  use review_comments_raw <- result.try(
     json.parse(review_output, decode.list(gh_review_comment_decoder()))
     |> result.map_error(fn(err) {
       "Failed to parse review comments JSON: "
@@ -553,7 +800,28 @@ pub fn get_pr_comments(
     }),
   )
 
-  let all_comments = list.append(review_comments, issue_comments)
+  use review_bodies_raw <- result.try(
+    json.parse(review_body_output, decode.list(gh_review_body_decoder()))
+    |> result.map_error(fn(err) {
+      "Failed to parse review bodies JSON: "
+      <> error_format.json_decode_error(err)
+    }),
+  )
+  let review_bodies =
+    list.filter(review_bodies_raw, fn(c) { string.trim(c.body) != "" })
+
+  // Best-effort fetch of resolved-thread comment IDs (GraphQL).
+  let resolved_ids = fetch_resolved_comment_ids(repo, number)
+  let review_comments =
+    list.map(review_comments_raw, fn(c) {
+      PrComment(
+        ..c,
+        is_resolved: result.unwrap(dict.get(resolved_ids, c.id), False),
+      )
+    })
+
+  let all_comments =
+    list.flatten([review_comments, issue_comments, review_bodies])
   let sorted =
     list.sort(all_comments, fn(a, b) {
       string.compare(a.created_at, b.created_at)
